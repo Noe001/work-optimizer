@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 node:22.12.0
+FROM node:22.12.0
 WORKDIR /app
 COPY package.json yarn.lock ./
 RUN yarn install
