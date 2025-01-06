@@ -29,7 +29,7 @@ const DashboardView = () => {
 
           {/* Logo */}
           <div className="flex items-center gap-2 font-semibold">
-            <BarChart3 className="h-5 w-5" />
+            <img src="/images/w-o_logo.png" alt="logo" className="h-7 w-7" />
             <span className="hidden md:inline">Work-Optimizer</span>
           </div>
 
