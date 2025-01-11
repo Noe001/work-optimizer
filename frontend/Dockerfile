@@ -1,7 +1,7 @@
 FROM node:22.12.0
 WORKDIR /app
-COPY package.json yarn.lock ./
-RUN yarn install
+COPY package.json ./
+RUN npm install
 COPY . .
-EXPOSE 3000
-CMD ["yarn", "start"]
+EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host"]
