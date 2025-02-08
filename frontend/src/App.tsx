@@ -1,7 +1,6 @@
-import React from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import DashboardView from './pages/general/Dashboard';
-import ManualView from './pages/general/Manual';
+import DashboardView from './pages/general/Dashboard.tsx';
+import ManualView from './pages/general/Manual.tsx';
 
 const App = () => (
   <Router>
