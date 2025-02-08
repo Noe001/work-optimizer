@@ -100,7 +100,7 @@ const Header: React.FC = () => {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
-                <img src="/api/placeholder/32/32" alt="ユーザーアバター" className="w-8 h-8 rounded-full" />
+                <img src="public/images/circle-user-round.png" alt="ユーザーアバター" className="w-8 h-8 rounded-full" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
