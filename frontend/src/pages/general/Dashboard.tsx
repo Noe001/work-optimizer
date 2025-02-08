@@ -44,8 +44,6 @@ import {
 
 // Header Component
 const Header: React.FC = () => {
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false)
-
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white shadow-sm">
       <div className="container mx-auto flex h-14 items-center px-4">
@@ -54,7 +52,7 @@ const Header: React.FC = () => {
         </Button>
         <div className="flex items-center gap-2 font-semibold">
           <img src="/images/w-o_logo.png" alt="logo" className="h-7 w-7" />
-          <span className="hidden md:inline">Work-Optimizer</span>
+          <span className="hidden md:inline">WorkOptimizer</span>
         </div>
         <nav className="hidden md:flex items-center gap-6 mx-6">
           {[
@@ -702,24 +700,24 @@ const DashboardView: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 container mx-auto p-4">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 gap-2">
             <TabsTrigger value="dashboard">ダッシュボード</TabsTrigger>
             <TabsTrigger value="manuals">業務マニュアル</TabsTrigger>
             <TabsTrigger value="knowledge">ナレッジベース</TabsTrigger>
             <TabsTrigger value="meetings">会議管理</TabsTrigger>
           </TabsList>
-          <TabsContent value="dashboard">
+          <TabsContent value="dashboard" className="pt-4">
             <DashboardTab />
           </TabsContent>
-          <TabsContent value="manuals">
+          <TabsContent value="manuals" className="pt-4">
             <ManualsTab />
           </TabsContent>
-          <TabsContent value="knowledge">
+          <TabsContent value="knowledge" className="pt-4">
             <KnowledgeTab />
           </TabsContent>
-          <TabsContent value="meetings">
+          <TabsContent value="meetings" className="pt-4">
             <MeetingsTab />
           </TabsContent>
         </Tabs>
@@ -758,4 +756,3 @@ interface Meeting {
 }
 
 export default DashboardView
-
