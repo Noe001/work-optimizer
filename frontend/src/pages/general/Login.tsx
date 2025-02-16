@@ -56,7 +56,7 @@ const LoginPage: React.FC = () => {
                 type="email" 
                 value={formData.email}
                 onChange={handleInputChange}
-                placeholder="メールアドレスを入力"
+                placeholder=""
                 required
                 className="w-full"
               />
@@ -71,7 +71,7 @@ const LoginPage: React.FC = () => {
                   type={showPassword ? "text" : "password"}
                   value={formData.password}
                   onChange={handleInputChange}
-                  placeholder="パスワードを入力"
+                  placeholder=""
                   required
                   className="w-full pr-10"
                 />

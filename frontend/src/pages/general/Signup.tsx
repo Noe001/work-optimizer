@@ -141,7 +141,7 @@ const SignupPage: React.FC = () => {
                 type="text"
                 value={formData.username}
                 onChange={handleInputChange}
-                placeholder="ユーザー名を入力"
+                placeholder=""
                 required
                 className={`w-full ${
                   formData.username ? (validation.username.isValid ? "border-green-500" : "border-red-500") : ""
@@ -161,7 +161,7 @@ const SignupPage: React.FC = () => {
                 type="email"
                 value={formData.email}
                 onChange={handleInputChange}
-                placeholder="メールアドレスを入力"
+                placeholder=""
                 required
                 className={`w-full ${
                   formData.email ? (validation.email.isValid ? "border-green-500" : "border-red-500") : ""
@@ -182,7 +182,7 @@ const SignupPage: React.FC = () => {
                   type={showPassword ? "text" : "password"}
                   value={formData.password}
                   onChange={handleInputChange}
-                  placeholder="パスワードを入力"
+                  placeholder=""
                   required
                   className={`w-full pr-10 ${
                     formData.password
@@ -229,7 +229,7 @@ const SignupPage: React.FC = () => {
                   type={showConfirmPassword ? "text" : "password"}
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
-                  placeholder="パスワードを再入力"
+                  placeholder=""
                   required
                   className={`w-full pr-10 ${
                     formData.confirmPassword
