@@ -503,7 +503,7 @@ const MeetingsTab: React.FC = () => {
     },
   ]
 
-  const MeetingTimerModal: React.FC<{ meeting: Meeting; onClose: () => void }> = ({ meeting, onClose }) => {
+  const MeetingTimerModal: React.FC<{ meeting: Meeting; onClose: () => void }> = ({ meeting }) => {
     const [currentAgendaIndex, setCurrentAgendaIndex] = useState(0)
     const [remainingTime, setRemainingTime] = useState(meeting.agenda[0].duration * 60)
     const [isRunning, setIsRunning] = useState(false)
