@@ -5,7 +5,7 @@ import { useState, type FormEvent, type ChangeEvent } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Eye, EyeOff, CheckCircle2, XCircle, Circle } from "lucide-react"
 
 interface FormData {
@@ -129,7 +129,6 @@ const SignupPage: React.FC = () => {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl">アカウント作成</CardTitle>
-          <CardDescription>新しいアカウントを作成して、サービスをご利用ください。</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">

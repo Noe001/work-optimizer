@@ -2,7 +2,7 @@ import React, { useState, FormEvent, ChangeEvent } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Eye, EyeOff } from 'lucide-react';
 
 interface LoginFormData {
@@ -43,8 +43,7 @@ const LoginPage: React.FC = () => {
     <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-2xl">ログイン</CardTitle>
-          <CardDescription>アカウントにアクセスするには、メールアドレスとパスワードを入力してください。</CardDescription>
+          <CardTitle className="text-2xl mb-3 text-center">WorkOptimizer</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -90,8 +89,8 @@ const LoginPage: React.FC = () => {
             </Button>
             
             <div className="text-center text-sm text-gray-600 mt-4">
-              <a href="#" className="hover:underline">
-                パスワードを忘れた方
+              <a href="/signup" className="hover:underline">
+                パスワードを作成
               </a>
             </div>
           </form>

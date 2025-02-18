@@ -381,7 +381,7 @@ const KnowledgeTab: React.FC = () => {
               <Filter className="h-4 w-4" />
             </Button>
             <Button>
-              <Plus className="mr-2 h-4 w-4" />
+              <FilePlus className="mr-2 h-4 w-4" />
               新規作成
             </Button>
           </div>
@@ -641,7 +641,7 @@ const MeetingsTab: React.FC = () => {
         <CardTitle className="flex justify-between items-center">
           <span>会議管理</span>
           <Button>
-            <Plus className="mr-2 h-4 w-4" />
+            <FilePlus className="mr-2 h-4 w-4" />
             新規作成
           </Button>
         </CardTitle>
