@@ -37,7 +37,6 @@ import {
   Edit,
   Trash2,
   Filter,
-  Plus,
   Tag,
   Clock,
 } from "lucide-react"
