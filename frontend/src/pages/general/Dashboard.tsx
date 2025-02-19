@@ -37,7 +37,6 @@ import {
   Edit,
   Trash2,
   Filter,
-  Plus,
   Tag,
   Clock,
 } from "lucide-react"
@@ -381,7 +380,7 @@ const KnowledgeTab: React.FC = () => {
               <Filter className="h-4 w-4" />
             </Button>
             <Button>
-              <Plus className="mr-2 h-4 w-4" />
+              <FilePlus className="mr-2 h-4 w-4" />
               新規作成
             </Button>
           </div>
@@ -503,7 +502,7 @@ const MeetingsTab: React.FC = () => {
     },
   ]
 
-  const MeetingTimerModal: React.FC<{ meeting: Meeting; onClose: () => void }> = ({ meeting, onClose }) => {
+  const MeetingTimerModal: React.FC<{ meeting: Meeting; onClose: () => void }> = ({ meeting }) => {
     const [currentAgendaIndex, setCurrentAgendaIndex] = useState(0)
     const [remainingTime, setRemainingTime] = useState(meeting.agenda[0].duration * 60)
     const [isRunning, setIsRunning] = useState(false)
@@ -641,7 +640,7 @@ const MeetingsTab: React.FC = () => {
         <CardTitle className="flex justify-between items-center">
           <span>会議管理</span>
           <Button>
-            <Plus className="mr-2 h-4 w-4" />
+            <FilePlus className="mr-2 h-4 w-4" />
             新規作成
           </Button>
         </CardTitle>
