@@ -107,7 +107,7 @@ const CreateManual: React.FC = () => {
   };
 
   return (
-    <div className="p-6 bg-background min-h-screen">
+    <div className="p-6 bg-background min-h-screen bg-gray-50">
       {/* Header */}
       <div className="mb-6">
         <Button variant="ghost" className="mb-4 p-0 hover:bg-transparent">
