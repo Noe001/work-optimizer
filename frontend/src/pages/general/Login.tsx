@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Eye, EyeOff } from 'lucide-react';
+import Header from '@/components/Header';
 
 interface LoginFormData {
   email: string;
@@ -40,62 +41,65 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl mb-3 text-center">WorkOptimizer</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">メールアドレス</Label>
-              <Input 
-                id="email"
-                name="email"
-                type="email" 
-                value={formData.email}
-                onChange={handleInputChange}
-                placeholder=""
-                required
-                className="w-full"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="password">パスワード</Label>
-              <div className="relative">
+    <div className="p-6 bg-background min-h-screen bg-gray-50">
+      <Header />
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-2xl mb-3 text-center">WorkOptimizer</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">メールアドレス</Label>
                 <Input 
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  value={formData.password}
+                  id="email"
+                  name="email"
+                  type="email" 
+                  value={formData.email}
                   onChange={handleInputChange}
                   placeholder=""
                   required
-                  className="w-full pr-10"
+                  className="w-full"
                 />
-                <button
-                  type="button"
-                  onClick={togglePasswordVisibility}
-                  className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-600"
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
               </div>
-            </div>
-            
-            <Button type="submit" className="w-full">
-              ログイン
-            </Button>
-            
-            <div className="text-center text-sm text-gray-600 mt-4">
-              <a href="/signup" className="hover:underline">
-                パスワードを作成
-              </a>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+              
+              <div className="space-y-2">
+                <Label htmlFor="password">パスワード</Label>
+                <div className="relative">
+                  <Input 
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    placeholder=""
+                    required
+                    className="w-full pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={togglePasswordVisibility}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-600"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
+              
+              <Button type="submit" className="w-full">
+                ログイン
+              </Button>
+              
+              <div className="text-center text-sm text-gray-600 mt-4">
+                <a href="/signup" className="hover:underline">
+                  パスワードを作成
+                </a>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

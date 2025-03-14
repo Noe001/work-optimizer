@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-// import { Header } from "../components/Header" 既存のHeaderコンポーネントを再利用
+import Header from '@/components/Header'
 
 const KnowledgeCreationPage = () => {
   const [title, setTitle] = useState("")

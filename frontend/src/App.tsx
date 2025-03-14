@@ -5,6 +5,8 @@ import LoginView from './pages/general/Login.tsx';
 import SignUpView from './pages/general/Signup.tsx';
 import KnowledgeBaseView from './pages/general/KnowledgeBase.tsx';
 import MeetingView from './pages/general/Meeting.tsx';
+import NotificationCenterView from './pages/general/NotificationCenter.tsx';
+import ProfileView from './pages/general/Profile.tsx';
 
 const App = () => (
   <Router>
@@ -13,8 +15,10 @@ const App = () => (
       <Route path="/manual" element={<ManualView />} />
       <Route path="/login" element={<LoginView />} />
       <Route path="/signup" element={<SignUpView />} />
-      <Route path="/knowledge_base" element={<KnowledgeBaseView />} />
+      <Route path="/knowledge-base" element={<KnowledgeBaseView />} />
       <Route path="/meeting" element={<MeetingView />} />
+      <Route path="/notification_center" element={<NotificationCenterView />} />
+      <Route path="/profile" element={<ProfileView />} />
     </Routes>
   </Router>
 );
