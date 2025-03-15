@@ -8,6 +8,9 @@ import MeetingView from './pages/general/Meeting.tsx';
 import NotificationCenterView from './pages/general/NotificationCenter.tsx';
 import ProfileView from './pages/general/Profile.tsx';
 import SettingsView from './pages/general/Settings.tsx';
+import WorkLifeBalanceView from './pages/general/WorkLifeBalance.tsx';
+import TeamChatView from './pages/general/TeamChat.tsx';
+import TaskManagerView from './pages/general/TaskManager.tsx';
 
 const App = () => (
   <Router>
@@ -21,6 +24,9 @@ const App = () => (
       <Route path="/notification_center" element={<NotificationCenterView />} />
       <Route path="/profile" element={<ProfileView />} />
       <Route path="/settings" element={<SettingsView />} />
+      <Route path="/work_life_balance" element={<WorkLifeBalanceView />} />
+      <Route path="/team_chat" element={<TeamChatView />} />
+      <Route path="/tasks" element={<TaskManagerView />} />
     </Routes>
   </Router>
 );

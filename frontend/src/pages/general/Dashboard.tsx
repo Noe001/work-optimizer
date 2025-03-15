@@ -24,8 +24,13 @@ import {
   Filter,
   Tag,
   Clock,
+  Heart,
+  CheckSquare,
+  MessageSquare,
 } from "lucide-react"
 import Header from "@/components/Header"
+import { Link } from "react-router-dom"
+import { Badge } from "@/components/ui/badge"
 
 // DashboardTab Component
 const DashboardTab: React.FC = () => {
@@ -40,50 +45,197 @@ const DashboardTab: React.FC = () => {
     { id: 2, title: "プロジェクトMTG", time: "14:00", duration: "60分" },
   ]
 
+  // ワークライフバランススコア
+  const workLifeBalance = {
+    score: 72,
+    status: "良好",
+    color: "text-green-500",
+    recommendations: ["金曜日の業務を最適化", "週3回の運動習慣", "定期的な休憩"]
+  }
+
+  // チームアクティビティ
+  const teamActivities = [
+    { user: "佐藤太郎", activity: "タスク「プレゼン資料作成」を完了しました", time: "1時間前" },
+    { user: "鈴木花子", activity: "新しいナレッジ「効率的な会議の進め方」を追加しました", time: "3時間前" },
+    { user: "田中誠", activity: "チームチャットで新しい投稿をしました", time: "昨日" },
+  ]
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            業務進捗
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {tasks.map((task) => (
-              <div key={task.id} className="space-y-2">
-                <div className="flex justify-between">
-                  <span>{task.title}</span>
-                  <span>{task.progress}%</span>
+    <div className="space-y-6">
+      {/* ようこそメッセージ */}
+      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg p-6 text-white shadow-lg">
+        <h2 className="text-2xl font-bold mb-2">おはようございます、田中さん</h2>
+        <p className="opacity-90">今日も素晴らしい一日になりますように。今週のタスク完了率は85%です。</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button variant="secondary" className="bg-white/20 hover:bg-white/30">
+            <FileText className="h-4 w-4 mr-2" />
+            今日のタスク
+          </Button>
+          <Button variant="secondary" className="bg-white/20 hover:bg-white/30">
+            <Calendar className="h-4 w-4 mr-2" />
+            スケジュール
+          </Button>
+          <Button variant="secondary" className="bg-white/20 hover:bg-white/30">
+            <MessageSquare className="h-4 w-4 mr-2" />
+            メッセージ
+          </Button>
+        </div>
+      </div>
+
+      {/* クイックアクセスとステータス */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              業務進捗
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {tasks.map((task) => (
+                <div key={task.id} className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>{task.title}</span>
+                    <span>{task.progress}%</span>
+                  </div>
+                  <Progress value={task.progress} />
                 </div>
-                <Progress value={task.progress} />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            本日の会議
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {meetings.map((meeting) => (
-              <div key={meeting.id} className="flex justify-between items-center p-2 border rounded">
-                <div>
-                  <div className="font-medium">{meeting.title}</div>
-                  <div className="text-sm text-muted-foreground">{meeting.time}</div>
+              ))}
+            </div>
+            <div className="mt-4">
+              <Button variant="outline" size="sm" className="w-full" asChild>
+                <Link to="/tasks">すべてのタスクを表示</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              本日の会議
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {meetings.map((meeting) => (
+                <div key={meeting.id} className="flex justify-between items-center p-2 border rounded">
+                  <div>
+                    <div className="font-medium">{meeting.title}</div>
+                    <div className="text-sm text-muted-foreground">{meeting.time}</div>
+                  </div>
+                  <div className="text-sm">{meeting.duration}</div>
                 </div>
-                <div className="text-sm">{meeting.duration}</div>
+              ))}
+            </div>
+            <div className="mt-4">
+              <Button variant="outline" size="sm" className="w-full" asChild>
+                <Link to="/meeting">会議スケジュール</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <Heart className="h-5 w-5" />
+              ワークライフバランス
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-2">
+            <div className="flex flex-col items-center">
+              <div className="relative flex items-center justify-center w-24 h-24 mb-2">
+                <svg className="w-full h-full" viewBox="0 0 100 100">
+                  <circle
+                    className="text-muted-foreground/20"
+                    strokeWidth="8"
+                    stroke="currentColor"
+                    fill="transparent"
+                    r="40"
+                    cx="50"
+                    cy="50"
+                  />
+                  <circle
+                    className={workLifeBalance.score >= 70 ? "text-green-500" : "text-amber-500"}
+                    strokeWidth="8"
+                    strokeDasharray={`${(workLifeBalance.score / 100) * 251.2} 251.2`}
+                    strokeLinecap="round"
+                    stroke="currentColor"
+                    fill="transparent"
+                    r="40"
+                    cx="50"
+                    cy="50"
+                    transform="rotate(-90 50 50)"
+                  />
+                </svg>
+                <div className="absolute flex flex-col items-center justify-center">
+                  <span className={`text-xl font-bold ${workLifeBalance.color}`}>{workLifeBalance.score}</span>
+                </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              <Badge className="bg-green-100 text-green-800 mb-2">{workLifeBalance.status}</Badge>
+              <Button size="sm" variant="outline" className="w-full" asChild>
+                <Link to="/work_life_balance">詳細を見る</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              チームアクティビティ
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 max-h-[150px] overflow-y-auto">
+              {teamActivities.map((activity, index) => (
+                <div key={index} className="text-sm">
+                  <p className="font-medium">{activity.user}</p>
+                  <p className="text-muted-foreground">{activity.activity}</p>
+                  <p className="text-xs text-muted-foreground">{activity.time}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4">
+              <Button variant="outline" size="sm" className="w-full" asChild>
+                <Link to="/team_chat">チームチャットへ</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="col-span-2 lg:col-span-4 bg-muted/40">
+          <CardHeader>
+            <CardTitle>クイックアクセス</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+              {[
+                { icon: FileText, label: "新規マニュアル", path: "/manual" },
+                { icon: Timer, label: "会議開始", path: "/meeting" },
+                { icon: Book, label: "ナレッジ登録", path: "/knowledge_base" },
+                { icon: Users, label: "チャット", path: "/team_chat" },
+                { icon: CheckSquare, label: "タスク管理", path: "/tasks" },
+                { icon: Heart, label: "健康管理", path: "/work_life_balance" },
+              ].map(({ icon: Icon, label, path }, index) => (
+                <Button key={index} variant="outline" className="h-auto flex-col gap-2 py-4" asChild>
+                  <Link to={path}>
+                    <Icon className="h-6 w-6" />
+                    <span>{label}</span>
+                  </Link>
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>クイックアクセス</CardTitle>
