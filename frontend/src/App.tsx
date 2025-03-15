@@ -7,6 +7,7 @@ import KnowledgeBaseView from './pages/general/KnowledgeBase.tsx';
 import MeetingView from './pages/general/Meeting.tsx';
 import NotificationCenterView from './pages/general/NotificationCenter.tsx';
 import ProfileView from './pages/general/Profile.tsx';
+import SettingsView from './pages/general/Settings.tsx';
 
 const App = () => (
   <Router>
@@ -15,10 +16,11 @@ const App = () => (
       <Route path="/manual" element={<ManualView />} />
       <Route path="/login" element={<LoginView />} />
       <Route path="/signup" element={<SignUpView />} />
-      <Route path="/knowledge-base" element={<KnowledgeBaseView />} />
+      <Route path="/knowledge_base" element={<KnowledgeBaseView />} />
       <Route path="/meeting" element={<MeetingView />} />
       <Route path="/notification_center" element={<NotificationCenterView />} />
       <Route path="/profile" element={<ProfileView />} />
+      <Route path="/settings" element={<SettingsView />} />
     </Routes>
   </Router>
 );
