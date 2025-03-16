@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Eye, EyeOff } from 'lucide-react';
+import { userService } from '@/services';
+import { useNavigate } from 'react-router-dom';
 
 interface LoginFormData {
   email: string;
@@ -16,6 +18,9 @@ const LoginPage: React.FC = () => {
     password: ''
   });
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>): void => {
     const { name, value } = e.target;
@@ -27,11 +32,26 @@ const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
+    setLoading(true);
+    setError(null);
+    
     try {
-      // ログイン処理のロジックをここに追加
-      console.log('Login attempt with:', formData);
-    } catch (error) {
+      const response = await userService.login(formData);
+      
+      if (response.success) {
+        // トークンをローカルストレージに保存
+        localStorage.setItem('auth_token', response.data.token);
+        
+        // ダッシュボードにリダイレクト
+        navigate('/');
+      } else {
+        setError(response.message || 'ログインに失敗しました。');
+      }
+    } catch (error: any) {
+      setError(error.message || 'ログインに失敗しました。再度お試しください。');
       console.error('Login error:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -47,6 +67,12 @@ const LoginPage: React.FC = () => {
             <CardTitle className="text-2xl mb-3 text-center">WorkOptimizer</CardTitle>
           </CardHeader>
           <CardContent>
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                {error}
+              </div>
+            )}
+            
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">メールアドレス</Label>
@@ -58,7 +84,7 @@ const LoginPage: React.FC = () => {
                   onChange={handleInputChange}
                   placeholder=""
                   required
-                  className="w-full"
+                  disabled={loading}
                 />
               </div>
               
@@ -68,32 +94,30 @@ const LoginPage: React.FC = () => {
                   <Input 
                     id="password"
                     name="password"
-                    type={showPassword ? "text" : "password"}
+                    type={showPassword ? "text" : "password"} 
                     value={formData.password}
                     onChange={handleInputChange}
                     placeholder=""
                     required
-                    className="w-full pr-10"
+                    disabled={loading}
                   />
-                  <button
+                  <button 
                     type="button"
                     onClick={togglePasswordVisibility}
-                    className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-600"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2"
                   >
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
                 </div>
               </div>
               
-              <Button type="submit" className="w-full">
-                ログイン
+              <Button 
+                type="submit" 
+                className="w-full"
+                disabled={loading}
+              >
+                {loading ? 'ログイン中...' : 'ログイン'}
               </Button>
-              
-              <div className="text-center text-sm text-gray-600 mt-4">
-                <a href="/signup" className="hover:underline">
-                  パスワードを作成
-                </a>
-              </div>
             </form>
           </CardContent>
         </Card>

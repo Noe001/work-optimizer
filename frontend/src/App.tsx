@@ -11,22 +11,29 @@ import SettingsView from './pages/general/Settings.tsx';
 import WorkLifeBalanceView from './pages/general/WorkLifeBalance.tsx';
 import TeamChatView from './pages/general/TeamChat.tsx';
 import TaskManagerView from './pages/general/TaskManager.tsx';
+import CreateTaskView from './pages/general/CreateTask.tsx';
 
 const App = () => (
   <Router>
     <Routes>
       <Route path="/" element={<DashboardView />} />
-      <Route path="/manual" element={<ManualView />} />
+
       <Route path="/login" element={<LoginView />} />
       <Route path="/signup" element={<SignUpView />} />
+
+      <Route path="/manual" element={<ManualView />} />
       <Route path="/knowledge_base" element={<KnowledgeBaseView />} />
       <Route path="/meeting" element={<MeetingView />} />
+
       <Route path="/notification_center" element={<NotificationCenterView />} />
       <Route path="/profile" element={<ProfileView />} />
       <Route path="/settings" element={<SettingsView />} />
+
       <Route path="/work_life_balance" element={<WorkLifeBalanceView />} />
       <Route path="/team_chat" element={<TeamChatView />} />
+      
       <Route path="/tasks" element={<TaskManagerView />} />
+      <Route path="/tasks/create" element={<CreateTaskView />} />
     </Routes>
   </Router>
 );

@@ -24,17 +24,22 @@ import {
   Database,
   Calendar,
   Heart,
+  Plus,
 } from "lucide-react";
 
 // ナビゲーションリンクの定義
 const navigationLinks = [
   { path: "/", icon: Home, label: "ダッシュボード" },
   { path: "/tasks", icon: CheckSquare, label: "タスク管理" },
-  { path: "/meeting", icon: Calendar, label: "ミーティング" },
   { path: "/team_chat", icon: MessageSquare, label: "チーム会話" },
+  { path: "/work_life_balance", icon: Heart, label: "健康管理" },
+];
+
+// 新規作成メニュー項目
+const creationMenuItems = [
   { path: "/knowledge_base", icon: Database, label: "ナレッジベース" },
   { path: "/manual", icon: FileText, label: "マニュアル" },
-  { path: "/work_life_balance", icon: Heart, label: "健康管理" },
+  { path: "/meeting", icon: Calendar, label: "ミーティング" },
 ];
 
 const Header: React.FC = () => {
@@ -57,6 +62,20 @@ const Header: React.FC = () => {
                   <Link to={link.path} className="flex items-center">
                     <Icon className="mr-2 h-4 w-4" />
                     {link.label}
+                  </Link>
+                </DropdownMenuItem>
+              );
+            })}
+            {/* モバイル用の新規作成メニュー */}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>新規作成</DropdownMenuLabel>
+            {creationMenuItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <DropdownMenuItem key={item.path} asChild>
+                  <Link to={item.path} className="flex items-center">
+                    <Icon className="mr-2 h-4 w-4" />
+                    {item.label}
                   </Link>
                 </DropdownMenuItem>
               );
@@ -90,6 +109,40 @@ const Header: React.FC = () => {
               </Button>
             );
           })}
+          
+          {/* 新規作成ドロップダウンメニュー */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={
+                  location.pathname === "/knowledge_base" || 
+                  location.pathname === "/manual" || 
+                  location.pathname === "/meeting" 
+                    ? "default" 
+                    : "ghost"
+                }
+                size="sm"
+                className="flex items-center gap-1"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden lg:inline">新規作成</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {creationMenuItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+                return (
+                  <DropdownMenuItem key={item.path} asChild>
+                    <Link to={item.path} className={`flex items-center ${isActive ? 'bg-muted' : ''}`}>
+                      <Icon className="mr-2 h-4 w-4" />
+                      {item.label}
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </nav>
         
         <div className="flex-1 mx-4 relative hidden sm:block">
@@ -102,7 +155,7 @@ const Header: React.FC = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center bg-black text-white text-xs rounded-full">
+                <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center bg-red-500 text-white text-xs rounded-full">
                   3
                 </span>
               </Button>

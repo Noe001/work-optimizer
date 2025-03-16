@@ -89,7 +89,7 @@ const KnowledgeCreationPage = () => {
               <CardHeader>
                 <CardTitle>
                   <BookOpen className="inline-block mr-2 h-5 w-5" />
-                  ナレッジ編集
+                  ナレッジ詳細
                 </CardTitle>
               </CardHeader>
               <CardContent>
