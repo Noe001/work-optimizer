@@ -106,7 +106,7 @@ const DashboardTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* ようこそメッセージ */}
-      <div className="bg-gradient-to-r from-gray-200 to-blue-400 rounded-lg p-6 shadow-lg">
+      <div className="bg-gradient-to-r from-gray-200 to-cyan-500/30 rounded-lg p-6 shadow-lg">
         <h2 className="text-2xl font-bold mb-2">おはようございます、田中さん</h2>
         <p className="opacity-90">今日も素晴らしい一日になりますように。今週のタスク完了率は85%です。</p>
         <div className="mt-4 flex flex-wrap gap-2">

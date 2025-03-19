@@ -22,7 +22,7 @@ const meetingService = {
    * @param perPage 1ページあたりの件数
    */
   async getMeetings(page = 1, perPage = 10): Promise<ApiResponse<PaginatedResponse<Meeting>>> {
-    return api.get<PaginatedResponse<Meeting>>('/meetings', { page, per_page: perPage });
+    return api.get<PaginatedResponse<Meeting>>('/api/meetings', { page, per_page: perPage });
   },
 
   /**
@@ -30,7 +30,7 @@ const meetingService = {
    * @param id ミーティングID
    */
   async getMeeting(id: number): Promise<ApiResponse<Meeting>> {
-    return api.get<Meeting>(`/meetings/${id}`);
+    return api.get<Meeting>(`/api/meetings/${id}`);
   },
 
   /**
@@ -38,7 +38,7 @@ const meetingService = {
    * @param meetingData ミーティングデータ
    */
   async createMeeting(meetingData: MeetingData): Promise<ApiResponse<Meeting>> {
-    return api.post<Meeting>('/meetings', meetingData);
+    return api.post<Meeting>('/api/meetings', meetingData);
   },
 
   /**
@@ -47,7 +47,7 @@ const meetingService = {
    * @param meetingData 更新するミーティングデータ
    */
   async updateMeeting(id: number, meetingData: Partial<MeetingData>): Promise<ApiResponse<Meeting>> {
-    return api.put<Meeting>(`/meetings/${id}`, meetingData);
+    return api.put<Meeting>(`/api/meetings/${id}`, meetingData);
   },
 
   /**
@@ -55,14 +55,14 @@ const meetingService = {
    * @param id ミーティングID
    */
   async deleteMeeting(id: number): Promise<ApiResponse<null>> {
-    return api.delete<null>(`/meetings/${id}`);
+    return api.delete<null>(`/api/meetings/${id}`);
   },
   
   /**
    * 自分の参加するミーティング一覧を取得
    */
   async getMyMeetings(): Promise<ApiResponse<Meeting[]>> {
-    return api.get<Meeting[]>('/meetings/my');
+    return api.get<Meeting[]>('/api/meetings/my');
   },
   
   /**
@@ -71,7 +71,7 @@ const meetingService = {
    * @param userIds 追加するユーザーIDのリスト
    */
   async addParticipants(meetingId: number, userIds: string[]): Promise<ApiResponse<null>> {
-    return api.post<null>(`/meetings/${meetingId}/participants`, { user_ids: userIds });
+    return api.post<null>(`/api/meetings/${meetingId}/participants`, { user_ids: userIds });
   },
   
   /**
@@ -80,7 +80,7 @@ const meetingService = {
    * @param userId 削除するユーザーID
    */
   async removeParticipant(meetingId: number, userId: string): Promise<ApiResponse<null>> {
-    return api.delete<null>(`/meetings/${meetingId}/participants/${userId}`);
+    return api.delete<null>(`/api/meetings/${meetingId}/participants/${userId}`);
   }
 };
 

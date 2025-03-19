@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,14 +25,17 @@ import {
   Calendar,
   Heart,
   Plus,
+  Building2,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ナビゲーションリンクの定義
 const navigationLinks = [
   { path: "/", icon: Home, label: "ダッシュボード" },
-  { path: "/tasks", icon: CheckSquare, label: "タスク管理" },
+  { path: "/task_manager", icon: CheckSquare, label: "タスク管理" },
   { path: "/team_chat", icon: MessageSquare, label: "チーム会話" },
   { path: "/work_life_balance", icon: Heart, label: "健康管理" },
+  { path: "/organizations", icon: Building2, label: "組織管理" },
 ];
 
 // 新規作成メニュー項目
@@ -44,6 +47,14 @@ const creationMenuItems = [
 
 const Header: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+  
+  // ログアウト処理
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
   
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white shadow-md">
@@ -209,11 +220,9 @@ const Header: React.FC = () => {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link to="/login" className="cursor-pointer flex items-center">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  ログアウト
-                </Link>
+              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer flex items-center">
+                <LogOut className="mr-2 h-4 w-4" />
+                ログアウト
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

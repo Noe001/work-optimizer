@@ -23,7 +23,7 @@ const taskService = {
    * @param filters フィルタ条件
    */
   async getTasks(page = 1, perPage = 10, filters?: Record<string, any>): Promise<ApiResponse<PaginatedResponse<Task>>> {
-    return api.get<PaginatedResponse<Task>>('/tasks', { 
+    return api.get<PaginatedResponse<Task>>('/api/tasks', { 
       page, 
       per_page: perPage,
       ...filters
@@ -35,7 +35,7 @@ const taskService = {
    * @param id タスクID
    */
   async getTask(id: number): Promise<ApiResponse<Task>> {
-    return api.get<Task>(`/tasks/${id}`);
+    return api.get<Task>(`/api/tasks/${id}`);
   },
 
   /**
@@ -43,7 +43,7 @@ const taskService = {
    * @param taskData タスクデータ
    */
   async createTask(taskData: TaskData): Promise<ApiResponse<Task>> {
-    return api.post<Task>('/tasks', taskData);
+    return api.post<Task>('/api/tasks', taskData);
   },
 
   /**
@@ -52,7 +52,7 @@ const taskService = {
    * @param taskData 更新するタスクデータ
    */
   async updateTask(id: number, taskData: Partial<TaskData>): Promise<ApiResponse<Task>> {
-    return api.put<Task>(`/tasks/${id}`, taskData);
+    return api.put<Task>(`/api/tasks/${id}`, taskData);
   },
 
   /**
@@ -60,14 +60,14 @@ const taskService = {
    * @param id タスクID
    */
   async deleteTask(id: number): Promise<ApiResponse<null>> {
-    return api.delete<null>(`/tasks/${id}`);
+    return api.delete<null>(`/api/tasks/${id}`);
   },
   
   /**
    * 自分のタスク一覧を取得
    */
   async getMyTasks(): Promise<ApiResponse<Task[]>> {
-    return api.get<Task[]>('/tasks/my');
+    return api.get<Task[]>('/api/tasks/my');
   },
   
   /**
@@ -76,7 +76,7 @@ const taskService = {
    * @param status 新しいステータス
    */
   async updateTaskStatus(id: number, status: 'pending' | 'in_progress' | 'completed'): Promise<ApiResponse<Task>> {
-    return api.put<Task>(`/tasks/${id}/status`, { status });
+    return api.put<Task>(`/api/tasks/${id}/status`, { status });
   },
   
   /**
@@ -85,7 +85,7 @@ const taskService = {
    * @param userId 新しい担当者のID
    */
   async assignTask(id: number, userId: string): Promise<ApiResponse<Task>> {
-    return api.put<Task>(`/tasks/${id}/assign`, { user_id: userId });
+    return api.put<Task>(`/api/tasks/${id}/assign`, { user_id: userId });
   },
   
   /**
@@ -94,7 +94,7 @@ const taskService = {
    * @param comment コメント内容
    */
   async addComment(taskId: number, comment: string): Promise<ApiResponse<any>> {
-    return api.post<any>(`/tasks/${taskId}/comments`, { content: comment });
+    return api.post<any>(`/api/tasks/${taskId}/comments`, { content: comment });
   }
 };
 

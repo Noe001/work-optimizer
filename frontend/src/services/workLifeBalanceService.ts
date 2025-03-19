@@ -9,7 +9,7 @@ const workLifeBalanceService = {
    * ワークライフバランスのデータを取得
    */
   async getWorkLifeBalance(): Promise<ApiResponse<WorkLifeBalance>> {
-    return api.get<WorkLifeBalance>('/work-life-balance');
+    return api.get<WorkLifeBalance>('/api/work-life-balance');
   },
 
   /**
@@ -18,7 +18,7 @@ const workLifeBalanceService = {
    * @param value 新しい値
    */
   async updateWellnessIndicator(indicatorId: number, value: number): Promise<ApiResponse<WorkLifeBalance>> {
-    return api.put<WorkLifeBalance>(`/work-life-balance/wellness/${indicatorId}`, { value });
+    return api.put<WorkLifeBalance>(`/api/work-life-balance/wellness/${indicatorId}`, { value });
   },
 
   /**
@@ -26,7 +26,7 @@ const workLifeBalanceService = {
    * @param goalData 目標データ
    */
   async setHealthGoal(goalData: { category: string, value: number, deadline: string }): Promise<ApiResponse<any>> {
-    return api.post<any>('/work-life-balance/goals', goalData);
+    return api.post<any>('/api/work-life-balance/goals', goalData);
   },
 
   /**
@@ -34,7 +34,7 @@ const workLifeBalanceService = {
    * @param period 期間（日次、週次、月次）
    */
   async getBalanceHistory(period: 'daily' | 'weekly' | 'monthly'): Promise<ApiResponse<any>> {
-    return api.get<any>(`/work-life-balance/history`, { period });
+    return api.get<any>(`/api/work-life-balance/history`, { period });
   }
 };
 
