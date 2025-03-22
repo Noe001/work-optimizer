@@ -1,10 +1,22 @@
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { ApiError, ApiResponse } from '../types/api';
 
-// 開発環境と本番環境でベースURLを切り替え
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+// カスタムイベントの定義（認証エラー通知用）
+export const AUTH_ERROR_EVENT = 'auth:error';
 
-console.log('API Base URL:', BASE_URL); // デバッグ用のログ
+// 認証エラー発生時のイベント発火関数
+export const triggerAuthError = (details: any = {}) => {
+  const event = new CustomEvent(AUTH_ERROR_EVENT, { 
+    detail: { 
+      timestamp: new Date(),
+      ...details
+    } 
+  });
+  window.dispatchEvent(event);
+};
+
+// 開発環境と本番環境でベースURLを切り替え
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // Axiosインスタンスの作成
 const apiClient = axios.create({
@@ -20,69 +32,32 @@ const apiClient = axios.create({
 // リクエストインターセプター
 apiClient.interceptors.request.use(
   (config) => {
-    // リクエスト情報をログに出力（開発環境のみ）
-    if (import.meta.env.DEV) {
-      console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, config.data || config.params);
+    // 保存されたトークンがあればAuthorizationヘッダーに追加
+    const token = localStorage.getItem('auth_token');
+    if (token && config.headers) {
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
-
-    // JWTトークンがあれば、それをヘッダーに追加
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    
     return config;
   },
   (error) => {
-    console.error('API Request Error:', error);
     return Promise.reject(error);
   }
 );
 
 // レスポンスインターセプター
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    return response;
+  },
   (error: AxiosError) => {
-    // エラー情報をログに出力（開発環境のみ）
-    if (import.meta.env.DEV) {
-      console.error('API Response Error:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method
-        }
+    // 認証エラー（401）の場合にカスタムイベントを発火
+    if (error.response && error.response.status === 401) {
+      triggerAuthError({
+        message: error.message,
+        status: error.response.status,
+        statusText: error.response.statusText
       });
     }
-
-    // 401エラー（認証エラー）時の処理
-    if (error.response?.status === 401) {
-      // 初期認証チェックかどうかを確認
-      const isInitialAuthCheck = error.config?.url === '/api/auth/me' && 
-                               error.config?.method?.toLowerCase() === 'get';
-      
-      // 現在のパスを取得
-      const currentPath = window.location.pathname;
-      const isLoginPage = currentPath === '/login' || currentPath === '/signup';
-      
-      if (import.meta.env.DEV) {
-        console.log('Auth error details:', {
-          currentPath,
-          isLoginPage,
-          isInitialAuthCheck
-        });
-      }
-      
-      // 初期認証チェックまたはログインページでのエラーは無視
-      if (!isInitialAuthCheck && !isLoginPage) {
-        // カスタムイベントを発火して認証状態をリセット
-        window.dispatchEvent(new CustomEvent('auth_token_invalid'));
-      }
-
-      // エラーメッセージを設定
-      error.message = 'セッションが切れました。再度ログインしてください。';
-    }
-    
     return Promise.reject(error);
   }
 );
@@ -131,9 +106,10 @@ export const api = {
       const response = await apiClient.post<T>(url, data, config);
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
+      console.error('POST request failed:', error.message);
       return {
         success: false,
-        message: error.response?.data?.message || error.message,
+        message: error.message || 'リクエストに失敗しました',
         data: null as any
       };
     }
@@ -230,14 +206,62 @@ const handleApiError = (error: AxiosError<ApiError>): never => {
 export const authAPI = {
   // JWTベースの認証
   login: async (email: string, password: string) => {
-    return apiClient.post('/api/login', { email, password });
+    try {
+      const response = await apiClient.post('/api/login', { email, password });
+      
+      // ログイン成功時にトークンをヘッダーに設定
+      if (response.data && response.data.success && response.data.data.token) {
+        const token = response.data.data.token;
+        // 次回以降のリクエストのためにトークンを設定
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        console.log('Token set for future requests');
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Login API error:', error);
+      throw error;
+    }
   },
+  
   signup: async (name: string, email: string, password: string) => {
-    return apiClient.post('/api/signup', { name, email, password });
+    try {
+      const response = await apiClient.post('/api/signup', { 
+        name, 
+        email, 
+        password,
+        password_confirmation: password 
+      });
+      
+      // サインアップ成功時にトークンをヘッダーに設定
+      if (response.data && response.data.success && response.data.data.token) {
+        const token = response.data.data.token;
+        // 次回以降のリクエストのためにトークンを設定
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        console.log('Token set for future requests after signup');
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Signup API error:', error);
+      throw error;
+    }
   },
+  
   logout: async () => {
-    return apiClient.post('/api/auth/logout');
+    try {
+      const response = await apiClient.post('/api/auth/logout');
+      // ログアウト成功時にヘッダーからトークンを削除
+      delete apiClient.defaults.headers.common['Authorization'];
+      return response;
+    } catch (error) {
+      console.error('Logout API error:', error);
+      // エラーが発生してもヘッダーからトークンを削除
+      delete apiClient.defaults.headers.common['Authorization'];
+      throw error;
+    }
   },
+  
   me: async () => {
     return apiClient.get('/api/auth/me');
   },

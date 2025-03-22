@@ -6,6 +6,7 @@ class Organization < ApplicationRecord
 
   # コールバック
   before_create :generate_invite_code
+  before_create :set_uuid
 
   # バリデーション
   validates :name, presence: true, length: { maximum: 100 }
@@ -48,5 +49,10 @@ class Organization < ApplicationRecord
       code = SecureRandom.alphanumeric(8).upcase
       break code unless Organization.exists?(invite_code: code)
     end
+  end
+  
+  # UUID生成
+  def set_uuid
+    self.id = SecureRandom.uuid if self.id.nil?
   end
 end 

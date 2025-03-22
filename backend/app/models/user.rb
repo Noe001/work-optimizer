@@ -34,20 +34,10 @@ class User < ApplicationRecord
       iat: Time.now.to_i
     }
     
-    # トークン生成のログ
-    if Rails.env.development?
-      puts "Generating JWT token for user:"
-      puts "  ID: #{self.id}"
-      puts "  Email: #{self.email}"
-      puts "  Expiration: #{Time.at(exp_time).iso8601}"
-    end
+    # JWTConfig モジュールを使用して秘密鍵を取得
+    secret_key = JWTConfig.secret_key
     
-    token = JWT.encode(payload, Rails.application.credentials.secret_key_base, 'HS256')
-    
-    # 開発環境のみログ出力
-    if Rails.env.development?
-      puts "Generated JWT token: #{token[0..15]}..."
-    end
+    token = JWT.encode(payload, secret_key, JWTConfig::ALGORITHM)
     
     token
   end
@@ -66,11 +56,13 @@ class User < ApplicationRecord
 
   private
 
-  def set_uuid
-    self.id ||= SecureRandom.uuid
-  end
-
+  # メールアドレスを小文字に変換
   def downcase_email
     self.email = email.downcase
+  end
+
+  # UUID生成
+  def set_uuid
+    self.id = SecureRandom.uuid if self.id.nil?
   end
 end

@@ -1,7 +1,9 @@
 class UpdateMeetings < ActiveRecord::Migration[7.2]
   def change
-    create_table :meetings, id: false do |t|
-      t.string :id, limit: 36, null: false, primary_key: true
+    # 既存のテーブルを削除して新しく作成する
+    drop_table :meetings
+    
+    create_table :meetings, id: :string do |t|
       t.string :title, null: false
       t.text :agenda
       t.text :description

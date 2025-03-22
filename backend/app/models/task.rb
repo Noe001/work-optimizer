@@ -1,5 +1,7 @@
 class Task < ApplicationRecord
-  belongs_to :user
+  before_create :set_uuid
+  
+  belongs_to :user, foreign_key: 'assigned_to', optional: true
 
   # ステータスと優先度の定数
   STATUSES = ['pending', 'in_progress', 'completed'].freeze
@@ -27,4 +29,11 @@ class Task < ApplicationRecord
   scope :due_soon, -> { where('due_date <= ?', 7.days.from_now) }
   scope :overdue, -> { where('due_date < ? AND status != ?', Date.current, 'completed') }
   scope :recent, -> { order(created_at: :desc) }
+  
+  private
+  
+  # UUID生成
+  def set_uuid
+    self.id = SecureRandom.uuid if self.id.nil?
+  end
 end 

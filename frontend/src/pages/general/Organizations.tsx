@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Textarea } from '../../components/ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { useToast } from '../../hooks/use-toast';
 import organizationService, { Organization } from '../../services/organizationService';
 import invitationService from '../../services/invitationService';
-import { Copy, Loader2, Plus, Users, Server, Hash, ArrowRight } from 'lucide-react';
+import { Loader2, Plus, Users, Server, ArrowRight } from 'lucide-react';
 
 const OrganizationsView = () => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -20,10 +19,8 @@ const OrganizationsView = () => {
   const [organizationName, setOrganizationName] = useState('');
   const [organizationDescription, setOrganizationDescription] = useState('');
   const [inviteCode, setInviteCode] = useState('');
-  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
-  const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
   const [validateLoading, setValidateLoading] = useState(false);
   const [validatedOrg, setValidatedOrg] = useState<{id: string, name: string, description: string} | null>(null);
   const { toast } = useToast();
@@ -75,11 +72,11 @@ const OrganizationsView = () => {
       setOrganizationDescription('');
       setCreateDialogOpen(false);
       fetchOrganizations();
-    } catch (error) {
+    } catch (error: any) {
       console.error('組織の作成に失敗しました', error);
       toast({
         title: 'エラー',
-        description: '組織の作成に失敗しました',
+        description: error.message || '組織の作成に失敗しました',
         variant: 'destructive',
       });
     } finally {

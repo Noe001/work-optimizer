@@ -3,14 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Label } from '../../components/ui/label';
 import { Input } from '../../components/ui/input';
 import { Switch } from '../../components/ui/switch';
 import { useToast } from '../../hooks/use-toast';
 import organizationService, { Organization } from '../../services/organizationService';
 import invitationService, { Invitation } from '../../services/invitationService';
-import { Loader2, ArrowLeft, Users, Calendar, Server, Copy, Settings, Trash2, Plus, RefreshCw, Shield } from 'lucide-react';
+import { Loader2, ArrowLeft, Users, Calendar, Server, Copy, Trash2, Plus, RefreshCw, Shield } from 'lucide-react';
 
 const OrganizationDetailView = () => {
   const { id } = useParams<{ id: string }>();

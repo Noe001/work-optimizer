@@ -3,9 +3,12 @@ class CreateOrganizations < ActiveRecord::Migration[7.2]
     create_table :organizations, id: :string do |t|
       t.string :name, null: false
       t.text :description
+      t.string :invite_code
 
       t.timestamps
     end
+    
+    add_index :organizations, :invite_code, unique: true
     
     # 既存のOrganizationMembershipsマイグレーションを修正
     reversible do |dir|

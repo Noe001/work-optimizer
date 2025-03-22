@@ -10,13 +10,19 @@ module Api
     def create
       if @user && @user.authenticate(params[:password])
         session[:user_id] = @user.id
+        # JWTトークンも生成して返す
+        token = @user.generate_jwt
+        
         render json: {
           success: true,
           message: 'ログインしました',
-          user: {
-            id: @user.id,
-            name: @user.name,
-            email: @user.email
+          data: {
+            user: {
+              id: @user.id,
+              name: @user.name,
+              email: @user.email
+            },
+            token: token
           }
         }
       else
@@ -48,10 +54,13 @@ module Api
           render json: {
             success: true,
             message: 'ログインしています',
-            user: {
-              id: @user.id,
-              name: @user.name,
-              email: @user.email
+            data: {
+              user: {
+                id: @user.id,
+                name: @user.name,
+                email: @user.email
+              },
+              token: @user.generate_jwt
             }
           }
         else
