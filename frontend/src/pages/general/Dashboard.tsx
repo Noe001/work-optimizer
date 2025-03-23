@@ -34,10 +34,10 @@ import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { taskService, meetingService, workLifeBalanceService } from '@/services'
+import { taskService, meetingService, attendanceService } from '@/services'
 import { useApi } from '@/hooks'
 import { Task } from '@/types/api'
-import type { Meeting as ApiMeeting, WorkLifeBalance } from '@/types/api'
+import type { Meeting as ApiMeeting, Attendance } from '@/types/api'
 import { ApiError, LoadingIndicator } from '@/components/ui'
 
 // Meeting型定義
@@ -57,8 +57,8 @@ const DashboardTab: React.FC = () => {
   // ミーティング用のAPIフック
   const meetingsApi = useApi<ApiMeeting[]>();
 
-  // ワークライフバランス用のAPIフック
-  const workLifeBalanceApi = useApi<WorkLifeBalance>();
+  // 勤怠管理用のAPIフック
+  const attendanceApi = useApi<Attendance>();
 
   // チームアクティビティ
   const teamActivities = [
@@ -91,14 +91,14 @@ const DashboardTab: React.FC = () => {
         })
     );
 
-    // ワークライフバランスデータを取得
-    workLifeBalanceApi.execute(
-      () => workLifeBalanceService.getWorkLifeBalance()
+    // 勤怠データを取得
+    attendanceApi.execute(
+      () => attendanceService.getAttendance()
         .then(response => {
           if (response.success) {
             return response.data;
           }
-          throw new Error(response.message || 'ワークライフバランスデータの取得に失敗しました');
+          throw new Error(response.message || '勤怠データの取得に失敗しました');
         })
     );
   }, []);
@@ -249,25 +249,25 @@ const DashboardTab: React.FC = () => {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2">
               <Heart className="h-5 w-5" />
-              ワークライフバランス
+              勤怠管理
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-2">
-            {workLifeBalanceApi.loading && (
+            {attendanceApi.loading && (
               <LoadingIndicator text="データを読込中..." size="sm" />
             )}
             
-            {workLifeBalanceApi.error && (
+            {attendanceApi.error && (
               <ApiError 
-                error={workLifeBalanceApi.error}
-                onRetry={() => workLifeBalanceApi.execute(() => 
-                  workLifeBalanceService.getWorkLifeBalance()
+                error={attendanceApi.error}
+                onRetry={() => attendanceApi.execute(() => 
+                  attendanceService.getAttendance()
                     .then(res => res.success ? res.data : null)
                 )}
               />
             )}
             
-            {!workLifeBalanceApi.loading && !workLifeBalanceApi.error && workLifeBalanceApi.data && (
+            {!attendanceApi.loading && !attendanceApi.error && attendanceApi.data && (
               <div className="flex flex-col items-center">
                 <div className="relative flex items-center justify-center w-24 h-24 mb-2">
                   <svg className="w-full h-full" viewBox="0 0 100 100">
@@ -282,14 +282,14 @@ const DashboardTab: React.FC = () => {
                     />
                     <circle
                       className={
-                        workLifeBalanceApi.data.status === 'good' 
+                        attendanceApi.data.status === 'good' 
                           ? "text-green-500" 
-                          : workLifeBalanceApi.data.status === 'warning' 
+                          : attendanceApi.data.status === 'warning' 
                             ? "text-amber-500" 
                             : "text-red-500"
                       }
                       strokeWidth="8"
-                      strokeDasharray={`${(workLifeBalanceApi.data.score / 100) * 251.2} 251.2`}
+                      strokeDasharray={`${((attendanceApi.data.score || 0) / 100) * 251.2} 251.2`}
                       strokeLinecap="round"
                       stroke="currentColor"
                       fill="transparent"
@@ -301,30 +301,30 @@ const DashboardTab: React.FC = () => {
                   </svg>
                   <div className="absolute flex flex-col items-center justify-center">
                     <span className={`text-xl font-bold ${
-                      workLifeBalanceApi.data.status === 'good' 
+                      attendanceApi.data.status === 'good' 
                         ? "text-green-500" 
-                        : workLifeBalanceApi.data.status === 'warning' 
+                        : attendanceApi.data.status === 'warning' 
                           ? "text-amber-500" 
                           : "text-red-500"
                     }`}>
-                      {workLifeBalanceApi.data.score}
+                      {attendanceApi.data.score || 0}
                     </span>
                   </div>
                 </div>
                 <Badge 
                   className={
-                    workLifeBalanceApi.data.status === 'good' 
+                    attendanceApi.data.status === 'good' 
                       ? "bg-green-100 text-green-800" 
-                      : workLifeBalanceApi.data.status === 'warning' 
+                      : attendanceApi.data.status === 'warning' 
                         ? "bg-amber-100 text-amber-800" 
                         : "bg-red-100 text-red-800"
                   }
                 >
-                  {workLifeBalanceApi.data.status === 'good' ? '良好' : 
-                   workLifeBalanceApi.data.status === 'warning' ? '要注意' : '改善が必要'}
+                  {attendanceApi.data.status === 'good' ? '良好' : 
+                   attendanceApi.data.status === 'warning' ? '要注意' : '改善が必要'}
                 </Badge>
                 <Button size="sm" variant="outline" className="w-full mt-2" asChild>
-                  <Link to="/work_life_balance">詳細を見る</Link>
+                  <Link to="/attendance">詳細を見る</Link>
                 </Button>
               </div>
             )}

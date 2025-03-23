@@ -26,6 +26,7 @@ import {
   Heart,
   Plus,
   Building2,
+  Clock,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -34,7 +35,7 @@ const navigationLinks = [
   { path: "/", icon: Home, label: "ダッシュボード" },
   { path: "/task_manager", icon: CheckSquare, label: "タスク管理" },
   { path: "/team_chat", icon: MessageSquare, label: "チーム会話" },
-  { path: "/work_life_balance", icon: Heart, label: "健康管理" },
+  { path: "/attendance", icon: Clock, label: "勤怠管理" },
   { path: "/organizations", icon: Building2, label: "組織管理" },
 ];
 

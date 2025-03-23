@@ -51,11 +51,13 @@ Rails.application.routes.draw do
       end
     end
     
-    # ワークライフバランス関連のエンドポイント
-    get 'work-life-balance', to: 'work_life_balance#index'
-    put 'work-life-balance/wellness/:id', to: 'work_life_balance#update_wellness'
-    post 'work-life-balance/goals', to: 'work_life_balance#set_goal'
-    get 'work-life-balance/history', to: 'work_life_balance#get_history'
+    # 勤怠管理関連のエンドポイント
+    get 'attendance', to: 'attendance#index'
+    post 'attendance/check-in', to: 'attendance#check_in'
+    post 'attendance/check-out', to: 'attendance#check_out'
+    post 'attendance/leave', to: 'attendance#request_leave'
+    get 'attendance/history', to: 'attendance#get_history'
+    get 'attendance/summary', to: 'attendance#get_summary'
     
     # 組織関連
     resources :organizations, only: [:index, :show, :create] do

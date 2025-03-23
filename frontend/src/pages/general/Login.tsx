@@ -6,11 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2 } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -24,6 +26,7 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsSubmitting(true);
 
     try {
       const success = await login(email, password);
@@ -34,6 +37,8 @@ const Login: React.FC = () => {
       }
     } catch (err) {
       setError('ログイン中にエラーが発生しました。');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -66,6 +71,7 @@ const Login: React.FC = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -76,6 +82,7 @@ const Login: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
 
@@ -85,8 +92,19 @@ const Login: React.FC = () => {
               </Alert>
             )}
 
-            <Button type="submit" className="w-full">
-              ログイン
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  ログイン中...
+                </>
+              ) : (
+                'ログイン'
+              )}
             </Button>
           </form>
         </CardContent>
@@ -97,6 +115,7 @@ const Login: React.FC = () => {
               variant="link"
               className="p-0 h-auto font-normal"
               onClick={() => navigate('/signup')}
+              disabled={isSubmitting}
             >
               新規登録
             </Button>

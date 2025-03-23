@@ -73,21 +73,43 @@ export interface Manual {
   updated_at: string;
 }
 
-// ワークライフバランス関連の型
-export interface WorkLifeBalance {
+// 勤怠管理関連の型
+export interface Attendance {
   id: number;
-  score: number;
-  status: 'good' | 'warning' | 'bad';
-  lastUpdated: string;
-  recommendations: string[];
-  stressFactors: {
-    factor: string;
-    level: string;
-    recommendations: string[];
-  }[];
-  wellnessIndicators: {
-    name: string;
-    value: number;
-    target: number;
-  }[];
+  user_id: string;
+  date: string;
+  check_in: string;
+  check_out: string | null;
+  total_hours: number | null;
+  overtime_hours: number | null;
+  status: 'present' | 'absent' | 'late' | 'half_day' | 'holiday' | 'good' | 'warning' | 'bad';
+  score?: number;
+  comment?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeaveRequest {
+  id: number;
+  user_id: string;
+  type: 'paid' | 'sick' | 'other';
+  start_date: string;
+  end_date: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AttendanceSummary {
+  total_days: number;
+  present_days: number;
+  absent_days: number;
+  late_days: number;
+  total_hours: number;
+  total_overtime: number;
+  leave_balance: {
+    paid: number;
+    sick: number;
+  };
 } 
