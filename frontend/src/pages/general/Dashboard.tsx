@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 import { useState, useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,24 +10,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Bell,
-  Home,
   FilePlus,
   BookOpen,
-  MessageSquare,
   Search,
-  Menu,
-  User,
-  Settings,
-  LogOut,
   BarChart3,
   Calendar,
   FileText,
@@ -39,169 +24,365 @@ import {
   Filter,
   Tag,
   Clock,
+  Heart,
+  CheckSquare,
+  MessageSquare,
 } from "lucide-react"
+import Header from "@/components/Header"
+import { Link } from "react-router-dom"
+import { Badge } from "@/components/ui/badge"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { taskService, meetingService, attendanceService } from '@/services'
+import { useApi } from '@/hooks'
+import { Task } from '@/types/api'
+import type { Meeting as ApiMeeting, Attendance } from '@/types/api'
+import { ApiError, LoadingIndicator } from '@/components/ui'
 
-// Header Component
-const Header: React.FC = () => {
-  return (
-    <header className="sticky top-0 z-50 w-full border-b bg-white shadow-sm">
-      <div className="container mx-auto flex h-14 items-center px-4">
-        <Button variant="ghost" size="icon" className="md:hidden">
-          <Menu className="h-5 w-5" />
-        </Button>
-        <div className="flex items-center gap-2 font-semibold">
-          <img src="/images/w-o_logo.png" alt="logo" className="h-7 w-7" />
-          <span className="hidden md:inline">WorkOptimizer</span>
-        </div>
-        <nav className="hidden md:flex items-center gap-6 mx-6">
-          {[
-            { icon: Home, label: "ホーム" },
-            { icon: FilePlus, label: "新規作成" },
-            { icon: BookOpen, label: "ドキュメント" },
-            { icon: MessageSquare, label: "チャット" },
-          ].map(({ icon: Icon, label }) => (
-            <Button key={label} variant="ghost" className="flex items-center gap-2">
-              <Icon className="h-4 w-4" />
-              {label}
-            </Button>
-          ))}
-        </nav>
-        <div className="flex-1 mx-4 relative">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-          <Input type="text" placeholder="検索..." className="pl-8" />
-        </div>
-        <div className="flex items-center gap-4">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center bg-black text-white text-xs rounded-full">
-                  3
-                </span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>通知</DropdownMenuLabel>
-              <DropdownMenuItem>
-                <div className="flex flex-col">
-                  <span className="font-medium">会議リマインド</span>
-                  <span className="text-sm text-muted-foreground">14:00 プロジェクトMTG</span>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <div className="flex flex-col">
-                  <span className="font-medium">タスク期限</span>
-                  <span className="text-sm text-muted-foreground">マニュアル作成 本日期限</span>
-                </div>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <img src="public/images/circle-user-round.png" alt="ユーザーアバター" className="w-8 h-8 rounded-full" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>田中 太郎</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <User className="mr-2 h-4 w-4" />
-                プロフィール
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="mr-2 h-4 w-4" />
-                設定
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <LogOut className="mr-2 h-4 w-4" />
-                ログアウト
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-    </header>
-  )
+// Meeting型定義
+interface LocalMeeting {
+  id: number
+  title: string
+  scheduledTime: string
+  participants: number
+  agenda: { topic: string; duration: number }[]
 }
 
 // DashboardTab Component
 const DashboardTab: React.FC = () => {
-  const tasks = [
-    { id: 1, title: "業務マニュアル作成", progress: 75 },
-    { id: 2, title: "週次MTG", progress: 100 },
-    { id: 3, title: "ナレッジベース更新", progress: 30 },
+  // タスク用のAPIフック
+  const tasksApi = useApi<Task[]>();
+  
+  // ミーティング用のAPIフック
+  const meetingsApi = useApi<ApiMeeting[]>();
+
+  // 勤怠管理用のAPIフック
+  const attendanceApi = useApi<Attendance>();
+
+  // チームアクティビティ
+  const teamActivities = [
+    { user: "佐藤太郎", activity: "タスク「プレゼン資料作成」を完了しました", time: "1時間前" },
+    { user: "鈴木花子", activity: "新しいナレッジ「効率的な会議の進め方」を追加しました", time: "3時間前" },
+    { user: "田中誠", activity: "チームチャットで新しい投稿をしました", time: "昨日" },
   ]
 
-  const meetings = [
-    { id: 1, title: "朝会", time: "09:00", duration: "30分" },
-    { id: 2, title: "プロジェクトMTG", time: "14:00", duration: "60分" },
-  ]
+  // コンポーネントマウント時にデータを取得
+  useEffect(() => {
+    // 自分のタスクを取得
+    tasksApi.execute(
+      () => taskService.getMyTasks()
+        .then(response => {
+          if (response.success) {
+            return response.data;
+          }
+          throw new Error(response.message || 'タスクの取得に失敗しました');
+        })
+    );
+    
+    // 自分の参加するミーティングを取得
+    meetingsApi.execute(
+      () => meetingService.getMyMeetings()
+        .then(response => {
+          if (response.success) {
+            return response.data;
+          }
+          throw new Error(response.message || 'ミーティングの取得に失敗しました');
+        })
+    );
+
+    // 勤怠データを取得
+    attendanceApi.execute(
+      () => attendanceService.getAttendance()
+        .then(response => {
+          if (response.success) {
+            return response.data;
+          }
+          throw new Error(response.message || '勤怠データの取得に失敗しました');
+        })
+    );
+  }, []);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            業務進捗
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {tasks.map((task) => (
-              <div key={task.id} className="space-y-2">
-                <div className="flex justify-between">
-                  <span>{task.title}</span>
-                  <span>{task.progress}%</span>
-                </div>
-                <Progress value={task.progress} />
+    <div className="space-y-6">
+      {/* ようこそメッセージ */}
+      <div className="bg-gradient-to-r from-gray-200 to-cyan-500/30 rounded-lg p-6 shadow-lg">
+        <h2 className="text-2xl font-bold mb-2">おはようございます、田中さん</h2>
+        <p className="opacity-90">今日も素晴らしい一日になりますように。今週のタスク完了率は85%です。</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button variant="secondary" className="bg-white/20 hover:bg-white/30" asChild>
+            <Link to="/tasks">
+              <FileText className="h-4 w-4 mr-2" />
+              タスク
+            </Link>
+          </Button>
+          <Button variant="secondary" className="bg-white/20 hover:bg-white/30" asChild>
+            <Link to="/work_life_balance">
+              <Calendar className="h-4 w-4 mr-2" />
+              健康管理
+            </Link>
+          </Button>
+          <Button variant="secondary" className="bg-white/20 hover:bg-white/30" asChild>
+            <Link to="/team_chat">
+              <MessageSquare className="h-4 w-4 mr-2" />
+              メッセージ
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      {/* クイックアクセスとステータス */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              業務進捗
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {tasksApi.loading && (
+              <LoadingIndicator text="タスクを読込中..." size="sm" />
+            )}
+            
+            {tasksApi.error && (
+              <ApiError 
+                error={tasksApi.error}
+                onRetry={() => tasksApi.execute(() => taskService.getMyTasks().then(res => res.success ? res.data : []))}
+              />
+            )}
+            
+            {!tasksApi.loading && !tasksApi.error && tasksApi.data && (
+              <div className="space-y-4">
+                {tasksApi.data.length > 0 ? (
+                  tasksApi.data.slice(0, 3).map((task) => (
+                    <div key={task.id} className="space-y-2">
+                      <div className="flex justify-between">
+                        <span>{task.title}</span>
+                        <span>
+                          {task.status === 'completed' ? '100' : 
+                           task.status === 'in_progress' ? '50' : '0'}%
+                        </span>
+                      </div>
+                      <Progress 
+                        value={
+                          task.status === 'completed' ? 100 : 
+                          task.status === 'in_progress' ? 50 : 0
+                        } 
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center text-muted-foreground">タスクがありません</p>
+                )}
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            本日の会議
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {meetings.map((meeting) => (
-              <div key={meeting.id} className="flex justify-between items-center p-2 border rounded">
-                <div>
-                  <div className="font-medium">{meeting.title}</div>
-                  <div className="text-sm text-muted-foreground">{meeting.time}</div>
-                </div>
-                <div className="text-sm">{meeting.duration}</div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>クイックアクセス</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { icon: FileText, label: "マニュアル作成" },
-              { icon: Timer, label: "会議開始" },
-              { icon: Book, label: "ナレッジ登録" },
-              { icon: Users, label: "チーム管理" },
-            ].map(({ icon: Icon, label }, index) => (
-              <Button key={index} variant="outline" className="h-auto flex-col gap-2 py-4">
-                <Icon className="h-6 w-6" />
-                {label}
+            )}
+            
+            <div className="mt-4">
+              <Button variant="outline" size="sm" className="w-full" asChild>
+                <Link to="/tasks">タスク一覧</Link>
               </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              本日の会議
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {meetingsApi.loading && (
+              <LoadingIndicator text="会議を読込中..." size="sm" />
+            )}
+            
+            {meetingsApi.error && (
+              <ApiError 
+                error={meetingsApi.error}
+                onRetry={() => meetingsApi.execute(() => meetingService.getMyMeetings().then(res => res.success ? res.data : []))}
+              />
+            )}
+            
+            {!meetingsApi.loading && !meetingsApi.error && meetingsApi.data && (
+              <div className="space-y-4">
+                {meetingsApi.data.length > 0 ? (
+                  meetingsApi.data.slice(0, 3).map((meeting) => {
+                    // 日付と時間を変換
+                    const meetingDate = new Date(meeting.scheduledTime);
+                    const timeString = meetingDate.toLocaleTimeString('ja-JP', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    });
+                    
+                    // 会議時間（仮の実装）
+                    const duration = meeting.agenda && meeting.agenda.length > 0
+                      ? meeting.agenda.reduce((total, item) => total + item.duration, 0)
+                      : 30; // デフォルト30分
+                      
+                    return (
+                      <div key={meeting.id} className="flex justify-between items-center p-2 border rounded">
+                        <div>
+                          <div className="font-medium">{meeting.title}</div>
+                          <div className="text-sm text-muted-foreground">{timeString}</div>
+                        </div>
+                        <div className="text-sm">{duration}分</div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-center text-muted-foreground">今日の会議はありません</p>
+                )}
+              </div>
+            )}
+            
+            <div className="mt-4">
+              <Button variant="outline" size="sm" className="w-full" asChild>
+                <Link to="/meeting">会議スケジュール</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <Heart className="h-5 w-5" />
+              勤怠管理
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-2">
+            {attendanceApi.loading && (
+              <LoadingIndicator text="データを読込中..." size="sm" />
+            )}
+            
+            {attendanceApi.error && (
+              <ApiError 
+                error={attendanceApi.error}
+                onRetry={() => attendanceApi.execute(() => 
+                  attendanceService.getAttendance()
+                    .then(res => res.success ? res.data : null)
+                )}
+              />
+            )}
+            
+            {!attendanceApi.loading && !attendanceApi.error && attendanceApi.data && (
+              <div className="flex flex-col items-center">
+                <div className="relative flex items-center justify-center w-24 h-24 mb-2">
+                  <svg className="w-full h-full" viewBox="0 0 100 100">
+                    <circle
+                      className="text-muted-foreground/20"
+                      strokeWidth="8"
+                      stroke="currentColor"
+                      fill="transparent"
+                      r="40"
+                      cx="50"
+                      cy="50"
+                    />
+                    <circle
+                      className={
+                        attendanceApi.data.status === 'good' 
+                          ? "text-green-500" 
+                          : attendanceApi.data.status === 'warning' 
+                            ? "text-amber-500" 
+                            : "text-red-500"
+                      }
+                      strokeWidth="8"
+                      strokeDasharray={`${((attendanceApi.data.score || 0) / 100) * 251.2} 251.2`}
+                      strokeLinecap="round"
+                      stroke="currentColor"
+                      fill="transparent"
+                      r="40"
+                      cx="50"
+                      cy="50"
+                      transform="rotate(-90 50 50)"
+                    />
+                  </svg>
+                  <div className="absolute flex flex-col items-center justify-center">
+                    <span className={`text-xl font-bold ${
+                      attendanceApi.data.status === 'good' 
+                        ? "text-green-500" 
+                        : attendanceApi.data.status === 'warning' 
+                          ? "text-amber-500" 
+                          : "text-red-500"
+                    }`}>
+                      {attendanceApi.data.score || 0}
+                    </span>
+                  </div>
+                </div>
+                <Badge 
+                  className={
+                    attendanceApi.data.status === 'good' 
+                      ? "bg-green-100 text-green-800" 
+                      : attendanceApi.data.status === 'warning' 
+                        ? "bg-amber-100 text-amber-800" 
+                        : "bg-red-100 text-red-800"
+                  }
+                >
+                  {attendanceApi.data.status === 'good' ? '良好' : 
+                   attendanceApi.data.status === 'warning' ? '要注意' : '改善が必要'}
+                </Badge>
+                <Button size="sm" variant="outline" className="w-full mt-2" asChild>
+                  <Link to="/attendance">詳細を見る</Link>
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              チームアクティビティ
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 max-h-[150px] overflow-y-auto">
+              {teamActivities.map((activity, index) => (
+                <div key={index} className="text-sm">
+                  <p className="font-medium">{activity.user}</p>
+                  <p className="text-muted-foreground">{activity.activity}</p>
+                  <p className="text-xs text-muted-foreground">{activity.time}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4">
+              <Button variant="outline" size="sm" className="w-full" asChild>
+                <Link to="/team_chat">チームチャットへ</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="col-span-2 lg:col-span-4 bg-muted/40">
+          <CardHeader>
+            <CardTitle>クイックアクセス</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+              {[
+                { icon: FileText, label: "マニュアル作成", path: "/manual" },
+                { icon: Timer, label: "会議作成", path: "/meeting" },
+                { icon: Book, label: "ナレッジ作成", path: "/knowledge_base" },
+                { icon: Users, label: "チャット", path: "/team_chat" },
+                { icon: CheckSquare, label: "タスク管理", path: "/tasks" },
+                { icon: Heart, label: "健康管理", path: "/work_life_balance" },
+              ].map(({ icon: Icon, label, path }, index) => (
+                <Button key={index} variant="outline" className="h-auto flex-col gap-2 py-4" asChild>
+                  <Link to={path}>
+                    <Icon className="h-6 w-6" />
+                    <span>{label}</span>
+                  </Link>
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
@@ -210,6 +391,7 @@ const DashboardTab: React.FC = () => {
 const ManualsTab: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedTemplate, setSelectedTemplate] = useState<ManualTemplate | null>(null)
+  const [sortOrder, setSortOrder] = useState<string>("title")
 
   const manualTemplates: ManualTemplate[] = [
     {
@@ -217,26 +399,42 @@ const ManualsTab: React.FC = () => {
       title: "新入社員オリエンテーション",
       description: "新しい社員向けの基本的な業務ガイドライン",
       sections: ["会社概要", "組織構造", "基本的な業務プロセス", "行動規範", "福利厚生"],
+      createdAt: "2023-05-10",
     },
     {
       id: 2,
       title: "営業活動マニュアル",
       description: "営業チーム向けの標準的な営業プロセス",
       sections: ["見込み客リサーチ", "初回アプローチ", "提案資料作成", "価格交渉", "クロージング"],
+      createdAt: "2023-06-15",
     },
     {
       id: 3,
       title: "クレーム対応マニュアル",
       description: "顧客からのクレーム対応の標準手順",
       sections: ["初期対応", "事実確認", "謝罪と解決策提示", "フォローアップ", "再発防止策"],
+      createdAt: "2023-07-20",
     },
   ]
 
-  const filteredManuals = manualTemplates.filter(
+  const sortedManuals = [...manualTemplates].filter(
     (template) =>
       template.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       template.description.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  ).sort((a, b) => {
+    switch (sortOrder) {
+      case "title":
+        return a.title.localeCompare(b.title);
+      case "titleDesc":
+        return b.title.localeCompare(a.title);
+      case "createdAt":
+        return a.createdAt.localeCompare(b.createdAt);
+      case "createdAtDesc":
+        return b.createdAt.localeCompare(a.createdAt);
+      default:
+        return 0;
+    }
+  });
 
   return (
     <Card>
@@ -256,14 +454,39 @@ const ManualsTab: React.FC = () => {
                 className="pl-8"
               />
             </div>
-            <Button>
-              <FilePlus className="mr-2 h-4 w-4" />
-              新規作成
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <Filter className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-60">
+                <div className="space-y-2">
+                  <Label>ソート</Label>
+                  <Select defaultValue="title" value={sortOrder} onValueChange={setSortOrder}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="ソート順" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="title">タイトル (昇順)</SelectItem>
+                      <SelectItem value="titleDesc">タイトル (降順)</SelectItem>
+                      <SelectItem value="createdAt">作成日 (昇順)</SelectItem>
+                      <SelectItem value="createdAtDesc">作成日 (降順)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Button asChild>
+              <Link to="/manual">
+                <FilePlus className="mr-2 h-4 w-4" />
+                新規作成
+              </Link>
             </Button>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredManuals.map((template) => (
+            {sortedManuals.map((template) => (
               <Card key={template.id} className="cursor-pointer hover:shadow-md transition-shadow">
                 <CardHeader>
                   <CardTitle className="flex justify-between items-center">
@@ -316,6 +539,7 @@ const KnowledgeTab: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedKnowledge, setSelectedKnowledge] = useState<KnowledgeItem | null>(null)
+  const [sortOrder, setSortOrder] = useState<string>("title")
 
   const knowledgeCategories: KnowledgeCategory[] = [
     { id: 1, name: "業務プロセス" },
@@ -331,6 +555,7 @@ const KnowledgeTab: React.FC = () => {
       category: "顧客対応",
       description: "初回面談から契約までの標準的な顧客対応プロセス",
       tags: ["営業", "顧客", "接客"],
+      createdAt: "2023-05-15",
     },
     {
       id: 2,
@@ -338,6 +563,7 @@ const KnowledgeTab: React.FC = () => {
       category: "システム操作",
       description: "社内CRMシステムの基本操作と効率的な活用方法",
       tags: ["システム", "CRM", "トレーニング"],
+      createdAt: "2023-06-20",
     },
     {
       id: 3,
@@ -345,18 +571,38 @@ const KnowledgeTab: React.FC = () => {
       category: "業務プロセス",
       description: "新規プロジェクトの計画から実行までの標準フロー",
       tags: ["プロジェクト管理", "業務"],
+      createdAt: "2023-07-25",
     },
   ]
 
-  const filteredKnowledge = knowledgeItems.filter(
-    (item) =>
-      (selectedCategory ? item.category === selectedCategory : true) &&
-      (searchTerm
-        ? item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-        : true),
-  )
+  const filteredAndSortedKnowledge = knowledgeItems
+    .filter(
+      (item) =>
+        (selectedCategory ? item.category === selectedCategory : true) &&
+        (searchTerm
+          ? item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+          : true),
+    )
+    .sort((a, b) => {
+      switch (sortOrder) {
+        case "title":
+          return a.title.localeCompare(b.title);
+        case "titleDesc":
+          return b.title.localeCompare(a.title);
+        case "category":
+          return a.category.localeCompare(b.category);
+        case "categoryDesc":
+          return b.category.localeCompare(a.category);
+        case "createdAt":
+          return a.createdAt.localeCompare(b.createdAt);
+        case "createdAtDesc":
+          return b.createdAt.localeCompare(a.createdAt);
+        default:
+          return 0;
+      }
+    });
 
   return (
     <Card>
@@ -376,12 +622,36 @@ const KnowledgeTab: React.FC = () => {
                 className="pl-8"
               />
             </div>
-            <Button variant="outline" size="icon">
-              <Filter className="h-4 w-4" />
-            </Button>
-            <Button>
-              <FilePlus className="mr-2 h-4 w-4" />
-              新規作成
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <Filter className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-60">
+                <div className="space-y-2">
+                  <Label>ソート</Label>
+                  <Select defaultValue="title" value={sortOrder} onValueChange={setSortOrder}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="ソート順" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="title">タイトル (昇順)</SelectItem>
+                      <SelectItem value="titleDesc">タイトル (降順)</SelectItem>
+                      <SelectItem value="category">カテゴリ (昇順)</SelectItem>
+                      <SelectItem value="categoryDesc">カテゴリ (降順)</SelectItem>
+                      <SelectItem value="createdAt">作成日 (昇順)</SelectItem>
+                      <SelectItem value="createdAtDesc">作成日 (降順)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Button asChild>
+              <Link to="/knowledge_base">
+                <FilePlus className="mr-2 h-4 w-4" />
+                新規作成
+              </Link>
             </Button>
           </div>
 
@@ -401,7 +671,7 @@ const KnowledgeTab: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredKnowledge.map((knowledge) => (
+            {filteredAndSortedKnowledge.map((knowledge) => (
               <Card key={knowledge.id} className="cursor-pointer hover:shadow-md transition-shadow">
                 <CardHeader>
                   <CardTitle className="flex justify-between items-center">
@@ -467,8 +737,8 @@ const KnowledgeTab: React.FC = () => {
 
 // MeetingsTab Component
 const MeetingsTab: React.FC = () => {
-  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null)
-  const [activeTimer, setActiveTimer] = useState<Meeting | null>(null)
+  const [selectedMeeting, setSelectedMeeting] = useState<LocalMeeting | null>(null)
+  const [activeTimer, setActiveTimer] = useState<LocalMeeting | null>(null)
   const [meetingMinutes, setMeetingMinutes] = useState({
     participants: "",
     discussion: "",
@@ -476,7 +746,7 @@ const MeetingsTab: React.FC = () => {
     nextActions: "",
   })
 
-  const meetings: Meeting[] = [
+  const meetingsLocal: LocalMeeting[] = [
     {
       id: 1,
       title: "朝会",
@@ -502,7 +772,7 @@ const MeetingsTab: React.FC = () => {
     },
   ]
 
-  const MeetingTimerModal: React.FC<{ meeting: Meeting; onClose: () => void }> = ({ meeting }) => {
+  const MeetingTimerModal: React.FC<{ meeting: LocalMeeting; onClose: () => void }> = ({ meeting }) => {
     const [currentAgendaIndex, setCurrentAgendaIndex] = useState(0)
     const [remainingTime, setRemainingTime] = useState(meeting.agenda[0].duration * 60)
     const [isRunning, setIsRunning] = useState(false)
@@ -551,7 +821,7 @@ const MeetingsTab: React.FC = () => {
           </div>
           <div className="space-y-2">
             <h4 className="font-medium">アジェンダ</h4>
-            {meeting.agenda.map((item, index) => (
+            {meeting.agenda.map((item: { topic: string; duration: number }, index: number) => (
               <div key={index} className="flex justify-between items-center">
                 <span>{item.topic}</span>
                 <span>{item.duration}分</span>
@@ -563,7 +833,7 @@ const MeetingsTab: React.FC = () => {
     )
   }
 
-  const MeetingMinutesModal: React.FC<{ meeting: Meeting; onClose: () => void }> = ({ meeting, onClose }) => {
+  const MeetingMinutesModal: React.FC<{ meeting: LocalMeeting; onClose: () => void }> = ({ meeting, onClose }) => {
     return (
       <DialogContent>
         <DialogHeader>
@@ -639,15 +909,17 @@ const MeetingsTab: React.FC = () => {
       <CardHeader>
         <CardTitle className="flex justify-between items-center">
           <span>会議管理</span>
-          <Button>
-            <FilePlus className="mr-2 h-4 w-4" />
-            新規作成
+          <Button asChild>
+            <Link to="/meeting">
+              <FilePlus className="mr-2 h-4 w-4" />
+              新規作成
+            </Link>
           </Button>
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {meetings.map((meeting) => (
+          {meetingsLocal.map((meeting) => (
             <Card key={meeting.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <CardTitle className="flex justify-between items-center">
@@ -697,7 +969,7 @@ const DashboardView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>("dashboard")
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -731,6 +1003,7 @@ interface ManualTemplate {
   title: string
   description: string
   sections: string[]
+  createdAt: string
 }
 
 interface KnowledgeCategory {
@@ -744,14 +1017,7 @@ interface KnowledgeItem {
   category: string
   description: string
   tags: string[]
-}
-
-interface Meeting {
-  id: number
-  title: string
-  scheduledTime: string
-  participants: number
-  agenda: { topic: string; duration: number }[]
+  createdAt: string
 }
 
 export default DashboardView

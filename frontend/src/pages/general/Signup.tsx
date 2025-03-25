@@ -1,41 +1,47 @@
 "use client"
 
-import type React from "react"
-import { useState, type FormEvent, type ChangeEvent } from "react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Eye, EyeOff, CheckCircle2, XCircle, Circle } from "lucide-react"
+import React, { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Eye, EyeOff, CheckCircle2, XCircle, Circle } from 'lucide-react';
 
 interface FormData {
-  username: string
-  email: string
-  password: string
-  confirmPassword: string
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
 }
 
 interface Validation {
-  username: { isValid: boolean }
-  email: { isValid: boolean }
+  name: { isValid: boolean };
+  email: { isValid: boolean };
   password: {
-    hasMinLength: boolean
-    hasNumber: boolean
-    hasLetter: boolean
-  }
-  confirmPassword: { isValid: boolean }
+    hasMinLength: boolean;
+    hasNumber: boolean;
+    hasLetter: boolean;
+  };
+  confirmPassword: { isValid: boolean };
 }
 
-const SignupPage: React.FC = () => {
+const SignupView: React.FC = () => {
+  const navigate = useNavigate();
+  const { signup } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const [formData, setFormData] = useState<FormData>({
-    username: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-  })
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
 
   const [validation, setValidation] = useState<Validation>({
-    username: { isValid: false },
+    name: { isValid: false },
     email: { isValid: false },
     password: {
       hasMinLength: false,
@@ -43,32 +49,40 @@ const SignupPage: React.FC = () => {
       hasLetter: false,
     },
     confirmPassword: { isValid: false },
-  })
+  });
 
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  useEffect(() => {
+    // 認証済みの場合はダッシュボードにリダイレクト
+    const token = localStorage.getItem('token');
+    if (token) {
+      navigate('/dashboard');
+    }
+  }, [navigate]);
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-    validateField(name, value)
-  }
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    validateField(name, value);
+  };
 
   const validateField = (name: string, value: string) => {
     switch (name) {
-      case "username":
+      case 'name':
         setValidation((prev) => ({
           ...prev,
-          username: { isValid: /^[a-zA-Z0-9_-]{3,20}$/.test(value) },
-        }))
-        break
-      case "email":
+          name: { isValid: /^[a-zA-Z0-9_-]{3,20}$/.test(value) },
+        }));
+        break;
+      case 'email':
         setValidation((prev) => ({
           ...prev,
           email: { isValid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) },
-        }))
-        break
-      case "password":
+        }));
+        break;
+      case 'password':
         setValidation((prev) => ({
           ...prev,
           password: {
@@ -76,39 +90,51 @@ const SignupPage: React.FC = () => {
             hasNumber: /\d/.test(value),
             hasLetter: /[a-zA-Z]/.test(value),
           },
-        }))
-        break
-      case "confirmPassword":
+        }));
+        break;
+      case 'confirmPassword':
         setValidation((prev) => ({
           ...prev,
           confirmPassword: { isValid: value === formData.password },
-        }))
-        break
+        }));
+        break;
     }
-  }
+  };
 
   const isFormValid = () => {
     return (
-      validation.username.isValid &&
+      validation.name.isValid &&
       validation.email.isValid &&
       validation.password.hasMinLength &&
       validation.password.hasNumber &&
       validation.password.hasLetter &&
       validation.confirmPassword.isValid
-    )
-  }
+    );
+  };
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (isFormValid()) {
-      console.log("Form submitted:", formData)
-      // Here you would typically send the data to your server
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!isFormValid()) {
+      setError('すべての項目を正しく入力してください');
+      return;
     }
-  }
+
+    setIsLoading(true);
+    try {
+      await signup(formData.email, formData.password, formData.name);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'アカウントの作成に失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const ValidationItem: React.FC<{
-    isValid: boolean | null
-    message: string
+    isValid: boolean | null;
+    message: string;
   }> = ({ isValid, message }) => (
     <div className="flex items-center space-x-2 text-sm">
       {isValid === null ? (
@@ -118,11 +144,11 @@ const SignupPage: React.FC = () => {
       ) : (
         <XCircle className="h-4 w-4 text-red-500" />
       )}
-      <span className={isValid === null ? "text-gray-400" : isValid ? "text-green-600" : "text-red-600"}>
+      <span className={isValid === null ? 'text-gray-400' : isValid ? 'text-green-600' : 'text-red-600'}>
         {message}
       </span>
     </div>
-  )
+  );
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
@@ -133,21 +159,21 @@ const SignupPage: React.FC = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="username">ユーザー名</Label>
+              <Label htmlFor="name">ユーザー名</Label>
               <Input
-                id="username"
-                name="username"
+                id="name"
+                name="name"
                 type="text"
-                value={formData.username}
+                value={formData.name}
                 onChange={handleInputChange}
                 placeholder=""
                 required
                 className={`w-full ${
-                  formData.username ? (validation.username.isValid ? "border-green-500" : "border-red-500") : ""
+                  formData.name ? (validation.name.isValid ? 'border-green-500' : 'border-red-500') : ''
                 }`}
               />
               <ValidationItem
-                isValid={formData.username ? validation.username.isValid : null}
+                isValid={formData.name ? validation.name.isValid : null}
                 message="3〜20文字の半角英数字、ハイフン、アンダースコアが使用可能です"
               />
             </div>
@@ -163,7 +189,7 @@ const SignupPage: React.FC = () => {
                 placeholder=""
                 required
                 className={`w-full ${
-                  formData.email ? (validation.email.isValid ? "border-green-500" : "border-red-500") : ""
+                  formData.email ? (validation.email.isValid ? 'border-green-500' : 'border-red-500') : ''
                 }`}
               />
               <ValidationItem
@@ -178,21 +204,17 @@ const SignupPage: React.FC = () => {
                 <Input
                   id="password"
                   name="password"
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={handleInputChange}
                   placeholder=""
                   required
                   className={`w-full pr-10 ${
                     formData.password
-                      ? (
-                          validation.password.hasMinLength &&
-                            validation.password.hasNumber &&
-                            validation.password.hasLetter
-                        )
-                        ? "border-green-500"
-                        : "border-red-500"
-                      : ""
+                      ? validation.password.hasMinLength && validation.password.hasNumber && validation.password.hasLetter
+                        ? 'border-green-500'
+                        : 'border-red-500'
+                      : ''
                   }`}
                 />
                 <button
@@ -225,7 +247,7 @@ const SignupPage: React.FC = () => {
                 <Input
                   id="confirmPassword"
                   name="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
+                  type={showConfirmPassword ? 'text' : 'password'}
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
                   placeholder=""
@@ -233,9 +255,9 @@ const SignupPage: React.FC = () => {
                   className={`w-full pr-10 ${
                     formData.confirmPassword
                       ? validation.confirmPassword.isValid
-                        ? "border-green-500"
-                        : "border-red-500"
-                      : ""
+                        ? 'border-green-500'
+                        : 'border-red-500'
+                      : ''
                   }`}
                 />
                 <button
@@ -252,8 +274,12 @@ const SignupPage: React.FC = () => {
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={!isFormValid()}>
-              アカウント作成
+            {error && (
+              <div className="text-sm text-red-500 text-center">{error}</div>
+            )}
+
+            <Button type="submit" className="w-full" disabled={!isFormValid() || isLoading}>
+              {isLoading ? 'アカウント作成中...' : 'アカウント作成'}
             </Button>
 
             <div className="text-center text-sm text-gray-600">
@@ -266,8 +292,8 @@ const SignupPage: React.FC = () => {
         </CardContent>
       </Card>
     </div>
-  )
-}
+  );
+};
 
-export default SignupPage
+export default SignupView;
 

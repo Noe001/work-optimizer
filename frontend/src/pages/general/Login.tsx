@@ -1,103 +1,130 @@
-import React, { useState, FormEvent, ChangeEvent } from 'react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Eye, EyeOff } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2 } from 'lucide-react';
 
-interface LoginFormData {
-  email: string;
-  password: string;
-}
+const Login: React.FC = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { login, isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
 
-const LoginPage: React.FC = () => {
-  const [formData, setFormData] = useState<LoginFormData>({
-    email: '',
-    password: ''
-  });
-  const [showPassword, setShowPassword] = useState<boolean>(false);
+  // 認証済みの場合はダッシュボードにリダイレクト
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      navigate('/');
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement>): void => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    setIsSubmitting(true);
+
     try {
-      // ログイン処理のロジックをここに追加
-      console.log('Login attempt with:', formData);
-    } catch (error) {
-      console.error('Login error:', error);
+      const success = await login(email, password);
+      if (success) {
+        navigate('/');
+      } else {
+        setError('ログインに失敗しました。メールアドレスとパスワードを確認してください。');
+      }
+    } catch (err) {
+      setError('ログイン中にエラーが発生しました。');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const togglePasswordVisibility = (): void => {
-    setShowPassword(prev => !prev);
-  };
+  // ログイン中の場合はローディング表示
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-center">認証情報を確認中...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-2xl mb-3 text-center">WorkOptimizer</CardTitle>
+          <CardTitle className="text-2xl text-center">ログイン</CardTitle>
+          <CardDescription className="text-center">
+            アカウントにログインして続ける
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">メールアドレス</Label>
-              <Input 
+              <Input
                 id="email"
-                name="email"
-                type="email" 
-                value={formData.email}
-                onChange={handleInputChange}
-                placeholder=""
+                type="email"
+                placeholder="name@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full"
+                disabled={isSubmitting}
               />
             </div>
-            
             <div className="space-y-2">
               <Label htmlFor="password">パスワード</Label>
-              <div className="relative">
-                <Input 
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  placeholder=""
-                  required
-                  className="w-full pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={togglePasswordVisibility}
-                  className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-600"
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isSubmitting}
+              />
             </div>
-            
-            <Button type="submit" className="w-full">
-              ログイン
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  ログイン中...
+                </>
+              ) : (
+                'ログイン'
+              )}
             </Button>
-            
-            <div className="text-center text-sm text-gray-600 mt-4">
-              <a href="/signup" className="hover:underline">
-                パスワードを作成
-              </a>
-            </div>
           </form>
         </CardContent>
+        <CardFooter className="flex flex-col space-y-4">
+          <div className="text-sm text-center text-muted-foreground">
+            アカウントをお持ちでない方は
+            <Button
+              variant="link"
+              className="p-0 h-auto font-normal"
+              onClick={() => navigate('/signup')}
+              disabled={isSubmitting}
+            >
+              新規登録
+            </Button>
+            へ
+          </div>
+        </CardFooter>
       </Card>
     </div>
   );
 };
 
-export default LoginPage;
+export default Login; 
