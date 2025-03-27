@@ -1,4 +1,10 @@
 FROM ruby:3.3.6
+
+# タイムゾーンを Asia/Tokyo に設定
+RUN ln -sf /usr/share/zoneinfo/Asia/Tokyo /etc/localtime \
+    && echo "Asia/Tokyo" > /etc/timezone
+ENV TZ=Asia/Tokyo
+
 RUN apt-get update -qq && apt-get install -y nodejs default-mysql-client
 
 WORKDIR /app

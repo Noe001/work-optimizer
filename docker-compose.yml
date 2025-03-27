@@ -3,16 +3,21 @@ services:
     image: mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: password
+      TZ: Asia/Tokyo
+      MYSQL_TIMEZONE: "+09:00"
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    command: --default-time-zone='+09:00'
   back:
     build:
       context: ./backend
       dockerfile: Dockerfile
     env_file:
       - ./backend/.env.local
+    environment:
+      TZ: Asia/Tokyo
     command: bash -c "rm -f tmp/pids/server.pid && bundle exec rails s -b '0.0.0.0'"
     volumes:
       - ./backend:/app
@@ -26,6 +31,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    environment:
+      TZ: Asia/Tokyo
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules

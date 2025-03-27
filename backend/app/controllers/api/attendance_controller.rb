@@ -26,7 +26,6 @@ module Api
     # 出勤打刻
     def check_in
       today = Date.current
-      Rails.logger.info("勤怠登録: ユーザーID=#{current_user.id}, 日付=#{today}")
       
       # 既存のデータがあるか確認
       attendance = current_user.attendances.find_by(date: today)
@@ -35,7 +34,6 @@ module Api
       if attendance
         # 既に出勤打刻がある場合はエラー
         if attendance.check_in.present?
-          Rails.logger.info("勤怠登録エラー: 既に出勤打刻済み")
           return render json: { success: false, message: '既に出勤打刻済みです' }, status: :bad_request
         end
       else
@@ -43,30 +41,27 @@ module Api
         attendance = current_user.attendances.new(date: today)
       end
       
-      # 打刻情報を設定
-      attendance.check_in = Time.current
+      # 打刻情報を設定（日本時間で記録）
+      current_time = Time.current
+      attendance.check_in = current_time
       attendance.status = 'present'
       
-      # 9時以降なら遅刻
-      if Time.current.hour >= 9 && Time.current.min > 0
+      # 日本時間で9時以降なら遅刻
+      if current_time.hour >= 9 && current_time.min > 0
         attendance.status = 'late'
       end
       
       begin
         if attendance.save
-          Rails.logger.info("勤怠登録成功: ID=#{attendance.id}")
           render json: { 
             success: true, 
             message: '出勤を記録しました',
             data: format_attendance(attendance)
           }
         else
-          Rails.logger.error("勤怠登録失敗: エラー=#{attendance.errors.full_messages.join(', ')}")
           render json: { success: false, message: attendance.errors.full_messages.join(', ') }, status: :unprocessable_entity
         end
       rescue => e
-        Rails.logger.error("勤怠登録例外: #{e.message}")
-        Rails.logger.error(e.backtrace.join("\n"))
         render json: { success: false, message: "予期せぬエラーが発生しました: #{e.message}" }, status: :internal_server_error
       end
     end
@@ -84,7 +79,9 @@ module Api
         return render json: { success: false, message: '既に退勤打刻済みです' }, status: :bad_request
       end
       
-      attendance.check_out = Time.current
+      # 日本時間で退勤時刻を記録
+      current_time = Time.current
+      attendance.check_out = current_time
       
       if attendance.save
         render json: { 
@@ -112,6 +109,7 @@ module Api
       if update_params[:check_in].present?
         hour, min = update_params[:check_in].split(':')
         date = attendance.date
+        # 日本時間でTimeオブジェクトを作成
         check_in_time = Time.zone.local(date.year, date.month, date.day, hour.to_i, min.to_i)
         update_params[:check_in] = check_in_time
       end
@@ -119,6 +117,7 @@ module Api
       if update_params[:check_out].present?
         hour, min = update_params[:check_out].split(':')
         date = attendance.date
+        # 日本時間でTimeオブジェクトを作成
         check_out_time = Time.zone.local(date.year, date.month, date.day, hour.to_i, min.to_i)
         update_params[:check_out] = check_out_time
       end
@@ -291,14 +290,14 @@ module Api
       {
         id: attendance.id,
         date: attendance.date.iso8601,
-        check_in: attendance.check_in&.strftime('%H:%M:%S'),
-        check_out: attendance.check_out&.strftime('%H:%M:%S'),
+        check_in: attendance.check_in&.in_time_zone('Tokyo')&.strftime('%H:%M'),
+        check_out: attendance.check_out&.in_time_zone('Tokyo')&.strftime('%H:%M'),
         total_hours: attendance.total_hours,
         overtime_hours: attendance.overtime_hours,
         status: attendance.status,
         comment: attendance.comment,
-        created_at: attendance.created_at.iso8601,
-        updated_at: attendance.updated_at.iso8601
+        created_at: attendance.created_at.in_time_zone('Tokyo').iso8601,
+        updated_at: attendance.updated_at.in_time_zone('Tokyo').iso8601
       }
     end
     

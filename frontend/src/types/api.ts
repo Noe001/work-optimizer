@@ -92,7 +92,7 @@ export interface Attendance {
 export interface LeaveRequest {
   id: number;
   user_id: string;
-  type: 'paid' | 'sick' | 'other';
+  leave_type: 'paid' | 'sick' | 'other';
   start_date: string;
   end_date: string;
   reason: string;

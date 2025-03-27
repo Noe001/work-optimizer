@@ -12,32 +12,50 @@ export const getJSTDate = (date: Date = new Date()): Date => {
 };
 
 /**
- * HH:MM:SS形式で時間をフォーマット
+ * HH:MM形式で時間をフォーマット（日本時間・秒を含めない）
  */
 export const formatTime = (date: Date = new Date()): string => {
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  const seconds = date.getSeconds().toString().padStart(2, '0');
-  return `${hours}:${minutes}:${seconds}`;
+  // 日本時間に変換
+  const jstDate = getJSTDate(date);
+  const hours = jstDate.getHours().toString().padStart(2, '0');
+  const minutes = jstDate.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
 };
 
 /**
- * YYYY-MM-DD形式で日付をフォーマット
+ * YYYY-MM-DD形式で日付をフォーマット（日本時間）
  */
 export const formatDate = (date: Date = new Date()): string => {
-  const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
+  // 日本時間に変換
+  const jstDate = getJSTDate(date);
+  const year = jstDate.getFullYear();
+  const month = (jstDate.getMonth() + 1).toString().padStart(2, '0');
+  const day = jstDate.getDate().toString().padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+/**
+ * 時刻文字列を日本時間のDateオブジェクトに変換
+ */
+export const parseTimeToJST = (timeString: string): Date => {
+  const today = new Date();
+  const [hours, minutes, seconds] = timeString.split(':').map(Number);
+  
+  // 日本時間でDateオブジェクトを作成
+  const jstDate = getJSTDate(today);
+  jstDate.setHours(hours, minutes, seconds || 0);
+  
+  return jstDate;
 };
 
 /**
  * 2つの時刻の間の経過時間を時間単位で計算（小数点以下2桁まで）
  */
 export const calculateHoursBetween = (start: string, end: string): number => {
-  const startTime = new Date(`1970-01-01T${start}`);
-  const endTime = new Date(`1970-01-01T${end}`);
+  // 日本時間として処理
+  const startDate = parseTimeToJST(start);
+  const endDate = parseTimeToJST(end);
   
-  const diffInMilliseconds = endTime.getTime() - startTime.getTime();
+  const diffInMilliseconds = endDate.getTime() - startDate.getTime();
   return Math.round(diffInMilliseconds / (1000 * 60 * 60) * 100) / 100;
 }; 

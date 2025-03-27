@@ -14,7 +14,7 @@ class Attendance < ApplicationRecord
 
   def check_out_after_check_in
     if check_out <= check_in
-      errors.add(:check_out, "は出勤時刻より後でなければなりません")
+      errors.add(:check_out, "出勤時刻より後の時刻を設定してください")
     end
   end
 
