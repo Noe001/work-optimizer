@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2025_03_26_135807) do
+ActiveRecord::Schema[7.2].define(version: 2025_03_29_135706) do
   create_table "attendances", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "user_id", null: false
     t.date "date", null: false
@@ -96,8 +96,10 @@ ActiveRecord::Schema[7.2].define(version: 2025_03_26_135807) do
     t.string "organization_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "parent_task_id"
     t.index ["assigned_to"], name: "index_tasks_on_assigned_to"
     t.index ["organization_id"], name: "index_tasks_on_organization_id"
+    t.index ["parent_task_id"], name: "index_tasks_on_parent_task_id"
   end
 
   create_table "users", id: :string, charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|

@@ -30,12 +30,17 @@ Rails.application.routes.draw do
     # タスク関連のエンドポイント
     resources :tasks do
       collection do
-        get 'my'  # 自分のタスク一覧
+        get :calendar
+        get :dashboard
+        get :my  # 自分のタスク一覧
+        post :batch_update  # 複数タスクの一括更新
+        put :reorder  # タスクの並び替え
       end
       
       member do
         put 'status', to: 'tasks#update_status'  # ステータス更新
         put 'assign', to: 'tasks#assign'  # 担当者変更
+        put 'subtask/:subtask_id/toggle', to: 'tasks#toggle_subtask'  # サブタスクの完了状態切替
       end
     end
     

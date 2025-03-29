@@ -69,6 +69,13 @@ const App = () => (
             <CreateTaskView />
           </ProtectedRoute>
         } />
+        
+        {/* タスク編集 */}
+        <Route path="/tasks/edit/:taskId" element={
+          <ProtectedRoute>
+            <CreateTaskView />
+          </ProtectedRoute>
+        } />
 
         {/* チーム会話 */}
         <Route path="/team_chat" element={
