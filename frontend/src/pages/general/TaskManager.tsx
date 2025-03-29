@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link } from "react-router-dom";
 import { taskService } from "@/services";
-import { Task as ApiTask, SubTask as ApiSubTask } from "@/types/api";
+import { Task as ApiTask } from "@/types/api";
 import { usePaginatedApi } from "@/hooks";
 import { ApiError } from "@/components/ui/api-error";
 import { LoadingIndicator } from "@/components/ui/loading-indicator";
@@ -759,7 +759,6 @@ interface TaskDetailsProps {
 
 const TaskDetails: React.FC<TaskDetailsProps> = ({ 
   task, 
-  onClose, 
   onDelete, 
   isLoading, 
   calculateTaskProgress,

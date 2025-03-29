@@ -14,11 +14,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "@radix-ui/react-icons";
 import { format, parseISO } from "date-fns";
-import { ja } from "date-fns/locale";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { taskService } from "@/services";
 import { useToast } from "@/hooks";
-import { Task } from "@/types/api";
 
 // APIステータスとUIステータスのマッピング
 const statusToApiMapping: Record<string, string> = {
