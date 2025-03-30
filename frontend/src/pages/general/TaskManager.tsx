@@ -30,7 +30,7 @@ interface User {
 
 // UI表示用に拡張したタスクインターフェース
 interface UITask {
-  id: number;
+  id: string | number;
   title: string;
   description?: string;
   status: "未着手" | "進行中" | "レビュー中" | "完了";
@@ -38,7 +38,7 @@ interface UITask {
   dueDate?: string;
   assignee?: User;
   tags: string[];
-  subtasks: { id: number; title: string; completed: boolean }[];
+  subtasks: { id: string | number; title: string; completed: boolean }[];
   attachments?: { name: string; url: string }[];
   comments?: { id: number; user: User; text: string; timestamp: string }[];
   createdAt: string;
@@ -78,12 +78,14 @@ const TaskManagerView: React.FC = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | number | null>(null);
   const [taskViewMode, setTaskViewMode] = useState<"list" | "board">("board");
   const [filterPriority, setFilterPriority] = useState<string | null>(null);
-  const [expandedTasks, setExpandedTasks] = useState<Record<number, boolean>>({});
+  const [expandedTasks, setExpandedTasks] = useState<Record<string | number, boolean>>({});
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [tasks, setTasks] = useState<UITask[]>([]);
+  const [taskOperationLoading, setTaskOperationLoading] = useState(false);
+  const [updatingSubtasks, setUpdatingSubtasks] = useState<Record<string | number, boolean>>({});
   const { toast } = useToast();
 
   // サンプルユーザーデータ
@@ -145,21 +147,55 @@ const TaskManagerView: React.FC = () => {
       ? users.find(user => user.id.toString() === apiTask.assigned_to) 
       : undefined;
 
-    // タグを変換（APIではタグが配列で返ってくると仮定）
-    const tags = apiTask.tags || [];
+    // タグを変換（APIではタグが配列または文字列で返ってくる可能性がある）
+    let tags: string[] = [];
+    
+    // APIのタグデータを安全に処理
+    try {
+      if (apiTask.tag_list) {
+        // APIからタグリストが返ってきた場合
+        if (Array.isArray(apiTask.tag_list)) {
+          tags = apiTask.tag_list;
+        } else if (typeof apiTask.tag_list === 'string') {
+          tags = (apiTask.tag_list as string).split(',').map((t: string) => t.trim()).filter(Boolean);
+        }
+      } else if (apiTask.tags) {
+        // タグフィールドが直接返ってきた場合
+        if (typeof apiTask.tags === 'string') {
+          tags = (apiTask.tags as string).split(',').map((t: string) => t.trim()).filter(Boolean);
+        } else if (Array.isArray(apiTask.tags)) {
+          tags = apiTask.tags;
+        }
+      }
+    } catch (error) {
+      console.error('タグデータの処理中にエラーが発生しました:', error);
+      // エラーが発生した場合は空の配列を使用
+      tags = [];
+    }
       
-    // サブタスクとコメントはモックデータを使用（APIに実装されるまで）
-    const subtasks = [
-      { id: 1, title: "業務フローの整理", completed: true },
-      { id: 2, title: "マニュアル下書き作成", completed: true },
-      { id: 3, title: "レビュー依頼", completed: false },
-    ];
+    // サブタスクの変換
+    let subtasks: { id: string | number; title: string; completed: boolean }[] = [];
+    
+    if (apiTask.subtasks && Array.isArray(apiTask.subtasks)) {
+      subtasks = apiTask.subtasks.map(subtask => ({
+        id: subtask.id,
+        title: subtask.title,
+        completed: subtask.status === 'completed'
+      }));
+    } else {
+      // APIにサブタスクが実装されていない場合のフォールバック
+      subtasks = [
+        { id: 1, title: "業務フローの整理", completed: true },
+        { id: 2, title: "マニュアル下書き作成", completed: true },
+        { id: 3, title: "レビュー依頼", completed: false },
+      ];
+    }
     
     // 日付フォーマット
     const dueDate = apiTask.due_date;
       
     return {
-      id: apiTask.id,
+      id: apiTask.id, // UUIDはそのまま使用する
       title: apiTask.title,
       description: apiTask.description,
       status: statusMapping[apiTask.status] || '未着手',
@@ -174,7 +210,7 @@ const TaskManagerView: React.FC = () => {
   };
 
   // タスクの展開/折りたたみを切り替える
-  const toggleTaskExpanded = (taskId: number) => {
+  const toggleTaskExpanded = (taskId: string | number) => {
     setExpandedTasks((prev) => ({
       ...prev,
       [taskId]: !prev[taskId],
@@ -189,15 +225,47 @@ const TaskManagerView: React.FC = () => {
   };
 
   // タスク詳細ダイアログを開く
-  const openTaskDetails = (taskId: number) => {
-    setSelectedTaskId(taskId);
-    setIsTaskDialogOpen(true);
+  const openTaskDetails = (taskId: string | number) => {
+    try {
+      const taskExists = tasks.some(task => task.id === taskId);
+      if (!taskExists) {
+        showErrorToast("指定されたタスクが見つかりませんでした");
+        return;
+      }
+      setSelectedTaskId(taskId);
+      setIsTaskDialogOpen(true);
+    } catch (error) {
+      console.error("タスク詳細を開く際にエラーが発生しました:", error);
+      showErrorToast("タスク詳細を表示できませんでした");
+    }
   };
 
   // タスク詳細ダイアログを閉じる
   const closeTaskDetails = () => {
     setIsTaskDialogOpen(false);
     setSelectedTaskId(null);
+  };
+
+  // タスクを削除する
+  const deleteTask = async (taskId: string | number) => {
+    try {
+      setTaskOperationLoading(true);
+      const taskIdString = taskId.toString();
+      const response = await taskService.deleteTask(taskIdString);
+      if (response.success) {
+        showSuccessToast("タスクが削除されました");
+        setIsTaskDialogOpen(false);
+        // タスク一覧を更新
+        fetchData(true);
+      } else {
+        showErrorToast("タスクの削除に失敗しました");
+      }
+    } catch (error) {
+      console.error("タスク削除エラー:", error);
+      showErrorToast("タスクの削除中にエラーが発生しました");
+    } finally {
+      setTaskOperationLoading(false);
+    }
   };
 
   // さらにタスクを読み込む
@@ -221,6 +289,74 @@ const TaskManagerView: React.FC = () => {
       description: message,
       variant: "destructive",
     });
+  };
+
+  // サブタスクの完了状態を切り替える関数
+  const handleToggleSubtask = async (taskId: string, subtaskId: string) => {
+    try {
+      // 対象のタスクとサブタスクを特定
+      const taskIndex = tasks.findIndex(task => task.id.toString() === taskId);
+      if (taskIndex === -1) return;
+      
+      const task = tasks[taskIndex];
+      const subtaskIndex = task.subtasks.findIndex(subtask => subtask.id.toString() === subtaskId);
+      if (subtaskIndex === -1) return;
+      
+      // UIの更新状態を設定
+      const updatedTasks = [...tasks];
+      const updatedSubtasks = [...updatedTasks[taskIndex].subtasks];
+      updatedSubtasks[subtaskIndex] = {
+        ...updatedSubtasks[subtaskIndex],
+        completed: !updatedSubtasks[subtaskIndex].completed
+      };
+      updatedTasks[taskIndex] = {
+        ...updatedTasks[taskIndex],
+        subtasks: updatedSubtasks
+      };
+      setTasks(updatedTasks);
+      
+      // 対象のサブタスクのローディング状態を設定
+      const updatingSubtask: Record<string, boolean> = {};
+      updatingSubtask[subtaskId] = true;
+      setUpdatingSubtasks(prev => ({ ...prev, ...updatingSubtask }));
+      
+      // APIを呼び出してサブタスクの状態を更新
+      const response = await taskService.toggleSubtaskStatus(taskId, subtaskId);
+      
+      if (response.success) {
+        showSuccessToast("サブタスクのステータスを更新しました");
+        
+        // 更新が成功したら、タスク一覧を再取得せずに更新
+        if (response.data?.parent_task) {
+          const parentTask = convertApiTaskToUITask(response.data.parent_task);
+          const updatedTasks = tasks.map(task => 
+            task.id.toString() === taskId ? parentTask : task
+          );
+          setTasks(updatedTasks);
+        }
+      } else {
+        // 失敗した場合は元の状態に戻す
+        updatedSubtasks[subtaskIndex] = {
+          ...updatedSubtasks[subtaskIndex],
+          completed: !updatedSubtasks[subtaskIndex].completed
+        };
+        updatedTasks[taskIndex] = {
+          ...updatedTasks[taskIndex],
+          subtasks: updatedSubtasks
+        };
+        setTasks(updatedTasks);
+        
+        showErrorToast("サブタスクの更新に失敗しました");
+      }
+    } catch (error) {
+      console.error("サブタスク更新エラー:", error);
+      showErrorToast("サブタスクの更新中にエラーが発生しました");
+    } finally {
+      // ローディング状態を解除
+      const updatingSubtask: Record<string, boolean> = {};
+      updatingSubtask[subtaskId] = false;
+      setUpdatingSubtasks(prev => ({ ...prev, ...updatingSubtask }));
+    }
   };
 
   // タスクボードビュー (カンバンボード風のUI)
@@ -353,9 +489,17 @@ const TaskManagerView: React.FC = () => {
                     <div className="space-y-1">
                       {task.subtasks.map((subtask) => (
                         <div key={subtask.id} className="flex items-center">
-                          <Checkbox checked={subtask.completed} className="mr-2" />
+                          <Checkbox 
+                            checked={subtask.completed} 
+                            className="mr-2" 
+                            disabled={updatingSubtasks[subtask.id]}
+                            onCheckedChange={() => handleToggleSubtask(task.id.toString(), subtask.id.toString())}
+                          />
                           <span className={subtask.completed ? "line-through text-muted-foreground" : ""}>
                             {subtask.title}
+                            {updatingSubtasks[subtask.id] && (
+                              <Loader2 className="h-3 w-3 inline ml-2 animate-spin" />
+                            )}
                           </span>
                         </div>
                       ))}
@@ -381,7 +525,9 @@ const TaskManagerView: React.FC = () => {
                     詳細を見る
                   </Button>
                   <Button variant="outline" size="sm" className="h-8">
-                    <Edit className="h-4 w-4 mr-1" /> 編集
+                    <Link to={`/tasks/edit/${task.id}`}>
+                      <Edit className="h-4 w-4 mr-2" /> 編集
+                    </Link>
                   </Button>
                 </div>
               </CardContent>
@@ -574,11 +720,24 @@ const TaskManagerView: React.FC = () => {
         <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
           <DialogContent className="max-w-3xl">
             {selectedTaskId && (
-              <TaskDetails 
-                task={tasks.find((t) => t.id === selectedTaskId)!} 
-                onClose={closeTaskDetails}
-                calculateTaskProgress={calculateTaskProgress}
-              />
+              <>
+                {tasks.find((t) => t.id === selectedTaskId) ? (
+                  <TaskDetails 
+                    task={tasks.find((t) => t.id === selectedTaskId)!} 
+                    onClose={closeTaskDetails}
+                    onDelete={deleteTask}
+                    isLoading={taskOperationLoading}
+                    calculateTaskProgress={calculateTaskProgress}
+                    updatingSubtasks={updatingSubtasks}
+                    handleToggleSubtask={handleToggleSubtask}
+                  />
+                ) : (
+                  <div className="p-4 text-center">
+                    <p className="mb-4 text-muted-foreground">タスクが見つかりませんでした</p>
+                    <Button variant="outline" onClick={closeTaskDetails}>閉じる</Button>
+                  </div>
+                )}
+              </>
             )}
           </DialogContent>
         </Dialog>
@@ -591,21 +750,51 @@ const TaskManagerView: React.FC = () => {
 interface TaskDetailsProps {
   task: UITask;
   onClose: () => void;
+  onDelete: (taskId: string | number) => Promise<void>;
+  isLoading: boolean;
   calculateTaskProgress: (task: UITask) => number;
+  updatingSubtasks?: Record<string | number, boolean>;
+  handleToggleSubtask?: (taskId: string, subtaskId: string) => Promise<void>;
 }
 
-const TaskDetails: React.FC<TaskDetailsProps> = ({ task, calculateTaskProgress }) => {
+const TaskDetails: React.FC<TaskDetailsProps> = ({ 
+  task, 
+  onDelete, 
+  isLoading, 
+  calculateTaskProgress,
+  updatingSubtasks = {},
+  handleToggleSubtask = async () => {} 
+}) => {
+  // 削除確認
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  // 削除処理
+  const handleDelete = async () => {
+    if (!deleteConfirm) {
+      setDeleteConfirm(true);
+      return;
+    }
+    await onDelete(task.id);
+  };
+
+  // サブタスクのチェック状態切り替え
+  const toggleSubtask = (subtaskId: string | number) => {
+    if (handleToggleSubtask) {
+      handleToggleSubtask(task.id.toString(), subtaskId.toString());
+    }
+  };
+
   return (
     <>
       <DialogHeader>
         <div className="flex items-center justify-between">
           <DialogTitle className="text-xl">{task.title}</DialogTitle>
-          <Badge className={statusColors[task.status]}>
+          <Badge className={`${statusColors[task.status]} mr-5`}>
             {task.status}
           </Badge>
         </div>
         <DialogDescription>
-          作成日: {task.createdAt} {task.dueDate && `/ 期限: ${task.dueDate}`}
+          作成日: {new Date(task.createdAt).toISOString().split('T')[0]} {task.dueDate && `/ 期限: ${task.dueDate}`}
         </DialogDescription>
       </DialogHeader>
       
@@ -624,9 +813,17 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({ task, calculateTaskProgress }
               <div className="space-y-2">
                 {task.subtasks.map((subtask) => (
                   <div key={subtask.id} className="flex items-center">
-                    <Checkbox checked={subtask.completed} className="mr-2" />
+                    <Checkbox 
+                      checked={subtask.completed} 
+                      className="mr-2" 
+                      disabled={updatingSubtasks[subtask.id]}
+                      onCheckedChange={() => toggleSubtask(subtask.id)}
+                    />
                     <span className={subtask.completed ? "line-through text-muted-foreground" : ""}>
                       {subtask.title}
+                      {updatingSubtasks[subtask.id] && (
+                        <Loader2 className="h-3 w-3 inline ml-2 animate-spin" />
+                      )}
                     </span>
                   </div>
                 ))}
@@ -730,11 +927,27 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({ task, calculateTaskProgress }
           )}
           
           <div className="pt-4 mt-4 border-t">
-            <Button variant="outline" className="w-full flex items-center justify-center">
-              <Edit className="h-4 w-4 mr-2" /> 編集
-            </Button>
-            <Button variant="outline" className="w-full mt-2 flex items-center justify-center text-destructive hover:text-destructive hover:bg-destructive/10">
-              <Trash2 className="h-4 w-4 mr-2" /> 削除
+            <Link to={`/tasks/edit/${task.id}`}>
+              <Button variant="outline" className="w-full flex items-center justify-center">
+                <Edit className="h-4 w-4 mr-2" /> 編集
+              </Button>
+            </Link>
+            <Button 
+              variant="outline" 
+              className="w-full mt-2 flex items-center justify-center text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={handleDelete}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  処理中...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" /> {deleteConfirm ? "削除を確定" : "削除"}
+                </>
+              )}
             </Button>
           </div>
         </div>

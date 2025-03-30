@@ -16,6 +16,9 @@ default: &default
   username: root
   password: password
   host: db
+  variables:
+    sql_mode: TRADITIONAL
+    time_zone: "+09:00"
 
 development:
   <<: *default

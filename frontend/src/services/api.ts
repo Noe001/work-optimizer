@@ -32,7 +32,15 @@ const apiClient = axios.create({
 // リクエストインターセプター
 apiClient.interceptors.request.use(
   (config) => {
-    // 保存されたトークンがあればAuthorizationヘッダーに追加
+    // キャッシュ回避のためにタイムスタンプパラメータを追加（GETリクエスト時）
+    if (config.method?.toLowerCase() === 'get') {
+      config.params = {
+        ...config.params,
+        _: new Date().getTime() // タイムスタンプを追加
+      };
+    }
+
+    // ローカルストレージからトークンを取得
     const token = localStorage.getItem('auth_token');
     if (token && config.headers) {
       config.headers['Authorization'] = `Bearer ${token}`;

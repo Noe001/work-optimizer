@@ -48,16 +48,31 @@ export interface Meeting {
 
 // タスク関連の型
 export interface Task {
-  id: number;
+  id: string;
   title: string;
   description: string;
   status: 'pending' | 'in_progress' | 'completed';
   priority: 'low' | 'medium' | 'high';
   due_date?: string;
   assigned_to?: string;
+  organization_id?: string;
+  parent_task_id?: string;  // 親タスクID
   created_at: string;
   updated_at: string;
-  tags?: string[];
+  tags?: string | string[];  // タグ文字列またはタグ配列
+  tag_list?: string | string[];  // タグリスト（APIによって返される形式が異なる場合）
+  assignee_name?: string;
+  is_overdue?: boolean;
+  is_completed?: boolean;
+  time_remaining?: number;
+  subtasks?: Task[];  // サブタスク配列
+}
+
+// サブタスク関連の型（フロントエンドでのフォーム用）
+export interface SubTask {
+  id?: string | number;
+  title: string;
+  completed: boolean;
 }
 
 // マニュアル関連の型
@@ -92,7 +107,7 @@ export interface Attendance {
 export interface LeaveRequest {
   id: number;
   user_id: string;
-  type: 'paid' | 'sick' | 'other';
+  leave_type: 'paid' | 'sick' | 'other';
   start_date: string;
   end_date: string;
   reason: string;

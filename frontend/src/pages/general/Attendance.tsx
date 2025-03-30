@@ -58,103 +58,6 @@ interface AttendanceRecord {
   status: string;
 }
 
-// サンプルデータ - 実際にはAPIから取得します
-const dailyAttendanceData = [
-  { date: "3/15", 勤務時間: 8.5, 残業時間: 0.5 },
-  { date: "3/16", 勤務時間: 9.2, 残業時間: 1.2 },
-  { date: "3/17", 勤務時間: 7.8, 残業時間: 0 },
-  { date: "3/18", 勤務時間: 8.0, 残業時間: 0 },
-  { date: "3/19", 勤務時間: 9.5, 残業時間: 1.5 },
-  { date: "3/20", 勤務時間: 0, 残業時間: 0 },
-  { date: "3/21", 勤務時間: 0, 残業時間: 0 },
-]
-
-const monthlyAttendanceData = [
-  { month: "1月", 勤務時間: 168, 残業時間: 8 },
-  { month: "2月", 勤務時間: 155, 残業時間: 5 },
-  { month: "3月", 勤務時間: 175, 残業時間: 17 },
-  { month: "4月", 勤務時間: 162, 残業時間: 2 },
-  { month: "5月", 勤務時間: 161, 残業時間: 1 },
-  { month: "6月", 勤務時間: 148, 残業時間: 0 },
-]
-
-// 勤怠履歴サンプルデータ
-const attendanceHistory = [
-  { 
-    id: 1, 
-    date: "2023-03-21", 
-    checkIn: "08:55:23", 
-    checkOut: "18:05:45", 
-    totalHours: 8.17, 
-    overtimeHours: 0.17, 
-    status: "present" 
-  },
-  { 
-    id: 2, 
-    date: "2023-03-20", 
-    checkIn: "09:10:05", 
-    checkOut: "19:20:33", 
-    totalHours: 9.17, 
-    overtimeHours: 1.17, 
-    status: "late" 
-  },
-  { 
-    id: 3, 
-    date: "2023-03-19", 
-    checkIn: "08:48:12", 
-    checkOut: "18:10:22", 
-    totalHours: 8.37, 
-    overtimeHours: 0.37, 
-    status: "present" 
-  },
-  { 
-    id: 4, 
-    date: "2023-03-18", 
-    checkIn: "08:52:37", 
-    checkOut: "17:55:18", 
-    totalHours: 7.97, 
-    overtimeHours: 0, 
-    status: "present" 
-  },
-  { 
-    id: 5, 
-    date: "2023-03-17", 
-    checkIn: "-", 
-    checkOut: "-", 
-    totalHours: 0, 
-    overtimeHours: 0, 
-    status: "absent" 
-  },
-]
-
-// 休暇リクエスト履歴
-const leaveRequests = [
-  { 
-    id: 1, 
-    type: "paid", 
-    startDate: "2023-04-10", 
-    endDate: "2023-04-12", 
-    reason: "家族旅行", 
-    status: "approved" 
-  },
-  { 
-    id: 2, 
-    type: "sick", 
-    startDate: "2023-03-05", 
-    endDate: "2023-03-06", 
-    reason: "体調不良", 
-    status: "approved" 
-  },
-  { 
-    id: 3, 
-    type: "other", 
-    startDate: "2023-02-15", 
-    endDate: "2023-02-15", 
-    reason: "私用のため", 
-    status: "rejected" 
-  },
-]
-
 const AttendanceView: React.FC = () => {
   const [viewMode, setViewMode] = useState<"日次" | "週次" | "月次">("週次")
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false)
@@ -165,7 +68,13 @@ const AttendanceView: React.FC = () => {
   const [currentTime, setCurrentTime] = useState<string>(formatTime(new Date()))
   const [todayAttendance, setTodayAttendance] = useState<any>(null)
   const [loading, setLoading] = useState<boolean>(false)
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(attendanceHistory)
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([])
+  const [leaveHistory, setLeaveHistory] = useState<any[]>([])
+  const [attendanceSummary, setAttendanceSummary] = useState<any>(null)
+  
+  // 勤怠グラフデータ用の状態
+  const [graphData, setGraphData] = useState<any[]>([])
+  const [graphLoading, setGraphLoading] = useState<boolean>(false)
   
   // 勤怠編集用の状態
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -174,35 +83,227 @@ const AttendanceView: React.FC = () => {
   const [editCheckOut, setEditCheckOut] = useState("")
   const [editStatus, setEditStatus] = useState("")
   
-  // 現在時刻を1分ごとに更新
+  // 現在時刻を1秒ごとに更新
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(formatTime(new Date()));
-    }, 60000);
+    }, 1000); // 1秒ごとに更新
     return () => clearInterval(timer);
   }, []);
-
-  // 本日の勤怠データを取得（実際のアプリケーションではAPI呼び出し）
+  
+  // 今日の勤怠情報を取得
   useEffect(() => {
-    // ダミーデータ
-    setTodayAttendance({
-      date: format(new Date(), 'yyyy-MM-dd'),
-      check_in: "09:05",
-      check_out: null,
-      status: "present"
-    });
+    const fetchTodayAttendance = async () => {
+      try {
+        setLoading(true);
+        const response = await attendanceService.getAttendance();
+        
+        if (response.success) {
+          setTodayAttendance(response.data);
+        } else {
+          // APIからデータを取得できなかった場合はデフォルト値を設定
+          setTodayAttendance({
+            date: format(new Date(), 'yyyy-MM-dd'),
+            check_in: null,
+            check_out: null,
+            status: 'pending'
+          });
+        }
+      } catch (error) {
+        console.error("勤怠データ取得エラー:", error);
+        toast.error("勤怠データの取得に失敗しました");
+        // エラー時にもデフォルト値を設定
+        setTodayAttendance({
+          date: format(new Date(), 'yyyy-MM-dd'),
+          check_in: null,
+          check_out: null,
+          status: 'pending'
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    // 実際のアプリケーションではAPI呼び出しでデータを取得
-    // fetchAttendanceRecords();
+    fetchTodayAttendance();
+    
+    // 定期的な更新（5分ごと）
+    const attendanceRefreshTimer = setInterval(() => {
+      fetchTodayAttendance();
+    }, 300000); // 5分ごとに更新
+    
+    return () => clearInterval(attendanceRefreshTimer);
   }, []);
   
-  // 勤怠記録を取得（実際のアプリケーションでは使用）
+  // viewModeに応じたグラフデータの取得
+  useEffect(() => {
+    fetchGraphData();
+  }, [viewMode]);
+  
+  // 勤怠履歴と勤怠サマリーを取得
+  useEffect(() => {
+    const fetchAttendanceData = async () => {
+      try {
+        setLoading(true);
+        await fetchAttendanceRecords();
+        
+        // 勤怠サマリーの取得
+        const summaryResponse = await attendanceService.getAttendanceSummary();
+        if (summaryResponse.success) {
+          // サマリーデータを状態に保存
+          setAttendanceSummary(summaryResponse.data);
+        }
+        
+        // 休暇履歴の取得
+        const leaveHistoryResponse = await attendanceService.getLeaveHistory();
+        if (leaveHistoryResponse.success && Array.isArray(leaveHistoryResponse.data)) {
+          // 休暇履歴データをダミーデータからAPIレスポンスに更新
+          const formattedLeaveHistory = leaveHistoryResponse.data.map(leave => ({
+            id: leave.id,
+            type: leave.leave_type,
+            startDate: leave.start_date,
+            endDate: leave.end_date,
+            reason: leave.reason,
+            status: leave.status
+          }));
+          
+          // 休暇履歴を状態に保存
+          setLeaveHistory(formattedLeaveHistory);
+        }
+        
+        // 初期表示時のグラフデータ取得
+        await fetchGraphData();
+      } catch (error) {
+        console.error("勤怠データ取得エラー:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchAttendanceData();
+  }, []);
+  
+  // グラフデータ取得
+  const fetchGraphData = async () => {
+    try {
+      setGraphLoading(true);
+      
+      // viewModeに基づいてAPIのパラメータを決定
+      const period = viewMode === "日次" ? "daily" : 
+                     viewMode === "週次" ? "weekly" : "monthly";
+      
+      const response = await attendanceService.getAttendanceHistory(period);
+      
+      if (response.success && Array.isArray(response.data)) {
+        // APIレスポンスをグラフ用に変換
+        const formattedData = response.data.map(item => {
+          // 日付の形式をチェックして安全に変換
+          let label = "";
+          
+          try {
+            // 様々な形式の日付に対応
+            if (item.date && typeof item.date === 'string') {
+              // 日付の前処理（APIの返す形式によって調整）
+              let dateStr = item.date;
+              
+              // 日付文字列が有効かチェック
+              const date = new Date(dateStr);
+              
+              if (!isNaN(date.getTime())) {
+                // 有効な日付の場合、表示形式を調整
+                if (viewMode === "月次") {
+                  label = `${date.getMonth() + 1}月`;
+                } else {
+                  label = `${date.getMonth() + 1}/${date.getDate()}`;
+                }
+              } else {
+                // 無効な日付の場合、日付文字列をそのまま使用
+                label = dateStr || "日付なし";
+              }
+            } else if (item.month && typeof item.month === 'string') {
+              // 月次データで month フィールドがある場合
+              label = item.month;
+            } else if (item.week && typeof item.week === 'string') {
+              // 週次データで week フィールドがある場合
+              label = item.week;
+            } else if (item.day && typeof item.day === 'string') {
+              // 日次データで day フィールドがある場合
+              label = item.day;
+            } else {
+              // その他の場合はインデックスを使用
+              label = `データ${item.id || ""}`;
+            }
+          } catch (err) {
+            console.error("日付変換エラー:", err, item);
+            label = "日付エラー";
+          }
+          
+          return {
+            date: label,
+            勤務時間: item.total_hours || 0,
+            残業時間: item.overtime_hours || 0
+          };
+        });
+        
+        // 処理済みのデータ
+        let processedData = formattedData;
+        
+        // 日次表示の場合は7日分のデータを表示
+        if (viewMode === "日次") {
+          // データが多い場合は最新の7件だけを使用
+          if (processedData.length > 7) {
+            processedData = processedData.slice(-7);
+          } 
+          // データが7件未満の場合は空データで埋める
+          else if (processedData.length < 7) {
+            const emptyDataCount = 7 - processedData.length;
+            const emptyData = Array(emptyDataCount).fill(0).map((_, index) => ({
+              date: `-`,
+              勤務時間: 0,
+              残業時間: 0
+            }));
+            // 空データを後ろに追加して、最新データ（実データ）が左側に配置されるようにする
+            processedData = [...processedData, ...emptyData];
+          }
+        }
+        
+        // データを逆順にして最新のデータが右側に表示されるようにする
+        const reversedData = [...processedData].reverse();
+        
+        setGraphData(reversedData);
+      } else {
+        // APIから適切なデータが取得できなかった場合は空配列を設定
+        console.error("グラフデータ取得エラー:", response);
+        setGraphData([]);
+      }
+    } catch (error) {
+      console.error("グラフデータ取得エラー:", error);
+      setGraphData([]);
+    } finally {
+      setGraphLoading(false);
+    }
+  };
+  
+  // 勤怠記録を取得
   const fetchAttendanceRecords = async () => {
     try {
       setLoading(true);
       const response = await attendanceService.getAttendanceHistory('daily');
       if (response.success) {
-        setAttendanceRecords(response.data);
+        // APIレスポンスが配列かチェック
+        const records = Array.isArray(response.data) ? response.data : [];
+        
+        // レスポンスデータをAttendanceRecord形式に変換
+        const formattedRecords = records.map(record => ({
+          id: record.id,
+          date: record.date,
+          checkIn: record.check_in || '-',
+          checkOut: record.check_out || '-',
+          totalHours: record.total_hours || 0,
+          overtimeHours: record.overtime_hours || 0,
+          status: record.status || 'pending'
+        }));
+        
+        setAttendanceRecords(formattedRecords);
       }
     } catch (error) {
       console.error("勤怠履歴取得エラー:", error);
@@ -216,14 +317,18 @@ const AttendanceView: React.FC = () => {
   const handleCheckIn = async () => {
     try {
       setLoading(true);
-      // 実際のアプリケーションではAPI呼び出し
-      await attendanceService.checkIn();
-      setTodayAttendance({
-        ...todayAttendance,
-        check_in: formatTime(new Date()),
-        status: "present"
-      });
-      toast.success("出勤を記録しました");
+      const response = await attendanceService.checkIn();
+      if (response.success && response.data) {
+        // APIからのレスポンスデータでステートを更新
+        setTodayAttendance(response.data);
+        
+        // 勤怠履歴を即時更新
+        await fetchAttendanceRecords();
+        
+        toast.success("出勤を記録しました");
+      } else {
+        toast.error(response.message || "出勤打刻に失敗しました");
+      }
     } catch (error) {
       console.error("出勤打刻エラー:", error);
       toast.error("出勤打刻に失敗しました");
@@ -236,16 +341,29 @@ const AttendanceView: React.FC = () => {
   const handleCheckOut = async () => {
     try {
       setLoading(true);
-      // 実際のアプリケーションではAPI呼び出し
-      await attendanceService.checkOut();
-      setTodayAttendance({
-        ...todayAttendance,
-        check_out: formatTime(new Date())
-      });
-      toast.success("退勤を記録しました");
-    } catch (error) {
+      const response = await attendanceService.checkOut();
+      if (response.success && response.data) {
+        // APIからのレスポンスデータでステートを更新
+        setTodayAttendance(response.data);
+        
+        // 勤怠履歴を即時更新
+        await fetchAttendanceRecords();
+        
+        toast.success("退勤を記録しました");
+      } else {
+        // より詳細なエラーメッセージを表示
+        const errorMessage = response.message || "退勤打刻に失敗しました";
+        console.error("退勤打刻エラー:", errorMessage);
+        toast.error(errorMessage);
+      }
+    } catch (error: any) {
       console.error("退勤打刻エラー:", error);
-      toast.error("退勤打刻に失敗しました");
+      // エラーレスポンスからメッセージを抽出
+      const errorMessage = 
+        error.response?.data?.message ||
+        error.response?.data?.errors?.check_out?.join(', ') ||
+        "退勤打刻に失敗しました。出勤時刻より後の時刻であることを確認してください。";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -261,12 +379,31 @@ const AttendanceView: React.FC = () => {
     try {
       setLoading(true);
       // 実際のアプリケーションではAPI呼び出し
-      await attendanceService.requestLeave({
-        type: leaveType as 'paid' | 'sick' | 'other',
+      const response = await attendanceService.requestLeave({
+        leave_type: leaveType as 'paid' | 'sick' | 'other',
         start_date: format(leaveStartDate, 'yyyy-MM-dd'),
         end_date: format(leaveEndDate, 'yyyy-MM-dd'),
         reason: leaveReason
       });
+      
+      if (response.success) {
+        // 休暇申請が成功したら、休暇履歴を即時更新
+        const leaveHistoryResponse = await attendanceService.getLeaveHistory();
+        if (leaveHistoryResponse.success && Array.isArray(leaveHistoryResponse.data)) {
+          // 休暇履歴データを更新
+          const formattedLeaveHistory = leaveHistoryResponse.data.map(leave => ({
+            id: leave.id,
+            type: leave.leave_type,
+            startDate: leave.start_date,
+            endDate: leave.end_date,
+            reason: leave.reason,
+            status: leave.status
+          }));
+          
+          // 休暇履歴を状態に保存
+          setLeaveHistory(formattedLeaveHistory);
+        }
+      }
       
       setIsLeaveDialogOpen(false);
       toast.success("休暇申請を送信しました");
@@ -333,53 +470,54 @@ const AttendanceView: React.FC = () => {
       
       // 本日の勤怠編集の場合
       if (editingRecord.id === 0) {
-        // 本日の勤怠データを更新
-        setTodayAttendance({
-          ...todayAttendance,
-          check_in: editCheckIn,
-          check_out: editCheckOut,
-          status: editStatus
-        });
+        // 実際のAPIを呼び出す
+        const response = await attendanceService.updateAttendanceByDate(
+          editingRecord.date,
+          {
+            check_in: editCheckIn,
+            check_out: editCheckOut,
+            status: editStatus
+          }
+        );
         
-        // 実際のアプリケーションではAPI呼び出し
-        // await attendanceService.updateTodayAttendance({
-        //   check_in: editCheckIn,
-        //   check_out: editCheckOut,
-        //   status: editStatus
-        // });
-        
-        setIsEditDialogOpen(false);
-        toast.success("本日の勤怠記録を更新しました");
+        if (response.success) {
+          // 本日の勤怠データを更新
+          setTodayAttendance({
+            ...todayAttendance,
+            check_in: editCheckIn,
+            check_out: editCheckOut,
+            status: editStatus
+          });
+          
+          // 勤怠履歴を即時更新
+          await fetchAttendanceRecords();
+          
+          setIsEditDialogOpen(false);
+          toast.success("本日の勤怠記録を更新しました");
+        } else {
+          toast.error("更新に失敗しました: " + response.message);
+        }
         return;
       }
       
       // 過去の勤怠記録更新の場合
-      // 実際のアプリケーションではAPI呼び出し
-      // 今回はフロントエンドのみで更新
-      const updatedRecords = attendanceRecords.map(record => {
-        if (record.id === editingRecord.id) {
-          // 簡易的な時間計算（実際のアプリケーションではより精密な計算が必要）
-          const checkInTime = new Date(`2000-01-01T${editCheckIn}`);
-          const checkOutTime = new Date(`2000-01-01T${editCheckOut}`);
-          const diffInHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
-          const totalHours = Math.round(diffInHours * 100) / 100;
-          const overtimeHours = Math.max(0, Math.round((totalHours - 8) * 100) / 100);
-          
-          return {
-            ...record,
-            checkIn: editCheckIn,
-            checkOut: editCheckOut,
-            status: editStatus,
-            totalHours,
-            overtimeHours
-          };
+      const response = await attendanceService.updateAttendanceByDate(
+        editingRecord.date,
+        {
+          check_in: editCheckIn,
+          check_out: editCheckOut,
+          status: editStatus
         }
-        return record;
-      });
+      );
       
-      setAttendanceRecords(updatedRecords);
-      setIsEditDialogOpen(false);
-      toast.success("勤怠記録を更新しました");
+      if (response.success) {
+        // 履歴データを更新
+        await fetchAttendanceRecords();
+        setIsEditDialogOpen(false);
+        toast.success("勤怠記録を更新しました");
+      } else {
+        toast.error("更新に失敗しました: " + response.message);
+      }
     } catch (error) {
       console.error("勤怠更新エラー:", error);
       toast.error("勤怠記録の更新に失敗しました");
@@ -436,6 +574,17 @@ const AttendanceView: React.FC = () => {
     return isSameMonth(recordDate, currentDate);
   };
 
+  // 時刻を HH:MM 形式にフォーマットする（秒を表示しない）
+  const formatTimeWithoutSeconds = (timeString: string | null | undefined): string => {
+    if (!timeString || timeString === "" || timeString === "-") return '-';
+    // HH:MM:SS 形式から HH:MM 形式に変換（今後は必要なくなるが互換性のために残す）
+    const match = timeString.match(/^(\d{1,2}):(\d{1,2})/);
+    if (match) {
+      return `${match[1]}:${match[2]}`;
+    }
+    return timeString;
+  };
+
   return (
     <div className="flex flex-col h-full">
       <Header />
@@ -463,49 +612,64 @@ const AttendanceView: React.FC = () => {
 
                 <div className="flex flex-col items-center gap-2">
                   <div className="grid grid-cols-2 gap-4 text-center">
-                    <div>
+                    <div className={`p-2 rounded ${todayAttendance?.check_in ? 'bg-green-50' : 'bg-gray-50'}`}>
                       <div className="text-sm text-muted-foreground">出勤時刻</div>
-                      <div className="font-medium">
-                        {todayAttendance?.check_in || '-'}
+                      <div className={`font-medium ${todayAttendance?.check_in ? 'text-green-600' : ''}`}>
+                        {todayAttendance?.check_in && todayAttendance.check_in !== ""
+                          ? formatTimeWithoutSeconds(todayAttendance.check_in) 
+                          : "未打刻"}
                       </div>
                     </div>
-                    <div>
+                    <div className={`p-2 rounded ${todayAttendance?.check_out ? 'bg-blue-50' : 'bg-gray-50'}`}>
                       <div className="text-sm text-muted-foreground">退勤時刻</div>
-                      <div className="font-medium">
-                        {todayAttendance?.check_out || '-'}
+                      <div className={`font-medium ${todayAttendance?.check_out ? 'text-blue-600' : ''}`}>
+                        {todayAttendance?.check_out && todayAttendance.check_out !== ""
+                          ? formatTimeWithoutSeconds(todayAttendance.check_out) 
+                          : "未打刻"}
                       </div>
                     </div>
                   </div>
-                  <div className="mt-2">
-                    {getStatusBadge(todayAttendance?.status || 'unknown')}
-                  </div>
+                  {todayAttendance?.status && (
+                    <div className="mt-2">
+                      {getStatusBadge(todayAttendance.status)}
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex gap-4">
-                  <Button
-                    className="flex gap-2 bg-green-600 hover:bg-green-700"
-                    onClick={handleCheckIn}
-                    disabled={loading || !!todayAttendance?.check_in}
-                  >
-                    <LogIn className="h-4 w-4" />
-                    出勤
-                  </Button>
-                  <Button
-                    className="flex gap-2 bg-blue-600 hover:bg-blue-700"
-                    onClick={handleCheckOut}
-                    disabled={loading || !todayAttendance?.check_in || !!todayAttendance?.check_out}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    退勤
-                  </Button>
-                  <Button
-                    className="flex gap-2"
-                    variant="outline"
-                    onClick={handleEditTodayAttendance}
-                  >
-                    <Edit className="h-4 w-4" />
-                    編集
-                  </Button>
+                {/* 打刻関連のボタン */}
+                <div className="flex flex-col md:flex-row gap-4 mt-4">
+                  {!todayAttendance || !todayAttendance.check_in ? (
+                    <Button 
+                      onClick={handleCheckIn} 
+                      disabled={loading}
+                      className="flex items-center gap-2"
+                    >
+                      <LogIn className="h-4 w-4" />
+                      出勤打刻
+                    </Button>
+                  ) : !todayAttendance.check_out ? (
+                    <Button 
+                      onClick={handleCheckOut} 
+                      disabled={loading}
+                      className="flex items-center gap-2"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      退勤打刻
+                    </Button>
+                  ) : (
+                    <div className="text-sm">本日の勤務は終了しました</div>
+                  )}
+                  
+                  {todayAttendance && (
+                    <Button 
+                      variant="outline" 
+                      className="flex items-center gap-2"
+                      onClick={handleEditTodayAttendance}
+                    >
+                      <Edit className="h-4 w-4" />
+                      勤怠編集
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -556,7 +720,7 @@ const AttendanceView: React.FC = () => {
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart
-                data={viewMode === "月次" ? monthlyAttendanceData : dailyAttendanceData}
+                data={graphData}
                 margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
@@ -568,6 +732,19 @@ const AttendanceView: React.FC = () => {
                 <Bar dataKey="残業時間" stackId="a" fill="#EF4444" />
               </BarChart>
             </ResponsiveContainer>
+            {graphLoading && (
+              <div className="flex justify-center mt-4">
+                <div className="text-center">
+                  <div className="animate-spin h-6 w-6 border-2 border-gray-500 border-t-transparent rounded-full mx-auto"></div>
+                  <p className="text-sm text-gray-500 mt-2">データを読み込み中...</p>
+                </div>
+              </div>
+            )}
+            {!graphLoading && graphData.length === 0 && (
+              <div className="text-center py-4 text-gray-500">
+                表示するデータがありません
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -594,8 +771,8 @@ const AttendanceView: React.FC = () => {
                 {attendanceRecords.map((record) => (
                   <TableRow key={record.id}>
                     <TableCell>{record.date}</TableCell>
-                    <TableCell>{record.checkIn}</TableCell>
-                    <TableCell>{record.checkOut}</TableCell>
+                    <TableCell>{formatTimeWithoutSeconds(record.checkIn)}</TableCell>
+                    <TableCell>{formatTimeWithoutSeconds(record.checkOut)}</TableCell>
                     <TableCell>{record.totalHours}時間</TableCell>
                     <TableCell>{record.overtimeHours}時間</TableCell>
                     <TableCell>{getStatusBadge(record.status)}</TableCell>
@@ -628,24 +805,79 @@ const AttendanceView: React.FC = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>種類</TableHead>
-                  <TableHead>開始日</TableHead>
-                  <TableHead>終了日</TableHead>
+                  <TableHead>期間</TableHead>
                   <TableHead>理由</TableHead>
                   <TableHead>状態</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {leaveRequests.map((request) => (
-                  <TableRow key={request.id}>
-                    <TableCell>{getLeaveTypeBadge(request.type)}</TableCell>
-                    <TableCell>{request.startDate}</TableCell>
-                    <TableCell>{request.endDate}</TableCell>
-                    <TableCell>{request.reason}</TableCell>
-                    <TableCell>{getLeaveStatusBadge(request.status)}</TableCell>
+                {leaveHistory.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-4">休暇申請履歴がありません</TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  leaveHistory.map((request) => (
+                    <TableRow key={request.id}>
+                      <TableCell>{getLeaveTypeBadge(request.type)}</TableCell>
+                      <TableCell>
+                        {new Date(request.startDate).toLocaleDateString()} 
+                        {request.startDate !== request.endDate && ` 〜 ${new Date(request.endDate).toLocaleDateString()}`}
+                      </TableCell>
+                      <TableCell>{request.reason}</TableCell>
+                      <TableCell>{getLeaveStatusBadge(request.status)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+
+        {/* 今月の勤怠サマリー */}
+        <Card>
+          <CardHeader>
+            <CardTitle>今月の勤怠サマリー</CardTitle>
+            <CardDescription>当月の勤怠概要</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
+                <span className="text-sm text-muted-foreground">出勤日数</span>
+                <span className="text-2xl font-semibold mt-1">
+                  {attendanceSummary ? attendanceSummary.present_days : "-"}/{attendanceSummary ? attendanceSummary.total_days : "-"}
+                </span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
+                <span className="text-sm text-muted-foreground">遅刻日数</span>
+                <span className="text-2xl font-semibold mt-1">
+                  {attendanceSummary ? attendanceSummary.late_days : "-"}
+                </span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
+                <span className="text-sm text-muted-foreground">総労働時間</span>
+                <span className="text-2xl font-semibold mt-1">
+                  {attendanceSummary ? attendanceSummary.total_hours : "-"}
+                </span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
+                <span className="text-sm text-muted-foreground">残業時間</span>
+                <span className="text-2xl font-semibold mt-1">
+                  {attendanceSummary ? attendanceSummary.total_overtime : "-"}
+                </span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
+                <span className="text-sm text-muted-foreground">有給休暇残</span>
+                <span className="text-2xl font-semibold mt-1">
+                  {attendanceSummary ? attendanceSummary.leave_balance?.paid : "-"}
+                </span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
+                <span className="text-sm text-muted-foreground">病休残</span>
+                <span className="text-2xl font-semibold mt-1">
+                  {attendanceSummary ? attendanceSummary.leave_balance?.sick : "-"}
+                </span>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

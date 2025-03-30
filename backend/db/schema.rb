@@ -10,7 +10,33 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2025_03_17_140001) do
+ActiveRecord::Schema[7.2].define(version: 2025_03_29_135706) do
+  create_table "attendances", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.string "user_id", null: false
+    t.date "date", null: false
+    t.time "check_in"
+    t.time "check_out"
+    t.float "total_hours"
+    t.float "overtime_hours"
+    t.string "status", default: "pending", null: false
+    t.text "comment"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "date"], name: "index_attendances_on_user_id_and_date", unique: true
+  end
+
+  create_table "leave_requests", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.string "user_id", null: false
+    t.string "leave_type", null: false
+    t.date "start_date", null: false
+    t.date "end_date", null: false
+    t.text "reason"
+    t.string "status", default: "pending", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_leave_requests_on_user_id"
+  end
+
   create_table "manuals", id: :string, charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "title"
     t.text "content"
@@ -70,8 +96,10 @@ ActiveRecord::Schema[7.2].define(version: 2025_03_17_140001) do
     t.string "organization_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "parent_task_id"
     t.index ["assigned_to"], name: "index_tasks_on_assigned_to"
     t.index ["organization_id"], name: "index_tasks_on_organization_id"
+    t.index ["parent_task_id"], name: "index_tasks_on_parent_task_id"
   end
 
   create_table "users", id: :string, charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
@@ -83,9 +111,12 @@ ActiveRecord::Schema[7.2].define(version: 2025_03_17_140001) do
     t.timestamp "last_login_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "activation_digest"
     t.index ["email"], name: "index_users_on_email", unique: true
   end
 
+  add_foreign_key "attendances", "users"
+  add_foreign_key "leave_requests", "users"
   add_foreign_key "organization_memberships", "organizations"
   add_foreign_key "organization_memberships", "users"
 end

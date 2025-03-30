@@ -23,7 +23,6 @@ import {
   FileText,
   Database,
   Calendar,
-  Heart,
   Plus,
   Building2,
   Clock,
@@ -32,7 +31,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 // ナビゲーションリンクの定義
 const navigationLinks = [
-  { path: "/", icon: Home, label: "ダッシュボード" },
+  { path: "/", icon: Home, label: "ホーム" },
   { path: "/task_manager", icon: CheckSquare, label: "タスク管理" },
   { path: "/team_chat", icon: MessageSquare, label: "チーム会話" },
   { path: "/attendance", icon: Clock, label: "勤怠管理" },
