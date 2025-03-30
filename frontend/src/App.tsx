@@ -48,15 +48,8 @@ const App = () => (
             <OrganizationDetailView />
           </ProtectedRoute>
         } />
-
-        {/* タスク管理 */}
-        <Route path="/task_manager" element={
-          <ProtectedRoute>
-            <TaskManagerView />
-          </ProtectedRoute>
-        } />
         
-        {/* タスク管理（別名） */}
+        {/* タスク管理 */}
         <Route path="/tasks" element={
           <ProtectedRoute>
             <TaskManagerView />

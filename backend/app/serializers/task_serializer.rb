@@ -1,7 +1,7 @@
 class TaskSerializer < ActiveModel::Serializer
   attributes :id, :title, :description, :status, :priority, :due_date, :assigned_to, 
              :created_at, :updated_at, :user_id, :tag_list, :assignee_name,
-             :organization_id, :organization_name, :is_overdue, :is_completed, :time_remaining
+             :organization_id, :organization_name, :is_overdue, :is_completed, :time_remaining, :attachment_urls
 
   # タグリストを配列として返す
   def tag_list
@@ -42,6 +42,19 @@ class TaskSerializer < ActiveModel::Serializer
       return -1 * (Date.current - object.due_date).to_i
     else
       return (object.due_date - Date.current).to_i
+    end
+  end
+  
+  # 添付ファイルのURLリストを返す
+  def attachment_urls
+    return [] unless object.attachments.attached?
+    
+    object.attachments.map do |attachment|
+      {
+        id: attachment.id,
+        name: attachment.filename.to_s,
+        url: Rails.application.routes.url_helpers.rails_blob_url(attachment, only_path: true)
+      }
     end
   end
 end 

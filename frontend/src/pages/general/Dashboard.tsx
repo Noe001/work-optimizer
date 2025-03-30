@@ -39,6 +39,7 @@ import { useApi } from '@/hooks'
 import { Task } from '@/types/api'
 import type { Meeting as ApiMeeting, Attendance } from '@/types/api'
 import { ApiError, LoadingIndicator } from '@/components/ui'
+import { getTaskProgress } from '@/services/taskService'
 
 // Meeting型定義
 interface LocalMeeting {
@@ -117,9 +118,9 @@ const DashboardTab: React.FC = () => {
             </Link>
           </Button>
           <Button variant="secondary" className="bg-white/20 hover:bg-white/30" asChild>
-            <Link to="/work_life_balance">
+            <Link to="/attendance">
               <Calendar className="h-4 w-4 mr-2" />
-              健康管理
+              勤怠管理
             </Link>
           </Button>
           <Button variant="secondary" className="bg-white/20 hover:bg-white/30" asChild>
@@ -154,26 +155,49 @@ const DashboardTab: React.FC = () => {
             
             {!tasksApi.loading && !tasksApi.error && tasksApi.data && (
               <div className="space-y-4">
-                {tasksApi.data.length > 0 ? (
-                  tasksApi.data.slice(0, 3).map((task) => (
-                    <div key={task.id} className="space-y-2">
-                      <div className="flex justify-between">
-                        <span>{task.title}</span>
-                        <span>
-                          {task.status === 'completed' ? '100' : 
-                           task.status === 'in_progress' ? '50' : '0'}%
-                        </span>
-                      </div>
-                      <Progress 
-                        value={
-                          task.status === 'completed' ? 100 : 
-                          task.status === 'in_progress' ? 50 : 0
-                        } 
-                      />
-                    </div>
-                  ))
+                {tasksApi.data.filter(task => task.status !== 'completed').length > 0 ? (
+                  tasksApi.data
+                    .filter(task => task.status !== 'completed')
+                    .sort((a, b) => {
+                      // サブタスクを持つタスクを優先
+                      const aHasSubtasks = a.subtasks && a.subtasks.length > 0;
+                      const bHasSubtasks = b.subtasks && b.subtasks.length > 0;
+                      
+                      if (aHasSubtasks && !bHasSubtasks) return -1;
+                      if (!aHasSubtasks && bHasSubtasks) return 1;
+                      return 0;
+                    })
+                    .slice(0, 3)
+                    .map((task) => {
+                      const hasSubtasks = task.subtasks && task.subtasks.length > 0;
+                      
+                      return (
+                        <div key={task.id} className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="max-w-[65%] truncate" title={task.title}>{task.title}</span>
+                            {hasSubtasks ? (
+                              <span>
+                                {getTaskProgress(task)}%
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                サブタスク未作成
+                              </span>
+                            )}
+                          </div>
+                          {hasSubtasks ? (
+                            <Progress 
+                              value={getTaskProgress(task)} 
+                              className="h-2"
+                            />
+                          ) : (
+                            <div className="h-1 rounded-full bg-muted"></div>
+                          )}
+                        </div>
+                      );
+                    })
                 ) : (
-                  <p className="text-center text-muted-foreground">タスクがありません</p>
+                  <p className="text-center text-muted-foreground">進行中のタスクがありません</p>
                 )}
               </div>
             )}
@@ -370,7 +394,7 @@ const DashboardTab: React.FC = () => {
                 { icon: Book, label: "ナレッジ作成", path: "/knowledge_base" },
                 { icon: Users, label: "チャット", path: "/team_chat" },
                 { icon: CheckSquare, label: "タスク管理", path: "/tasks" },
-                { icon: Heart, label: "健康管理", path: "/work_life_balance" },
+                { icon: Heart, label: "勤怠管理", path: "/attendance" },
               ].map(({ icon: Icon, label, path }, index) => (
                 <Button key={index} variant="outline" className="h-auto flex-col gap-2 py-4" asChild>
                   <Link to={path}>

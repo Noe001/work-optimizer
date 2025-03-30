@@ -39,5 +39,8 @@ module App
     config.middleware.use ActionDispatch::Cookies
     config.middleware.use ActionDispatch::Session::CookieStore, key: '_app_session'
     config.middleware.use ActionDispatch::ContentSecurityPolicy::Middleware
+    
+    # _methodパラメータでHTTPメソッドのオーバーライドを有効にする
+    config.middleware.use Rack::MethodOverride
   end
 end

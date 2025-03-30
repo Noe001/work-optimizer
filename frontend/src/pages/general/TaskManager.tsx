@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, Search, Plus, Filter, List, CalendarDays, ChevronUp, ChevronDown, Edit, Trash2, Loader2 } from "lucide-react";
+import { Calendar, Search, Plus, Filter, List, CalendarDays, ChevronUp, ChevronDown, Edit, Trash2, Loader2, File } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link } from "react-router-dom";
@@ -39,7 +39,7 @@ interface UITask {
   assignee?: User;
   tags: string[];
   subtasks: { id: string | number; title: string; completed: boolean }[];
-  attachments?: { name: string; url: string }[];
+  attachment_urls?: { id: string | number; name: string; url: string }[];
   comments?: { id: number; user: User; text: string; timestamp: string }[];
   createdAt: string;
 }
@@ -205,6 +205,7 @@ const TaskManagerView: React.FC = () => {
       tags,
       subtasks,
       createdAt: apiTask.created_at,
+      attachment_urls: apiTask.attachment_urls,
       // 他のプロパティは必要に応じて追加
     };
   };
@@ -718,7 +719,7 @@ const TaskManagerView: React.FC = () => {
 
         {/* タスク詳細ダイアログ */}
         <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="max-w-5xl max-h-[90vh] p-6">
             {selectedTaskId && (
               <>
                 {tasks.find((t) => t.id === selectedTaskId) ? (
@@ -785,174 +786,209 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
   };
 
   return (
-    <>
-      <DialogHeader>
+    <div className="max-h-[80vh] overflow-hidden flex flex-col">
+      <DialogHeader className="pb-6">
         <div className="flex items-center justify-between">
-          <DialogTitle className="text-xl">{task.title}</DialogTitle>
-          <Badge className={`${statusColors[task.status]} mr-5`}>
+          <DialogTitle className="text-2xl font-bold">{task.title}</DialogTitle>
+          <Badge className={`${statusColors[task.status]} mr-5 text-base px-3 py-1`}>
             {task.status}
           </Badge>
         </div>
-        <DialogDescription>
+        <DialogDescription className="text-base mt-2">
           作成日: {new Date(task.createdAt).toISOString().split('T')[0]} {task.dueDate && `/ 期限: ${task.dueDate}`}
         </DialogDescription>
       </DialogHeader>
       
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 space-y-4">
-          {task.description && (
-            <div>
-              <h3 className="text-sm font-medium mb-1">説明</h3>
-              <p>{task.description}</p>
-            </div>
-          )}
-          
-          {task.subtasks && task.subtasks.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium mb-2">サブタスク</h3>
-              <div className="space-y-2">
-                {task.subtasks.map((subtask) => (
-                  <div key={subtask.id} className="flex items-center">
-                    <Checkbox 
-                      checked={subtask.completed} 
-                      className="mr-2" 
-                      disabled={updatingSubtasks[subtask.id]}
-                      onCheckedChange={() => toggleSubtask(subtask.id)}
-                    />
-                    <span className={subtask.completed ? "line-through text-muted-foreground" : ""}>
-                      {subtask.title}
-                      {updatingSubtasks[subtask.id] && (
-                        <Loader2 className="h-3 w-3 inline ml-2 animate-spin" />
-                      )}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2">
-                <div className="flex justify-between items-center text-xs mb-1">
-                  <span>{calculateTaskProgress(task)}% 完了</span>
-                  <span>
-                    {task.subtasks.filter((st) => st.completed).length}/
-                    {task.subtasks.length}
-                  </span>
-                </div>
-                <Progress value={calculateTaskProgress(task)} className="h-2" />
-              </div>
-            </div>
-          )}
-          
-          {task.attachments && task.attachments.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium mb-2">添付ファイル</h3>
-              <div className="space-y-2">
-                {task.attachments.map((attachment, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center p-2 border rounded hover:bg-accent cursor-pointer"
-                  >
-                    <span>{attachment.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {task.comments && task.comments.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium mb-2">コメント</h3>
-              <div className="space-y-3">
-                {task.comments.map((comment) => (
-                  <div key={comment.id} className="flex space-x-2">
-                    <Avatar className="h-8 w-8">
-                      {comment.user.avatar ? (
-                        <AvatarImage src={comment.user.avatar} alt={comment.user.name} />
-                      ) : null}
-                      <AvatarFallback>{comment.user.initials}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="flex items-baseline">
-                        <span className="font-medium text-sm mr-2">{comment.user.name}</span>
-                        <span className="text-xs text-muted-foreground">{comment.timestamp}</span>
-                      </div>
-                      <p className="text-sm mt-1">{comment.text}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3">
-                <Textarea placeholder="コメントを追加..." className="resize-none" />
-                <Button className="mt-2">コメントを送信</Button>
-              </div>
-            </div>
+      <div className="overflow-y-auto pr-4 flex-1">
+        {/* 説明は全幅で表示 */}
+        <div className="mb-8 p-4 bg-muted/20 rounded-lg">
+          <h3 className="text-xl font-medium mb-3">説明</h3>
+          {task.description ? (
+            <div className="whitespace-pre-wrap break-words text-base">{task.description}</div>
+          ) : (
+            <div className="text-muted-foreground italic text-base">説明は設定されていません</div>
           )}
         </div>
-        
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-sm font-medium mb-2">優先度</h3>
-            <Badge className={priorityColors[task.priority]}>
-              {task.priority}
-            </Badge>
-          </div>
-          
-          {task.assignee && (
-            <div>
-              <h3 className="text-sm font-medium mb-2">担当者</h3>
-              <div className="flex items-center space-x-2">
-                <Avatar>
-                  {task.assignee.avatar ? (
-                    <AvatarImage
-                      src={task.assignee.avatar}
-                      alt={task.assignee.name}
-                    />
-                  ) : null}
-                  <AvatarFallback>{task.assignee.initials}</AvatarFallback>
-                </Avatar>
-                <span>{task.assignee.name}</span>
-              </div>
-            </div>
-          )}
-          
-          {task.tags && task.tags.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium mb-2">タグ</h3>
-              <div className="flex flex-wrap gap-1">
-                {task.tags.map((tag, index) => (
-                  <Badge key={index} variant="outline">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          <div className="pt-4 mt-4 border-t">
-            <Link to={`/tasks/edit/${task.id}`}>
-              <Button variant="outline" className="w-full flex items-center justify-center">
-                <Edit className="h-4 w-4 mr-2" /> 編集
-              </Button>
-            </Link>
-            <Button 
-              variant="outline" 
-              className="w-full mt-2 flex items-center justify-center text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={handleDelete}
-              disabled={isLoading}
-            >
-              {isLoading ? (
+
+        {/* 2列のグリッドレイアウト */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* 左側（2/3幅） - サブタスク・添付ファイル・コメント */}
+          <div className="md:col-span-2 space-y-8">
+            <div className="p-4 bg-muted/20 rounded-lg">
+              <h3 className="text-xl font-medium mb-3">サブタスク</h3>
+              {task.subtasks && task.subtasks.length > 0 ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  処理中...
+                  {task.subtasks.map((subtask) => (
+                    <div key={subtask.id} className="flex items-center p-2 hover:bg-muted/40 rounded-md">
+                      <Checkbox 
+                        checked={subtask.completed} 
+                        className="mr-3 h-5 w-5" 
+                        disabled={updatingSubtasks[subtask.id]}
+                        onCheckedChange={() => toggleSubtask(subtask.id)}
+                      />
+                      <span className={`text-base ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
+                        {subtask.title}
+                        {updatingSubtasks[subtask.id] && (
+                          <Loader2 className="h-3 w-3 inline ml-2 animate-spin" />
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="mt-4">
+                    <div className="flex justify-between items-center text-sm mb-2">
+                      <span>{calculateTaskProgress(task)}% 完了</span>
+                      <span>
+                        {task.subtasks.filter((st) => st.completed).length}/{task.subtasks.length}
+                      </span>
+                    </div>
+                    <Progress value={calculateTaskProgress(task)} className="h-2.5" />
+                  </div>
                 </>
               ) : (
-                <>
-                  <Trash2 className="h-4 w-4 mr-2" /> {deleteConfirm ? "削除を確定" : "削除"}
-                </>
+                <div className="text-muted-foreground italic text-base">サブタスクはありません</div>
               )}
-            </Button>
+            </div>
+            
+            <div className="p-4 bg-muted/20 rounded-lg">
+              <h3 className="text-xl font-medium mb-3">添付ファイル</h3>
+              {task.attachment_urls && task.attachment_urls.length > 0 ? (
+                <div className="space-y-3">
+                  {task.attachment_urls.map((attachment, index) => (
+                    <a
+                      key={index}
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center p-3 border rounded-md hover:bg-accent cursor-pointer"
+                    >
+                      <File className="h-5 w-5 mr-2 text-gray-500" />
+                      <span className="text-base">{attachment.name}</span>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-muted-foreground italic text-base">添付ファイルはありません</div>
+              )}
+            </div>
+            
+            <div className="p-4 bg-muted/20 rounded-lg">
+              <h3 className="text-xl font-medium mb-3">コメント</h3>
+              {task.comments && task.comments.length > 0 ? (
+                <>
+                  <div className="space-y-4">
+                    {task.comments.map((comment) => (
+                      <div key={comment.id} className="flex space-x-3 p-3 bg-background rounded-md">
+                        <Avatar className="h-10 w-10">
+                          {comment.user.avatar ? (
+                            <AvatarImage src={comment.user.avatar} alt={comment.user.name} />
+                          ) : null}
+                          <AvatarFallback>{comment.user.initials}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="flex items-baseline">
+                            <span className="font-medium text-base mr-2">{comment.user.name}</span>
+                            <span className="text-sm text-muted-foreground">{comment.timestamp}</span>
+                          </div>
+                          <p className="text-base mt-1">{comment.text}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="text-muted-foreground italic mb-4 text-base">コメントはありません</div>
+              )}
+              <div className="mt-4">
+                <Textarea placeholder="コメントを追加..." className="resize-none text-base" />
+                <Button className="mt-3">コメントを送信</Button>
+              </div>
+            </div>
+          </div>
+          
+          {/* 右側（1/3幅） - 優先度・担当者・期限日・タグ */}
+          <div className="space-y-6">
+            <div className="p-4 bg-muted/20 rounded-lg">
+              <h3 className="text-xl font-medium mb-3">優先度</h3>
+              <Badge className={`${priorityColors[task.priority]} text-base px-3 py-1`}>
+                {task.priority}
+              </Badge>
+            </div>
+            
+            <div className="p-4 bg-muted/20 rounded-lg">
+              <h3 className="text-xl font-medium mb-3">担当者</h3>
+              {task.assignee ? (
+                <div className="flex items-center space-x-3">
+                  <Avatar className="h-10 w-10">
+                    {task.assignee.avatar ? (
+                      <AvatarImage
+                        src={task.assignee.avatar}
+                        alt={task.assignee.name}
+                      />
+                    ) : null}
+                    <AvatarFallback>{task.assignee.initials}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-base">{task.assignee.name}</span>
+                </div>
+              ) : (
+                <div className="text-muted-foreground italic text-base">担当者は未設定です</div>
+              )}
+            </div>
+            
+            <div className="p-4 bg-muted/20 rounded-lg">
+              <h3 className="text-xl font-medium mb-3">期限日</h3>
+              {task.dueDate ? (
+                <div className="flex items-center">
+                  <Calendar className="h-5 w-5 mr-2" />
+                  <span className="text-base">{task.dueDate}</span>
+                </div>
+              ) : (
+                <div className="text-muted-foreground italic text-base">期限日は未設定です</div>
+              )}
+            </div>
+            
+            <div className="p-4 bg-muted/20 rounded-lg">
+              <h3 className="text-xl font-medium mb-3">タグ</h3>
+              {task.tags && task.tags.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {task.tags.map((tag, index) => (
+                    <Badge key={index} variant="outline" className="text-base px-3 py-1">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-muted-foreground italic text-base">タグはありません</div>
+              )}
+            </div>
+            
+            <div className="pt-6 mt-4 border-t space-y-3">
+              <Link to={`/tasks/edit/${task.id}`}>
+                <Button variant="outline" className="w-full flex items-center justify-center h-10 text-base">
+                  <Edit className="h-5 w-5 mr-2" /> 編集
+                </Button>
+              </Link>
+              <Button 
+                variant="outline" 
+                className="w-full h-10 flex items-center justify-center text-destructive hover:text-destructive hover:bg-destructive/10 text-base"
+                onClick={handleDelete}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    処理中...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-5 w-5 mr-2" /> {deleteConfirm ? "削除を確定" : "削除"}
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

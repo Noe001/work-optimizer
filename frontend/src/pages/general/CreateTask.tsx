@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Plus, Tag, X, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Tag, X, Loader2, Upload, Paperclip, File } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "@radix-ui/react-icons";
@@ -17,6 +17,7 @@ import { format, parseISO } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { taskService } from "@/services";
 import { useToast } from "@/hooks";
+import { AttachmentFile } from "@/types/api";
 
 // APIステータスとUIステータスのマッピング
 const statusToApiMapping: Record<string, string> = {
@@ -73,6 +74,8 @@ interface TaskFormData {
   assigneeId: string | null;
   tags: string[];
   subtasks: SubTask[];
+  attachments: File[];   // 新規ファイルアップロード用
+  existingAttachments: AttachmentFile[];  // 既存の添付ファイル用
 }
 
 const CreateTaskView: React.FC = () => {
@@ -87,6 +90,7 @@ const CreateTaskView: React.FC = () => {
   const [initialLoading, setInitialLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // サンプルユーザーデータ（後でAPIから取得する）
   const users: User[] = [
@@ -106,6 +110,8 @@ const CreateTaskView: React.FC = () => {
     assigneeId: null,
     tags: [],
     subtasks: [],
+    attachments: [],
+    existingAttachments: [],
   });
 
   // 編集モードの場合、既存のタスクデータを取得
@@ -169,6 +175,8 @@ const CreateTaskView: React.FC = () => {
                   completed: subtask.status === 'completed'
                 }))
               : [],
+            attachments: [],
+            existingAttachments: task.attachment_urls || [],
           });
         } else {
           toast({
@@ -217,7 +225,7 @@ const CreateTaskView: React.FC = () => {
   const addSubtask = () => {
     if (subtaskInput.trim()) {
       const newSubtask: SubTask = {
-        id: Date.now(), // 一時的なIDとして現在のタイムスタンプを使用
+        id: `temp_${Date.now()}`, // 一時的なIDに'temp_'プレフィックスを追加
         title: subtaskInput.trim(),
         completed: false
       };
@@ -247,34 +255,48 @@ const CreateTaskView: React.FC = () => {
     });
   };
   
-  // フォームデータをAPIフォーマットに変換
-  const convertFormDataToApiFormat = () => {
-    return {
-      title: formData.title,
-      description: formData.description || "",
-      status: statusToApiMapping[formData.status] as 'pending' | 'in_progress' | 'completed',
-      priority: priorityToApiMapping[formData.priority] as 'low' | 'medium' | 'high',
-      due_date: formData.dueDate ? format(formData.dueDate, 'yyyy-MM-dd') : undefined,
-      assigned_to: formData.assigneeId,
-      // APIが期待する形式でタグを送信
-      tags: formData.tags.join(','),
-      // サブタスクを送信
-      subtasks: formData.subtasks.map(subtask => ({
-        id: subtask.id,  // 既存のIDを保持
-        title: subtask.title,
-        completed: subtask.completed
-      }))
-    };
+  // 添付ファイルを追加
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files);
+      setFormData({
+        ...formData,
+        attachments: [...formData.attachments, ...newFiles]
+      });
+    }
   };
   
-  // フォーム送信ハンドラ
+  // 新規添付ファイルを削除
+  const removeFile = (indexToRemove: number) => {
+    setFormData({
+      ...formData,
+      attachments: formData.attachments.filter((_, index) => index !== indexToRemove)
+    });
+  };
+  
+  // 既存の添付ファイルを削除
+  const removeExistingFile = (idToRemove: string | number) => {
+    setFormData({
+      ...formData,
+      existingAttachments: formData.existingAttachments.filter(file => file.id !== idToRemove)
+    });
+  };
+  
+  // ファイル選択ダイアログを開く
+  const openFileDialog = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+  
+  // フォーム送信
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title.trim()) {
+    if (formData.title.trim() === "") {
       toast({
         title: "入力エラー",
-        description: "タイトルは必須項目です",
+        description: "タイトルは必須です",
         variant: "destructive"
       });
       return;
@@ -283,36 +305,60 @@ const CreateTaskView: React.FC = () => {
     setLoading(true);
     
     try {
-      const apiTaskData = convertFormDataToApiFormat();
+      // APIに送信するデータを準備
+      const taskData: any = {
+        title: formData.title,
+        description: formData.description,
+        status: statusToApiMapping[formData.status],
+        priority: priorityToApiMapping[formData.priority],
+        due_date: formData.dueDate ? format(formData.dueDate, 'yyyy-MM-dd') : undefined,
+        assigned_to: formData.assigneeId || undefined,
+        tags: formData.tags.join(','),
+        subtasks: formData.subtasks.map(subtask => ({
+          id: subtask.id,
+          title: subtask.title,
+          completed: subtask.completed
+        })),
+        attachments: formData.attachments,
+      };
+      
+      console.log("送信するタスクデータ:", taskData);
+      
       let response;
       
-      if (isEditMode && taskId) {
-        // 編集モード: 既存タスクを更新
-        const actualTaskId = taskId.toString();
-        response = await taskService.updateTask(actualTaskId, apiTaskData);
-      } else {
-        // 新規作成モード: 新しいタスクを作成
-        response = await taskService.createTask(apiTaskData);
-      }
-      
-      if (response.success) {
-        toast({
-          title: isEditMode ? "タスク更新成功" : "タスク作成成功",
-          description: isEditMode ? "タスクが更新されました" : "新しいタスクが作成されました",
-        });
-        navigate("/tasks");
-      } else {
+      try {
+        if (isEditMode && taskId) {
+          console.log(`タスク更新を実行: ID=${taskId}`);
+          response = await taskService.updateTask(taskId.toString(), taskData);
+          console.log("更新レスポンス:", response);
+        } else {
+          console.log("タスク作成を実行");
+          response = await taskService.createTask(taskData);
+          console.log("作成レスポンス:", response);
+        }
+        
+        if (response && response.success) {
+          toast({
+            title: isEditMode ? "タスク更新成功" : "タスク作成成功",
+            description: isEditMode ? "タスクが更新されました" : "新しいタスクが作成されました",
+          });
+          navigate("/tasks");
+        } else {
+          throw new Error(response?.message || "API処理中にエラーが発生しました");
+        }
+      } catch (error: any) {
+        console.error(isEditMode ? "タスク更新エラー:" : "タスク作成エラー:", error);
         toast({
           title: "エラー",
-          description: response.message || (isEditMode ? "タスクの更新に失敗しました" : "タスクの作成に失敗しました"),
+          description: error.message || (isEditMode ? "タスクの更新に失敗しました" : "タスクの作成に失敗しました"),
           variant: "destructive"
         });
       }
-    } catch (error) {
-      console.error(isEditMode ? "タスク更新エラー:" : "タスク作成エラー:", error);
+    } catch (error: any) {
+      console.error("データ準備エラー:", error);
       toast({
         title: "エラー",
-        description: isEditMode ? "タスクの更新中にエラーが発生しました" : "タスクの作成中にエラーが発生しました",
+        description: "データの準備中にエラーが発生しました",
         variant: "destructive"
       });
     } finally {
@@ -558,6 +604,89 @@ const CreateTaskView: React.FC = () => {
                       </div>
                     )}
                   </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>添付ファイル</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    multiple
+                    className="hidden"
+                  />
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={openFileDialog}
+                    className="w-full border-dashed border-2 h-24 flex flex-col items-center justify-center"
+                  >
+                    <Upload className="h-6 w-6 mb-2" />
+                    <span>ファイルをドラッグ＆ドロップまたはクリックして選択</span>
+                    <span className="text-xs text-gray-500 mt-1">最大ファイルサイズ: 10MB</span>
+                  </Button>
+                  
+                  {/* 既存の添付ファイルのリスト */}
+                  {formData.existingAttachments.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>既存の添付ファイル</Label>
+                      <div className="space-y-2">
+                        {formData.existingAttachments.map((file) => (
+                          <div
+                            key={file.id}
+                            className="flex items-center justify-between p-3 bg-gray-50 rounded-md"
+                          >
+                            <div className="flex items-center">
+                              <File className="h-5 w-5 mr-2 text-gray-500" />
+                              <span>{file.name}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeExistingFile(file.id)}
+                              className="text-gray-500 hover:text-red-500"
+                            >
+                              <X className="h-5 w-5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* 新規アップロードファイルのリスト */}
+                  {formData.attachments.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>新規アップロードファイル</Label>
+                      <div className="space-y-2">
+                        {formData.attachments.map((file, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-3 bg-gray-50 rounded-md"
+                          >
+                            <div className="flex items-center">
+                              <File className="h-5 w-5 mr-2 text-gray-500" />
+                              <span>{file.name}</span>
+                              <span className="ml-2 text-xs text-gray-500">
+                                ({Math.round(file.size / 1024)} KB)
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeFile(index)}
+                              className="text-gray-500 hover:text-red-500"
+                            >
+                              <X className="h-5 w-5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

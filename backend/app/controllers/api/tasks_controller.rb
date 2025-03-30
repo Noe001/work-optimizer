@@ -111,14 +111,32 @@ module Api
         if @task.update(task_params)
           # サブタスクの更新処理
           if params[:task][:subtasks].present?
+            # サブタスクパラメータが配列であることを確認
+            subtasks_params = params[:task][:subtasks]
+            
+            # Stringの場合はJSONをパース（Angular等のフレームワークからのリクエスト対応）
+            if subtasks_params.is_a?(String)
+              begin
+                subtasks_params = JSON.parse(subtasks_params)
+              rescue JSON::ParserError => e
+                render json: { success: false, message: "サブタスクデータが無効です" }, status: :unprocessable_entity
+                return
+              end
+            end
+            
             # 既存のサブタスクのIDを取得
             existing_subtask_ids = @task.subtasks.pluck(:id)
             updated_subtask_ids = []
             
-            params[:task][:subtasks].each do |subtask_params|
-              if subtask_params[:id].present?
+            subtasks_params.each do |subtask_params|
+              # キーをシンボル化して処理を統一
+              subtask_params = subtask_params.transform_keys(&:to_sym) if subtask_params.is_a?(Hash)
+              
+              # IDチェック
+              subtask_id = subtask_params[:id]
+              if subtask_id.present? && !subtask_id.to_s.start_with?('temp_')
                 # 既存のサブタスクを更新
-                subtask = Task.find_by(id: subtask_params[:id])
+                subtask = Task.find_by(id: subtask_id)
                 if subtask.present?
                   subtask.update!(
                     title: subtask_params[:title],
@@ -142,6 +160,9 @@ module Api
             # 削除されたサブタスクを処理
             subtasks_to_delete = existing_subtask_ids - updated_subtask_ids
             Task.where(id: subtasks_to_delete).destroy_all if subtasks_to_delete.any?
+          else
+            # サブタスクが空の場合、既存のサブタスクをすべて削除
+            @task.subtasks.destroy_all if @task.subtasks.any?
           end
           
           render json: { success: true, data: @task.reload.as_json(include: :subtasks), message: 'タスクが更新されました' }
@@ -330,7 +351,7 @@ module Api
     end
 
     def task_params
-      params.require(:task).permit(:title, :description, :status, :priority, :due_date, :assigned_to, :tags, :organization_id, :parent_task_id)
+      params.require(:task).permit(:title, :description, :status, :priority, :due_date, :assigned_to, :tags, :organization_id, :parent_task_id, attachments: [])
     end
   end
 end
