@@ -66,6 +66,7 @@ export interface Task {
   is_completed?: boolean;
   time_remaining?: number;
   subtasks?: Task[];  // サブタスク配列
+  attachment_urls?: AttachmentFile[];  // 添付ファイルの配列
 }
 
 // サブタスク関連の型（フロントエンドでのフォーム用）
@@ -73,6 +74,13 @@ export interface SubTask {
   id?: string | number;
   title: string;
   completed: boolean;
+}
+
+// 添付ファイル関連の型
+export interface AttachmentFile {
+  id: string | number;
+  name: string;
+  url: string;
 }
 
 // マニュアル関連の型

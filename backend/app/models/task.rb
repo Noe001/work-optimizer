@@ -4,6 +4,9 @@ class Task < ApplicationRecord
   belongs_to :user, foreign_key: 'assigned_to', optional: true
   belongs_to :organization, optional: true
   
+  # Active Storage設定
+  has_many_attached :attachments
+  
   # サブタスク関係の追加
   belongs_to :parent_task, class_name: 'Task', foreign_key: 'parent_task_id', optional: true
   has_many :subtasks, class_name: 'Task', foreign_key: 'parent_task_id', dependent: :destroy

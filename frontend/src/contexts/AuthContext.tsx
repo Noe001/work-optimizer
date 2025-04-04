@@ -72,7 +72,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // 認証エラーイベントのリスナーを設定
   useEffect(() => {
-    const handleAuthError = (event: CustomEvent) => {
+    const handleAuthError = () => {
       clearAuthData();
     };
 

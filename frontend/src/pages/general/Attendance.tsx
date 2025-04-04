@@ -256,7 +256,7 @@ const AttendanceView: React.FC = () => {
           // データが7件未満の場合は空データで埋める
           else if (processedData.length < 7) {
             const emptyDataCount = 7 - processedData.length;
-            const emptyData = Array(emptyDataCount).fill(0).map((_, index) => ({
+            const emptyData = Array(emptyDataCount).fill(0).map((_) => ({
               date: `-`,
               勤務時間: 0,
               残業時間: 0

@@ -131,9 +131,26 @@ export const api = {
    */
   async put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     try {
+      // FormDataの場合は_methodパラメータを追加してPOSTメソッドで送信
+      if (data instanceof FormData) {
+        console.log('FormDataを検出したため、POSTリクエストとして送信します', { url });
+        data.append('_method', 'PUT');
+        try {
+          const response = await apiClient.post<T>(url, data, {
+            ...config
+          });
+          return axiosToApiResponse<T>(response);
+        } catch (error: any) {
+          console.error('FormData PUT request failed:', error.message, { url, status: error.response?.status, data: error.response?.data });
+          throw error;
+        }
+      }
+      
+      // 通常のJSONデータはPUTで送信
       const response = await apiClient.put<T>(url, data, config);
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
+      console.error('PUT request failed:', error.message);
       return {
         success: false,
         message: error.response?.data?.message || error.message,
@@ -159,12 +176,41 @@ export const api = {
       };
     }
   },
+
+  /**
+   * PATCHリクエスト
+   * @param url エンドポイントURL
+   * @param data リクエストボディ (FormData も可)
+   * @param config Axiosリクエスト設定
+   */
+  async patch<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+    try {
+      const headers = data instanceof FormData
+        ? { ...config?.headers } // FormData の場合は Content-Type を axios に任せる
+        : { 'Content-Type': 'application/json', ...config?.headers };
+
+      const response = await apiClient.patch<T>(url, data, { ...config, headers });
+      return axiosToApiResponse<T>(response);
+    } catch (error: any) {
+      console.error('PATCH request failed:', error.message);
+       // エラーレスポンスの詳細を取得しようと試みる
+      const message = error.response?.data?.message || error.response?.data?.error || error.message || 'Unknown error';
+      const errors = error.response?.data?.errors;
+      console.error('Server Error Details:', errors);
+      return {
+        success: false,
+        message: `Request failed with status code ${error.response?.status || 'unknown'}: ${message}`,
+        data: null as any
+      };
+    }
+  },
 };
 
 /**
  * APIエラーハンドリング
+ * @export 外部からも利用可能
  */
-const handleApiError = (error: AxiosError<ApiError>): never => {
+export const handleApiError = (error: AxiosError<ApiError>): never => {
   // エラーオブジェクトの構築
   const errorMessage = error.response?.data?.message || error.message || 'エラーが発生しました';
   const errorCode = error.response?.data?.code;
@@ -199,7 +245,7 @@ const handleApiError = (error: AxiosError<ApiError>): never => {
   
   // 401エラーの場合はトークン認証エラーを処理
   if (error.response?.status === 401) {
-    console.log('Token authentication error', errorMessage);
+    console.error('Token authentication error', errorMessage);
   }
   
   // エラーをコンソールに出力（開発時のみ）
@@ -222,7 +268,6 @@ export const authAPI = {
         const token = response.data.data.token;
         // 次回以降のリクエストのためにトークンを設定
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        console.log('Token set for future requests');
       }
       
       return response;
@@ -246,7 +291,6 @@ export const authAPI = {
         const token = response.data.data.token;
         // 次回以降のリクエストのためにトークンを設定
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        console.log('Token set for future requests after signup');
       }
       
       return response;
