@@ -63,6 +63,7 @@ interface SubTask {
   id: number | string;
   title: string;
   completed: boolean;
+  _destroy?: boolean;
 }
 
 interface TaskFormData {
@@ -89,6 +90,7 @@ const CreateTaskView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -292,73 +294,107 @@ const CreateTaskView: React.FC = () => {
   // フォーム送信
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (formData.title.trim() === "") {
-      toast({
-        title: "入力エラー",
-        description: "タイトルは必須です",
-        variant: "destructive"
-      });
-      return;
-    }
-    
     setLoading(true);
-    
+    setError(null);
+
     try {
-      // APIに送信するデータを準備
-      const taskData: any = {
-        title: formData.title,
-        description: formData.description,
-        status: statusToApiMapping[formData.status],
-        priority: priorityToApiMapping[formData.priority],
-        due_date: formData.dueDate ? format(formData.dueDate, 'yyyy-MM-dd') : undefined,
-        assigned_to: formData.assigneeId || undefined,
-        tags: formData.tags.join(','),
-        subtasks: formData.subtasks.map(subtask => ({
-          id: subtask.id,
-          title: subtask.title,
-          completed: subtask.completed
-        })),
-        attachments: formData.attachments,
-      };
-      
-      console.log("送信するタスクデータ:", taskData);
-      
-      let response;
-      
-      try {
-        if (isEditMode && taskId) {
-          console.log(`タスク更新を実行: ID=${taskId}`);
-          response = await taskService.updateTask(taskId.toString(), taskData);
-          console.log("更新レスポンス:", response);
-        } else {
-          console.log("タスク作成を実行");
-          response = await taskService.createTask(taskData);
-          console.log("作成レスポンス:", response);
-        }
+      // 基本的な検証
+      if (!formData.title.trim()) {
+        throw new Error('タイトルは必須です');
+      }
+
+      if (taskId) {
+        // 更新の場合
+        // タスクデータを準備
+        const taskData = {
+          title: formData.title,
+          description: formData.description,
+          status: statusToApiMapping[formData.status],
+          priority: priorityToApiMapping[formData.priority],
+          due_date: formData.dueDate ? format(formData.dueDate, 'yyyy-MM-dd') : undefined,
+          assigned_to: formData.assigneeId || undefined,
+          tags: formData.tags.join(','),
+          subtasks: formData.subtasks.map(st => ({
+            id: st.id,
+            title: st.title,
+            completed: st.completed,
+            _destroy: st._destroy
+          })),
+          attachments: formData.existingAttachments,
+          newAttachmentFiles: formData.attachments
+        };
+
+        console.log('タスク更新データ:', taskData);
         
-        if (response && response.success) {
-          toast({
-            title: isEditMode ? "タスク更新成功" : "タスク作成成功",
-            description: isEditMode ? "タスクが更新されました" : "新しいタスクが作成されました",
+        // デバッグ: 添付ファイル情報をログに出力
+        if (formData.attachments && formData.attachments.length > 0) {
+          formData.attachments.forEach((file, index) => {
+            if (file && typeof file === 'object' && file.size > 0) {
+              console.log(`送信する添付ファイル[${index}]:`, {
+                name: file.name,
+                type: file.type,
+                size: file.size
+              });
+            }
           });
-          navigate("/tasks");
-        } else {
-          throw new Error(response?.message || "API処理中にエラーが発生しました");
         }
-      } catch (error: any) {
-        console.error(isEditMode ? "タスク更新エラー:" : "タスク作成エラー:", error);
+
+        // タスクサービスを使用して更新
+        const result = await taskService.updateTask(taskId, taskData);
+        
         toast({
-          title: "エラー",
-          description: error.message || (isEditMode ? "タスクの更新に失敗しました" : "タスクの作成に失敗しました"),
-          variant: "destructive"
+          title: "成功",
+          description: "タスクが更新されました！"
+        });
+      } else {
+        // 新規作成の場合
+        const taskData = {
+          title: formData.title,
+          description: formData.description,
+          status: statusToApiMapping[formData.status],
+          priority: priorityToApiMapping[formData.priority],
+          due_date: formData.dueDate ? format(formData.dueDate, 'yyyy-MM-dd') : undefined,
+          assigned_to: formData.assigneeId || undefined,
+          tags: formData.tags.join(','),
+          subtasks: formData.subtasks.map(st => ({
+            title: st.title,
+            completed: st.completed
+          })),
+          newAttachmentFiles: formData.attachments
+        };
+
+        console.log('新規タスクデータ:', taskData);
+        
+        // デバッグ: 添付ファイル情報をログに出力
+        if (formData.attachments && formData.attachments.length > 0) {
+          formData.attachments.forEach((file, index) => {
+            if (file && typeof file === 'object' && file.size > 0) {
+              console.log(`送信する添付ファイル[${index}]:`, {
+                name: file.name,
+                type: file.type,
+                size: file.size
+              });
+            }
+          });
+        }
+
+        // タスクサービスを使用して作成
+        const result = await taskService.createTask(taskData);
+        
+        toast({
+          title: "成功",
+          description: "新しいタスクが作成されました！"
         });
       }
-    } catch (error: any) {
-      console.error("データ準備エラー:", error);
+
+      // 一覧画面に戻る
+      navigate('/tasks');
+    } catch (err: any) {
+      console.error('タスク送信エラー:', err);
+      setError(err.message || 'タスクの送信中にエラーが発生しました');
       toast({
         title: "エラー",
-        description: "データの準備中にエラーが発生しました",
+        description: err.message || 'タスクの送信中にエラーが発生しました',
         variant: "destructive"
       });
     } finally {

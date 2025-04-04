@@ -1,4 +1,7 @@
 Rails.application.routes.draw do
+  # Active Storageのルートを明示的にマウント
+  mount ActiveStorage::Engine => "/rails/active_storage"
+  
   # API routes
   namespace :api do
     get "invitations/create"
@@ -131,4 +134,7 @@ Rails.application.routes.draw do
       get '/summary', to: 'attendance#summary'
     end
   end
+  
+  # 画像ファイルアクセス用のルート
+  get 'images/:filename', to: 'images#show'
 end

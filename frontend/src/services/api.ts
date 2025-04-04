@@ -176,6 +176,34 @@ export const api = {
       };
     }
   },
+
+  /**
+   * PATCHリクエスト
+   * @param url エンドポイントURL
+   * @param data リクエストボディ (FormData も可)
+   * @param config Axiosリクエスト設定
+   */
+  async patch<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+    try {
+      const headers = data instanceof FormData
+        ? { ...config?.headers } // FormData の場合は Content-Type を axios に任せる
+        : { 'Content-Type': 'application/json', ...config?.headers };
+
+      const response = await apiClient.patch<T>(url, data, { ...config, headers });
+      return axiosToApiResponse<T>(response);
+    } catch (error: any) {
+      console.error('PATCH request failed:', error.message);
+       // エラーレスポンスの詳細を取得しようと試みる
+      const message = error.response?.data?.message || error.response?.data?.error || error.message || 'Unknown error';
+      const errors = error.response?.data?.errors;
+      console.error('Server Error Details:', errors);
+      return {
+        success: false,
+        message: `Request failed with status code ${error.response?.status || 'unknown'}: ${message}`,
+        data: null as any
+      };
+    }
+  },
 };
 
 /**

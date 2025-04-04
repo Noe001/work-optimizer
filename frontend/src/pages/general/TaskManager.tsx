@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, Search, Plus, Filter, List, CalendarDays, ChevronUp, ChevronDown, Edit, Trash2, Loader2, File } from "lucide-react";
+import { Calendar, Search, Plus, Filter, List, CalendarDays, ChevronUp, ChevronDown, Edit, Trash2, Loader2, File, FileX, Image, Download } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link } from "react-router-dom";
@@ -39,7 +39,19 @@ interface UITask {
   assignee?: User;
   tags: string[];
   subtasks: { id: string | number; title: string; completed: boolean }[];
-  attachment_urls?: { id: string | number; name: string; url: string }[];
+  attachment_urls?: { 
+    id: string | number; 
+    name: string; 
+    url: string; 
+    content_type?: string; 
+    error?: string; 
+    error_info?: string;
+    blob_id?: number;
+    blob_signed_id?: string;
+    blob_key?: string;
+    created_at?: string;
+    file_exists?: boolean;
+  }[];
   comments?: { id: number; user: User; text: string; timestamp: string }[];
   createdAt: string;
 }
@@ -142,6 +154,10 @@ const TaskManagerView: React.FC = () => {
 
   // APIのタスクデータをUI用に変換
   const convertApiTaskToUITask = (apiTask: ApiTask): UITask => {
+    // 添付ファイルのデバッグ
+    console.log('変換開始 - 元のタスクデータ:', apiTask);
+    console.log('変換開始 - 添付ファイル:', apiTask.attachment_urls);
+
     // 担当者を見つける（実際のAPIでユーザーIDが返ってくると仮定）
     const assignee = apiTask.assigned_to 
       ? users.find(user => user.id.toString() === apiTask.assigned_to) 
@@ -194,7 +210,16 @@ const TaskManagerView: React.FC = () => {
     // 日付フォーマット
     const dueDate = apiTask.due_date;
       
-    return {
+    // 添付ファイルのチェック
+    if (!apiTask.attachment_urls) {
+      console.log('添付ファイルなし - undefined');
+    } else if (Array.isArray(apiTask.attachment_urls) && apiTask.attachment_urls.length === 0) {
+      console.log('添付ファイルなし - 空配列');
+    } else {
+      console.log('添付ファイルあり:', apiTask.attachment_urls);
+    }
+      
+    const result = {
       id: apiTask.id, // UUIDはそのまま使用する
       title: apiTask.title,
       description: apiTask.description,
@@ -208,6 +233,9 @@ const TaskManagerView: React.FC = () => {
       attachment_urls: apiTask.attachment_urls,
       // 他のプロパティは必要に応じて追加
     };
+    
+    console.log('変換結果 - 添付ファイル:', result.attachment_urls);
+    return result;
   };
 
   // タスクの展開/折りたたみを切り替える
@@ -226,18 +254,54 @@ const TaskManagerView: React.FC = () => {
   };
 
   // タスク詳細ダイアログを開く
-  const openTaskDetails = (taskId: string | number) => {
+  const openTaskDetails = async (taskId: string | number) => {
     try {
-      const taskExists = tasks.some(task => task.id === taskId);
-      if (!taskExists) {
-        showErrorToast("指定されたタスクが見つかりませんでした");
-        return;
+      setTaskOperationLoading(true);
+      
+      // タスクの最新情報を取得
+      const response = await taskService.getTask(taskId.toString());
+      
+      // デバッグログを追加
+      console.log('タスク詳細レスポンス:', response);
+      if (response.data) {
+        console.log('取得したタスク attachment_urls:', response.data.attachment_urls);
       }
+      
+      if (response.success && response.data) {
+        // データをUIタスクに変換
+        const uiTask = convertApiTaskToUITask(response.data);
+        console.log('変換後のUIタスク attachment_urls:', uiTask.attachment_urls);
+        
+        // データが正しく変換されていることを確認
+        if (!uiTask.attachment_urls && response.data.attachment_urls) {
+          console.warn('変換中に添付ファイル情報が失われています。直接設定します。');
+          uiTask.attachment_urls = response.data.attachment_urls;
+        }
+        
+        // 変換後にattachment_urlsが存在するがnullまたは空配列の場合に警告
+        if (uiTask.attachment_urls === null || (Array.isArray(uiTask.attachment_urls) && uiTask.attachment_urls.length === 0)) {
+          if (response.data.attachment_urls && Array.isArray(response.data.attachment_urls) && response.data.attachment_urls.length > 0) {
+            console.warn('APIからは添付ファイルが返されましたが、変換後に空になりました。問題を修正します。');
+            uiTask.attachment_urls = response.data.attachment_urls;
+          }
+        }
+        
+        // タスク一覧を更新して最新のデータを反映
+        const updatedTasks = tasks.map(task => 
+          task.id === taskId ? uiTask : task
+        );
+        setTasks(updatedTasks);
+        
       setSelectedTaskId(taskId);
       setIsTaskDialogOpen(true);
+      } else {
+        showErrorToast("タスク情報の取得に失敗しました");
+      }
     } catch (error) {
       console.error("タスク詳細を開く際にエラーが発生しました:", error);
       showErrorToast("タスク詳細を表示できませんでした");
+    } finally {
+      setTaskOperationLoading(false);
     }
   };
 
@@ -766,6 +830,11 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
   updatingSubtasks = {},
   handleToggleSubtask = async () => {} 
 }) => {
+  // TaskDetailsコンポーネントが受け取ったタスクデータをログに記録
+  console.log('TaskDetails - 受け取ったタスクデータ全体:', task);
+  console.log('TaskDetails - タスクID:', task.id);
+  console.log('TaskDetails - 添付ファイル情報:', task.attachment_urls);
+
   // 削除確認
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -851,24 +920,240 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
             
             <div className="p-4 bg-muted/20 rounded-lg">
               <h3 className="text-xl font-medium mb-3">添付ファイル</h3>
-              {task.attachment_urls && task.attachment_urls.length > 0 ? (
+              {/* デバッグログを追加 */}
+              {(() => {
+                console.log('添付ファイル表示時のデータ:', task.attachment_urls);
+                return null;
+              })()}
+              {(() => {
+                if (!task.attachment_urls) {
+                  console.log('添付ファイル表示条件: task.attachment_urls は undefined または null');
+                  return <div className="text-muted-foreground italic text-base">添付ファイルはありません (undefined)</div>;
+                } else if (!Array.isArray(task.attachment_urls)) {
+                  console.log('添付ファイル表示条件: task.attachment_urls は配列ではない', typeof task.attachment_urls);
+                  return <div className="text-muted-foreground italic text-base">添付ファイルはありません (配列ではない)</div>;
+                } else if (task.attachment_urls.length === 0) {
+                  console.log('添付ファイル表示条件: task.attachment_urls は空配列');
+                  return <div className="text-muted-foreground italic text-base">添付ファイルはありません (空配列)</div>;
+                } else {
+                  console.log('添付ファイル表示条件: task.attachment_urls に要素があります', task.attachment_urls.length, '個');
+                  return (
                 <div className="space-y-3">
-                  {task.attachment_urls.map((attachment, index) => (
+                      {task.attachment_urls.map((attachment, index) => {
+                        // URL が null または undefined の場合のチェック
+                        if (!attachment.url) {
+                          console.error(`添付ファイル ${attachment.name} のURLが無効: ${attachment.url}`);
+                          return (
+                            <div key={index} className="flex items-center p-3 border rounded-md bg-red-50">
+                              <FileX className="h-5 w-5 mr-2 text-red-500" />
+                              <span className="text-base text-red-700">{attachment.name} (URLエラー)</span>
+                              {attachment.error && <p className="text-xs text-red-600 ml-2">{attachment.error}</p>}
+                            </div>
+                          );
+                        }
+
+                        // ファイルが画像かどうかを判断
+                        // 拡張子だけでなくContent-Typeも考慮
+                        const isImage = attachment.content_type 
+                          ? attachment.content_type.startsWith('image/') 
+                          : attachment.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i);
+                          
+                          // ファイルが存在しない場合または問題がある場合は警告表示
+                          if (attachment.file_exists === false) {
+                            return (
+                              <div key={index} className="flex items-center p-3 border rounded-md bg-yellow-50">
+                                <FileX className="h-5 w-5 mr-2 text-yellow-500" />
+                                <div className="flex flex-col">
+                                  <span className="text-base">{attachment.name}</span>
+                                  <span className="text-xs text-yellow-700">ファイルが見つかりません。管理者に連絡してください。</span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          
+                          if (isImage) {
+                            // 画像の場合はプレビューを表示
+                            return (
+                              <div key={index} className="flex flex-col p-3 border rounded-md hover:bg-accent">
+                                <div className="flex items-center mb-2">
+                                  <Image className="h-5 w-5 mr-2 text-gray-500" />
+                                  <span className="text-base">{attachment.name}</span>
+                                </div>
+                                <div className="mt-2">
+                                  <img 
+                                    src={attachment.url} 
+                                    alt={attachment.name}
+                                    className="max-w-full h-auto max-h-48 rounded"
+                                    onError={(e) => {
+                                      console.error(`画像の読み込みエラー: ${attachment.url}`);
+                                      
+                                      // URLが正しく機能しない場合、代替URLを試す
+                                      if (attachment.url && !e.currentTarget.getAttribute('data-tried-alt')) {
+                                        // まだ代替URLを試していない場合、複数のパターンを順番に試す
+                                        const tryNextUrl = (urlIndex: number) => {
+                                          // 画像が既に表示されていれば終了
+                                          if (!e.currentTarget.getAttribute('data-error')) return;
+                                          
+                                          const domain = new URL(attachment.url).origin;
+                                          const filename = attachment.name;
+                                          const alternativeUrls = [];
+                                          
+                                          // データURLを追加（コンテンツレングスエラー対策）
+                                          if (attachment.blob_signed_id) {
+                                            alternativeUrls.push(
+                                              // fetch APIを使って別途取得してデータURLに変換するパターン
+                                              `${domain}/rails/active_storage/blobs/proxy/${attachment.blob_signed_id}/${encodeURIComponent(filename)}?disposition=inline`,
+                                              `${domain}/rails/active_storage/blobs/proxy/${attachment.blob_signed_id}/${encodeURIComponent(filename)}?content=inline`
+                                            );
+                                          }
+                                          
+                                          // Blobの各種情報を使用する場合
+                                          if (attachment.blob_signed_id) {
+                                            alternativeUrls.push(
+                                              `${domain}/rails/active_storage/blobs/proxy/${attachment.blob_signed_id}/${encodeURIComponent(filename)}`,
+                                              `${domain}/rails/active_storage/blobs/proxy/${attachment.blob_signed_id}/${encodeURIComponent(filename)}?disposition=attachment`,
+                                              `${domain}/rails/active_storage/blobs/redirect/${attachment.blob_signed_id}/${encodeURIComponent(filename)}`
+                                            );
+                                          }
+                                          
+                                          if (attachment.blob_key) {
+                                            alternativeUrls.push(
+                                              `${domain}/rails/active_storage/blobs/proxy/${attachment.blob_key}/${encodeURIComponent(filename)}`,
+                                              `${domain}/rails/active_storage/blobs/proxy/${attachment.id}/${encodeURIComponent(filename)}`
+                                            );
+                                          }
+                                          
+                                          // 通常のIDベースのURL
+                                          alternativeUrls.push(
+                                            `${domain}/rails/active_storage/blobs/proxy/${attachment.id}/${encodeURIComponent(filename)}`,
+                                            `${domain}/rails/active_storage/blobs/redirect/${attachment.id}/${encodeURIComponent(filename)}`
+                                          );
+                                          
+                                          // さらに再度オリジナルURLも試す
+                                          alternativeUrls.push(attachment.url);
+                                          
+                                          // インデックスが有効範囲内なら次のURLを試す
+                                          if (urlIndex < alternativeUrls.length) {
+                                            const nextUrl = alternativeUrls[urlIndex];
+                                            console.log(`代替URL(${urlIndex+1}/${alternativeUrls.length}): ${nextUrl}`);
+                                            
+                                            // 特別なケース：最初の2つのURLはfetch APIを使用してデータURLに変換
+                                            if (urlIndex < 2) {
+                                              // 特殊パターン：データURLに変換してContent-Length問題を回避
+                                              fetch(nextUrl)
+                                                .then(response => {
+                                                  if (!response.ok) {
+                                                    throw new Error('Network response was not ok');
+                                                  }
+                                                  return response.blob();
+                                                })
+                                                .then(blob => {
+                                                  const dataUrl = URL.createObjectURL(blob);
+                                                  console.log(`データURL生成成功: ${dataUrl}`);
+                                                  e.currentTarget.src = dataUrl;
+                                                  e.currentTarget.removeAttribute('data-error');
+                                                })
+                                                .catch(error => {
+                                                  console.error('データURL変換エラー:', error);
+                                                  // エラーの場合は次のURLを試す
+                                                  setTimeout(() => tryNextUrl(urlIndex + 1), 500);
+                                                });
+                                              return;
+                                            }
+                                            
+                                            // 数秒後に次を試す
+                                            const nextTimeout = setTimeout(() => {
+                                              tryNextUrl(urlIndex + 1);
+                                            }, 2000);
+                                            
+                                            // イベントリスナーを設定して成功したらタイムアウトをクリア
+                                            const loadHandler = () => {
+                                              console.log(`URL成功: ${nextUrl}`);
+                                              e.currentTarget.removeAttribute('data-error');
+                                              clearTimeout(nextTimeout);
+                                              e.currentTarget.removeEventListener('load', loadHandler);
+                                            };
+                                            
+                                            e.currentTarget.addEventListener('load', loadHandler);
+                                            e.currentTarget.setAttribute('data-error', 'true');
+                                            e.currentTarget.src = nextUrl;
+                                          } else {
+                                            // 全てのURLを試したがどれも成功しなかった場合
+                                            showErrorMessage();
+                                          }
+                                        };
+                                        
+                                        // 最初のURLから開始
+                                        e.currentTarget.setAttribute('data-tried-alt', 'true');
+                                        tryNextUrl(0);
+                                        return;
+                                      }
+                                      
+                                      // エラーメッセージを表示する関数
+                                      function showErrorMessage() {
+                                        // エラーメッセージを表示
+                                        const parent = e.currentTarget.parentElement;
+                                        if (parent) {
+                                          e.currentTarget.style.display = 'none';
+                                          const errorMessage = document.createElement('div');
+                                          errorMessage.className = 'p-3 bg-red-50 text-red-600 rounded mt-2 text-sm flex items-center';
+                                          errorMessage.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" /></svg>画像の読み込みに失敗しました`;
+                                          
+                                          // 代替ダウンロードリンクを追加
+                                          const downloadLink = document.createElement('a');
+                                          downloadLink.href = attachment.url;
+                                          downloadLink.target = '_blank';
+                                          downloadLink.rel = 'noopener noreferrer';
+                                          downloadLink.className = 'p-3 bg-blue-50 text-blue-600 rounded mt-2 text-sm flex items-center';
+                                          downloadLink.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>代わりにダウンロード`;
+                                          
+                                          parent.appendChild(errorMessage);
+                                          parent.appendChild(downloadLink);
+                                        }
+                                      }
+                                    }}
+                                  />
+                                </div>
+                                <a
+                                  href={attachment.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mt-2 text-sm text-blue-600 hover:underline"
+                                >
+                                  フルサイズで表示
+                                </a>
+                              </div>
+                            );
+                          } else {
+                            // その他のファイルはリンクとして表示
+                            return (
                     <a
                       key={index}
                       href={attachment.url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center p-3 border rounded-md hover:bg-accent cursor-pointer"
+                                onClick={(e) => {
+                                  // エラーの可能性があるリンクの場合は確認
+                                  if (attachment.error_info) {
+                                    const confirmed = window.confirm(`警告: ${attachment.error_info}\n続行しますか？`);
+                                    if (!confirmed) {
+                                      e.preventDefault();
+                                    }
+                                  }
+                                }}
                     >
                       <File className="h-5 w-5 mr-2 text-gray-500" />
                       <span className="text-base">{attachment.name}</span>
+                                <Download className="h-4 w-4 ml-auto text-gray-400" />
                     </a>
-                  ))}
+                            );
+                          }
+                        })}
                 </div>
-              ) : (
-                <div className="text-muted-foreground italic text-base">添付ファイルはありません</div>
-              )}
+                    );
+                  }
+                })()}
             </div>
             
             <div className="p-4 bg-muted/20 rounded-lg">
@@ -987,6 +1272,88 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
             </div>
           </div>
         </div>
+          
+          {/* 右側（1/3幅） - 優先度・担当者・期限日・タグ */}
+          <div className="space-y-6">
+            <div className="p-4 bg-muted/20 rounded-lg">
+              <h3 className="text-xl font-medium mb-3">優先度</h3>
+              <Badge className={`${priorityColors[task.priority]} text-base px-3 py-1`}>
+                {task.priority}
+              </Badge>
+            </div>
+            
+            <div className="p-4 bg-muted/20 rounded-lg">
+              <h3 className="text-xl font-medium mb-3">担当者</h3>
+              {task.assignee ? (
+                <div className="flex items-center space-x-3">
+                  <Avatar className="h-10 w-10">
+                    {task.assignee.avatar ? (
+                      <AvatarImage
+                        src={task.assignee.avatar}
+                        alt={task.assignee.name}
+                      />
+                    ) : null}
+                    <AvatarFallback>{task.assignee.initials}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-base">{task.assignee.name}</span>
+                </div>
+              ) : (
+                <div className="text-muted-foreground italic text-base">担当者は未設定です</div>
+              )}
+            </div>
+            
+            <div className="p-4 bg-muted/20 rounded-lg">
+              <h3 className="text-xl font-medium mb-3">期限日</h3>
+              {task.dueDate ? (
+                <div className="flex items-center">
+                  <Calendar className="h-5 w-5 mr-2" />
+                  <span className="text-base">{task.dueDate}</span>
+                </div>
+              ) : (
+                <div className="text-muted-foreground italic text-base">期限日は未設定です</div>
+              )}
+            </div>
+            
+            <div className="p-4 bg-muted/20 rounded-lg">
+              <h3 className="text-xl font-medium mb-3">タグ</h3>
+              {task.tags && task.tags.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {task.tags.map((tag, index) => (
+                    <Badge key={index} variant="outline" className="text-base px-3 py-1">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-muted-foreground italic text-base">タグはありません</div>
+              )}
+            </div>
+            
+            <div className="pt-6 mt-4 border-t space-y-3">
+              <Link to={`/tasks/edit/${task.id}`}>
+                <Button variant="outline" className="w-full flex items-center justify-center h-10 text-base">
+                  <Edit className="h-5 w-5 mr-2" /> 編集
+                </Button>
+              </Link>
+              <Button 
+                variant="outline" 
+                className="w-full h-10 flex items-center justify-center text-destructive hover:text-destructive hover:bg-destructive/10 text-base"
+                onClick={handleDelete}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    処理中...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-5 w-5 mr-2" /> {deleteConfirm ? "削除を確定" : "削除"}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
       </div>
     </div>
   );
