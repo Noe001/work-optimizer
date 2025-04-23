@@ -5,9 +5,6 @@ class TaskSerializer < ActiveModel::Serializer
              :created_at, :updated_at, :tag_list, :assignee_name,
              :organization_id, :organization_name, :is_overdue, :is_completed, :time_remaining, :attachment_urls
   has_one :user
-  has_many :comments
-  has_many :task_tags
-  has_many :tags, through: :task_tags
 
   # タグリストを配列として返す
   def tag_list
@@ -53,107 +50,109 @@ class TaskSerializer < ActiveModel::Serializer
   
   # 添付ファイルのURLリストを返す
   def attachment_urls
-    Rails.logger.debug "TaskSerializer#attachment_urls called for task #{object.id}"
     return [] unless object.attachments.attached?
-    
-    Rails.logger.debug "Task has #{object.attachments.count} attachments"
+      
+    Rails.logger.info "タスク(ID: #{object.id})の添付ファイルURL生成開始"
     
     object.attachments.map do |attachment|
-      blob = attachment.blob
-      filename = attachment.filename.to_s
-      Rails.logger.debug "Processing attachment: #{filename}, blob_id: #{blob.id}, key: #{blob.key}"
-      
-      # ファイル存在チェック
-      disk_path = ActiveStorage::Blob.service.path_for(blob.key)
-      file_exists = File.exist?(disk_path)
-      Rails.logger.debug "Checking file existence at path: #{disk_path}, exists: #{file_exists}"
-      
-      # コンテンツタイプ情報を取得
-      content_type = blob.content_type
-      Rails.logger.debug "Content-Type: #{content_type}"
-      
-      # ファイルが存在しない場合はデバッグ情報を追加
-      unless file_exists
-        Rails.logger.error "File not found on disk: #{disk_path} for blob key: #{blob.key}, id: #{blob.id}"
-        Rails.logger.debug "Blob metadata: #{blob.attributes}"
-      end
-      
-      # 基本情報を先に構築
-      url_info = {
-        id: attachment.id,
-        name: filename,
-        content_type: content_type,
-        blob_id: blob.id,
-        blob_key: blob.key,
-        blob_signed_id: blob.signed_id,
-        created_at: blob.created_at,
-        file_exists: file_exists
-      }
-      
-      # ファイルが存在しない場合はフォールバック画像を使用
-      if !file_exists
-        # イメージファイルの場合は "no-image-available.png" を使用
-        if content_type&.start_with?('image/')
-          url_info[:url] = "http://localhost:3000/images/no-image-available.png"
-          url_info[:error] = "File not found on disk"
-          url_info[:error_info] = "Original path: #{disk_path}"
-          return url_info
-        else
-          # その他のファイルタイプの場合は別のアイコンを使用
-          url_info[:url] = "http://localhost:3000/images/file-not-found.png"
-          url_info[:error] = "File not found on disk"
-          url_info[:error_info] = "Original path: #{disk_path}"
-          return url_info
-        end
-      end
-      
-      # ファイルが存在する場合は通常のURL生成を試みる
       begin
-        # 直接プロキシアクセスURLを生成（Rails 7の推奨方法）
-        url = if Rails.env.development?
-          # 開発環境では localhost:3000 を使用
-          host = "localhost:3000"
-          Rails.application.routes.url_helpers.rails_blob_url(blob, host: host)
+        Rails.logger.debug "添付ファイル処理中: ID #{attachment.id}, 名前: #{attachment.filename}"
+        
+        if file_exists?(attachment)
+          # 直接ダウンロードエンドポイントのURLを生成
+          url = Rails.application.routes.url_helpers.download_attachment_api_v1_task_path(
+            object.id, 
+            attachment_id: attachment.id
+          )
+          
+          {
+            id: attachment.id,
+            name: attachment.filename.to_s,
+            content_type: attachment.content_type,
+            url: url,
+            byte_size: attachment.blob.byte_size,
+            created_at: attachment.created_at
+          }
         else
-          # 本番環境では設定されたホストを使用
-          host = Rails.application.config.action_mailer.default_url_options[:host]
-          Rails.application.routes.url_helpers.rails_blob_url(blob, host: host)
+          # ファイルが見つからない場合はプレースホルダー
+          Rails.logger.warn "添付ファイルのBlobデータが見つかりません: ID #{attachment.id}"
+          placeholder_image(attachment)
         end
-        
-        Rails.logger.debug "Generated URL: #{url}"
-        url_info[:url] = url
-        
-        # Content-Length エラーに対処するため、小さなファイルの場合はBase64でエンコード
-        if file_exists && content_type&.start_with?('image/') && File.size(disk_path) < 1.megabyte
-          begin
-            Rails.logger.debug "Small image detected, generating base64 data URL"
-            file_content = File.binread(disk_path)
-            base64_data = Base64.strict_encode64(file_content)
-            url_info[:data_url] = "data:#{content_type};base64,#{base64_data}"
-          rescue => e
-            Rails.logger.error "Failed to generate base64 data URL: #{e.message}"
-          end
-        end
-        
-        return url_info
       rescue => e
-        Rails.logger.error "Error generating URL for attachment #{attachment.id}: #{e.message}"
-        url_info[:error] = e.message
-        
-        # エラー時はblobのkeyやsigned_idを使用した代替URLを試す
-        begin
-          # 代替URL生成ロジック
-          alternate_url = rails_blob_path(blob, disposition: :attachment)
-          Rails.logger.debug "Generated alternate URL: #{alternate_url}"
-          url_info[:url] = alternate_url
-        rescue => e2
-          Rails.logger.error "Failed to generate alternate URL: #{e2.message}"
-          url_info[:error_info] = e2.message
-          url_info[:url] = "http://localhost:3000/images/error-loading-file.png"
-        end
-        
-        return url_info
+        Rails.logger.error "添付ファイルURLの生成中にエラーが発生: #{e.message}"
+        Rails.logger.error e.backtrace.join("\n")
+        placeholder_image(attachment)
       end
     end
+  end
+  
+  private
+  
+  # ファイルが実際に存在するかチェック
+  def file_exists?(attachment)
+    begin
+      blob = attachment.blob
+      service = ActiveStorage::Blob.service
+      
+      Rails.logger.debug "[Serializer] file_exists? チェック開始 - Blob Key: #{blob.key}"
+      Rails.logger.debug "[Serializer] ストレージサービスの種類: #{service.class.name}"
+      
+      # サービスごとの存在確認
+      if service.is_a?(ActiveStorage::Service::DiskService)
+        if service.respond_to?(:path_for)
+          path = service.path_for(blob.key)
+          Rails.logger.debug "[Serializer] DiskServiceのパス: #{path}"
+          exists = File.exist?(path)
+          Rails.logger.debug "[Serializer] File.exist?(#{path}): #{exists}"
+          # ファイルが存在しても、読み込み可能か確認
+          if exists
+            begin
+              # ファイルを開いて最初の1バイトを読み込む試行
+              File.open(path, 'rb') { |f| f.read(1) }
+              Rails.logger.debug "[Serializer] ファイル読み込みテスト成功: #{path}"
+              return true
+            rescue => e
+              Rails.logger.error "[Serializer] ファイルは存在するが読み込み不可: #{path}, Error: #{e.message}"
+              return false
+            end
+          else
+            return false
+          end
+        else
+          Rails.logger.warn "[Serializer] DiskServiceにpath_forメソッドが存在しません。存在するとみなします。"
+          return true # 確認できない場合はtrueを返す
+        end
+      elsif service.is_a?(ActiveStorage::Service::S3Service)
+        begin
+          result = service.exist?(blob.key)
+          Rails.logger.debug "[Serializer] S3 exist?(#{blob.key}): #{result}"
+          return result
+        rescue => e
+          Rails.logger.error "[Serializer] S3の存在確認で例外が発生: #{e.message}"
+          return false
+        end
+      else
+        Rails.logger.info "[Serializer] 未対応のストレージサービス: #{service.class.name}。存在するとみなします。"
+        return true
+      end
+      
+    rescue => e
+      Rails.logger.error "[Serializer] file_exists?メソッドで予期せぬエラー発生: #{e.message}"
+      Rails.logger.error e.backtrace.join("\n")
+      return false
+    end
+  end
+  
+  # 欠損ファイル用のプレースホルダー
+  def placeholder_image(attachment)
+    {
+      id: attachment.id,
+      name: attachment.filename.to_s,
+      content_type: attachment.content_type,
+      url: "", # nullではなく空文字列を設定
+      error: "ファイルが見つかりません",
+      byte_size: 0,
+      created_at: attachment.created_at
+    }
   end
 end 

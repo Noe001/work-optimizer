@@ -178,7 +178,7 @@ const taskService = {
           if (file && typeof file === 'object' && file.size > 0) {
             try {
               // Content-Dispositionヘッダーがファイル名を保持するよう明示的に指定
-              formData.append('attachment', file, file.name);
+              formData.append('task[attachments][]', file, file.name);
               console.log(`添付ファイル[${index}]をFormDataに追加:`, file.name, file.type, file.size);
             } catch (e) {
               console.error(`ファイル追加エラー:`, e);
@@ -265,7 +265,7 @@ const taskService = {
           if (file && typeof file === 'object' && file.size > 0) {
             try {
               // Content-Dispositionヘッダーがファイル名を保持するよう明示的に指定
-              formData.append('attachment', file, file.name);
+              formData.append('task[attachments][]', file, file.name);
               console.log(`添付ファイル[${index}]をFormDataに追加:`, file.name, file.type, file.size);
             } catch (e) {
               console.error(`ファイル追加エラー:`, e);

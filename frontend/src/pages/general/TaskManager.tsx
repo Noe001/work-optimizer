@@ -51,6 +51,7 @@ interface UITask {
     blob_key?: string;
     created_at?: string;
     file_exists?: boolean;
+    preview_url?: string;
   }[];
   comments?: { id: number; user: User; text: string; timestamp: string }[];
   createdAt: string;
@@ -981,7 +982,7 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
                                 </div>
                                 <div className="mt-2">
                                   <img 
-                                    src={attachment.url} 
+                                    src={attachment.preview_url || attachment.url} 
                                     alt={attachment.name}
                                     className="max-w-full h-auto max-h-48 rounded"
                                     onError={(e) => {

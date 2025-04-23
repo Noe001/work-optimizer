@@ -37,6 +37,12 @@ Rails.application.configure do
   # Active Storageのパブリックアクセスを有効にする
   config.active_storage.resolve_model_to_route = :rails_storage_proxy
 
+  # ★追加：生成されるURLの有効期限（直接関係ないかも）
+  config.active_storage.service_urls_expire_in = 1.hour
+
+  # Force all Active Jobs to run inline in development
+  config.active_job.queue_adapter = :inline
+
   # Don't care if the mailer can't send.
   config.action_mailer.raise_delivery_errors = false
 

@@ -11,61 +11,109 @@ module Api
 
     # タスク一覧の取得
     def index
-      # フィルタリングと並び替え
-      tasks = Task.parent_tasks  # 親タスクのみを取得
-      
-      # ステータスでフィルタリング
-      if params[:status].present?
-        tasks = tasks.where(status: params[:status])
+      begin
+        if params[:dashboard].present?
+          # ダッシュボード用のタスク一覧を返す
+          tasks = Task.where(assigned_to: current_user.id)
+                  .where(parent_task_id: nil)
+                  .where('due_date IS NOT NULL AND due_date <= ?', 7.days.from_now)
+                  .order(due_date: :asc)
+                  .limit(5)
+          
+          @tasks = {
+            upcoming: tasks,
+            overdue: Task.where(assigned_to: current_user.id).where('due_date < ?', Date.today).where.not(status: 'completed').order(due_date: :asc).limit(5),
+            recent: Task.where(assigned_to: current_user.id).order(created_at: :desc).limit(5)
+          }
+          
+          render json: { 
+            success: true, 
+            data: @tasks.transform_values { |tasks| ActiveModel::Serializer::CollectionSerializer.new(tasks, serializer: TaskSerializer) }
+          }
+        elsif params[:calendar].present?
+          # カレンダー用のタスク一覧を返す
+          start_date = params[:start_date].present? ? Date.parse(params[:start_date]) : Date.today.beginning_of_month
+          end_date = params[:end_date].present? ? Date.parse(params[:end_date]) : Date.today.end_of_month
+          
+          tasks = Task.where(assigned_to: current_user.id).where('due_date >= ? AND due_date <= ?', start_date, end_date)
+          
+          render json: { success: true, data: ActiveModel::Serializer::CollectionSerializer.new(tasks, serializer: TaskSerializer) }
+        elsif params[:my].present?
+          # 自分のタスク一覧を返す
+          tasks = Task.where(assigned_to: current_user.id).order(created_at: :desc)
+
+          # 通常のページネーションを適用
+          page = (params[:page] || 1).to_i
+          per_page = (params[:per_page] || 10).to_i
+          offset = (page - 1) * per_page
+          total_count = tasks.count
+          total_pages = (total_count.to_f / per_page).ceil
+
+          paginated_tasks = tasks.offset(offset).limit(per_page)
+          
+          render json: { 
+            success: true, 
+            data: ActiveModel::Serializer::CollectionSerializer.new(paginated_tasks, serializer: TaskSerializer),
+            meta: {
+              current_page: page,
+              total_pages: total_pages,
+              total_count: total_count,
+              per_page: per_page
+            }
+          }
+        else
+          # 通常のタスク一覧を返す
+          tasks = if params[:search].present?
+                   Task.where('title LIKE ? OR description LIKE ?', "%#{params[:search]}%", "%#{params[:search]}%")
+                 else
+                   Task.where(parent_task_id: nil)
+                 end
+  
+          # ソート順を設定
+          order_by = params[:order_by] || 'created_at'
+          order_direction = params[:order_direction] || 'desc'
+          
+          # ステータスでフィルタリング
+          if params[:status].present?
+            tasks = tasks.where(status: params[:status])
+          end
+          
+          # 期限でフィルタリング
+          if params[:due_date].present?
+            due_date = Date.parse(params[:due_date])
+            tasks = tasks.where(due_date: due_date.beginning_of_day..due_date.end_of_day)
+          end
+          
+          # 担当者でフィルタリング
+          if params[:assigned_to].present?
+            tasks = tasks.where(assigned_to: params[:assigned_to])
+          end
+
+          # 通常のページネーションを適用
+          page = (params[:page] || 1).to_i
+          per_page = (params[:per_page] || 10).to_i
+          offset = (page - 1) * per_page
+          total_count = tasks.count
+          total_pages = (total_count.to_f / per_page).ceil
+
+          ordered_tasks = tasks.order("#{order_by} #{order_direction}")
+          paginated_tasks = ordered_tasks.offset(offset).limit(per_page)
+          
+          render json: { 
+            success: true, 
+            data: ActiveModel::Serializer::CollectionSerializer.new(paginated_tasks, serializer: TaskSerializer),
+            meta: {
+              current_page: page,
+              total_pages: total_pages,
+              total_count: total_count,
+              per_page: per_page
+            }
+          }
+        end
+      rescue => e
+        Rails.logger.error "TasksController#index error: #{e.message}\n#{e.backtrace.join("\n")}"
+        render json: { success: false, error: "タスクの取得に失敗しました: #{e.message}" }, status: :internal_server_error
       end
-      
-      # 優先度でフィルタリング
-      if params[:priority].present?
-        tasks = tasks.where(priority: params[:priority])
-      end
-      
-      # タグでフィルタリング
-      if params[:tag].present?
-        tasks = tasks.where("tags LIKE ?", "%#{params[:tag]}%")
-      end
-      
-      # 期限でフィルタリング
-      if params[:due_date_from].present?
-        tasks = tasks.where("due_date >= ?", params[:due_date_from])
-      end
-      
-      if params[:due_date_to].present?
-        tasks = tasks.where("due_date <= ?", params[:due_date_to])
-      end
-      
-      # 並び替え
-      case params[:sort_by]
-      when 'priority'
-        tasks = tasks.order(priority: params[:sort_order] || :desc)
-      when 'due_date'
-        tasks = tasks.order(due_date: params[:sort_order] || :asc)
-      else
-        tasks = tasks.order(created_at: params[:sort_order] || :desc)
-      end
-      
-      # ページネーション
-      tasks = tasks.page(params[:page] || 1).per(params[:per_page] || 10)
-      
-      # タスクをシリアライズ
-      serialized_tasks = tasks.map { |task| TaskSerializer.new(task).as_json }
-      
-      render json: {
-        success: true,
-        data: serialized_tasks,  # TaskSerializerを使用して添付ファイルURLを含める
-        meta: {
-          current_page: tasks.current_page,
-          total_pages: tasks.total_pages,
-          total_count: tasks.total_count,
-          per_page: tasks.limit_value
-        }
-      }, status: :ok
-    rescue => e
-      render json: { success: false, message: e.message }, status: :internal_server_error
     end
 
     # 自分のタスク一覧
@@ -88,22 +136,30 @@ module Api
       @task.reload
       
       # TaskSerializerを使用してタスク情報をJSONに変換（添付ファイルURLを含む）
-      serialized_task = TaskSerializer.new(@task).as_json
+      # serialized_task = TaskSerializer.new(@task).as_json # 事前変換をやめる
       
-      # デバッグログを追加
-      puts "[DEBUG] show - Serialized task includes attachment_urls: #{serialized_task.key?('attachment_urls')}"
-      if serialized_task['attachment_urls'].present?
-        puts "[DEBUG] show - Number of attachment URLs: #{serialized_task['attachment_urls'].size}"
-        serialized_task['attachment_urls'].each_with_index do |url_data, index|
-          puts "[DEBUG] show - Attachment URL #{index+1}: #{url_data['url']}"
-        end
-      end
+      # === デバッグログ追加 (修正) ===
+      # puts "[Controller Debug] Serialized Task JSON before render:"
+      # puts serialized_task.inspect # オブジェクトの内容を出力
+      puts "[Controller Debug] Rendering task with ID: #{@task.id}"
+      puts "[Controller Debug] Task attachments attached?: #{@task.attachments.attached?}"
+      # === デバッグログ追加 終了 ===
       
-      render json: {
-        success: true,
-        data: serialized_task,
-        message: "Task fetched successfully"
-      }
+      # デバッグログを追加 (修正：シンボルでキーを確認)
+      # puts "[DEBUG] show - Serialized task includes attachment_urls: #{serialized_task.key?(:attachment_urls)}"
+      # if serialized_task[:attachment_urls].present?
+      #   puts "[DEBUG] show - Number of attachment URLs: #{serialized_task[:attachment_urls].size}"
+      #   serialized_task[:attachment_urls].each_with_index do |url_data, index|
+      #     puts "[DEBUG] show - Attachment URL #{index+1}: #{url_data[:url]}"
+      #   end
+      # end
+      
+      # render json: { # render 呼び出し方を変更
+      #   success: true,
+      #   data: serialized_task,
+      #   message: "Task fetched successfully"
+      # }
+      render json: @task, serializer: TaskSerializer, success: true, message: "Task fetched successfully", include: '**' # シリアライザーを直接指定
     end
 
     # タスクの作成
@@ -121,6 +177,28 @@ module Api
       puts "[DEBUG] Task built with params (excluding attachments): #{task.attributes.inspect}"
       # --- デバッグコード追加 終了 --- 
 
+      # === FileUtils Test Start ===
+      test_dir = Rails.root.join("storage", "test_debug_dir")
+      test_file = test_dir.join("test_write.txt")
+      begin
+        puts "[DEBUG FileUtils Test] Attempting mkdir_p: #{test_dir}"
+        FileUtils.mkdir_p(test_dir.to_s) # Make sure path is string
+        puts "[DEBUG FileUtils Test] mkdir_p successful."
+        puts "[DEBUG FileUtils Test] Attempting File.write: #{test_file}"
+        File.write(test_file.to_s, "Test write successful at #{Time.now}") # Make sure path is string
+        puts "[DEBUG FileUtils Test] File.write successful."
+        # Verify existence
+        if File.exist?(test_file.to_s)
+          puts "[DEBUG FileUtils Test] Verification: File.exist? is TRUE for #{test_file}"
+        else
+          puts "[ERROR FileUtils Test] Verification: File.exist? is FALSE for #{test_file}"
+        end
+      rescue => e
+        puts "[ERROR FileUtils Test] Exception during manual write test: #{e.message}"
+        puts e.backtrace.join("\n")
+      end
+      # === FileUtils Test End ===
+
       # トランザクション開始
       ActiveRecord::Base.transaction do
         if task.save
@@ -129,28 +207,55 @@ module Api
           # Handle attachments after task is saved
           if task_params[:attachments].present?
             puts "[DEBUG] Attaching files: #{task_params[:attachments].map(&:original_filename).join(', ')}" # Log filenames
+            # === Broad Exception Catching Start ===
             begin
-              task.attachments.attach(task_params[:attachments])
-              puts "[DEBUG] task.attachments.attach called successfully."
-            rescue => attach_error
-              puts "[DEBUG] Error attaching files: #{attach_error.message}"
-              puts attach_error.backtrace.join("\n")
-              # Optionally re-raise or add to errors
-              task.errors.add(:attachments, "の保存に失敗しました: #{attach_error.message}")
-              raise ActiveRecord::Rollback # Rollback transaction
+              puts "[DEBUG] About to call task.attachments.attach with: #{task_params[:attachments].inspect}"
+              task.attachments.attach(task_params[:attachments]) # The critical call
+              puts "[DEBUG] task.attachments.attach finished (or did not raise an immediate error)."
+
+              # Keep the immediate verification log from before, as it was useful
+              task.reload
+              puts "[DEBUG] Verification after attach - task.attachments.attached?: #{task.attachments.attached?}"
+              if task.attachments.attached?
+                attached_blob = task.attachments.blobs.last
+                final_path = ActiveStorage::Blob.service.path_for(attached_blob.key) rescue "Path not found"
+                puts "[DEBUG] Verification after attach - Attached Blob ID: #{attached_blob.id}, Key: #{attached_blob.key}"
+                puts "[DEBUG] Verification after attach - Expected Final Path: #{final_path}"
+                file_exists_immediately = File.exist?(final_path) rescue false
+                puts "[DEBUG] Verification after attach - File.exist?(final_path) result: #{file_exists_immediately}"
+                unless file_exists_immediately
+                  puts "[ERROR] File NOT found at final path immediately after attach!"
+                end
+              else
+                 puts "[ERROR] task.attachments.attached? is false immediately after attach call!"
+              end
+
+            rescue ActiveRecord::Rollback => ar_rollback
+                # This is expected if validation fails later or explicitly raised
+                puts "[DEBUG] Transaction rolled back: #{ar_rollback.message}"
+                raise ar_rollback # Re-raise to let the outer transaction handler catch it
+            rescue StandardError => e # Catch any other standard error during attach
+                puts "[CRITICAL ERROR] Exception caught DIRECTLY during task.attachments.attach:"
+                puts "[CRITICAL ERROR]   Error Class: #{e.class.name}"
+                puts "[CRITICAL ERROR]   Error Message: #{e.message}"
+                puts "[CRITICAL ERROR]   Backtrace:\n#{e.backtrace.join("\n")}"
+                task.errors.add(:attachments, "の保存中に予期せぬエラーが発生しました: #{e.message}")
+                # Decide whether to rollback or continue, likely rollback is safest
+                raise ActiveRecord::Rollback # Force rollback on unexpected errors
+            # === Broad Exception Catching End ===
             end
           end
 
-          # --- デバッグコード追加 開始 --- (Re-check attachments)
-          task.reload # Reload to get the latest state including attachments
-          puts "[DEBUG] task.attachments.attached? after attach: #{task.attachments.attached?}"
-          if task.attachments.attached?
-            task.attachments.each do |attachment|
-              puts "[DEBUG] Attached file confirmed: #{attachment.filename}, size: #{attachment.byte_size}, content_type: #{attachment.content_type}"
-            end
-          else 
-            puts "[DEBUG] No attachments found after attach attempt."
-          end
+          # --- デバッグコード追加 開始 --- (Re-check attachments) - この部分はVerificationとかぶるので一旦コメントアウト
+          # task.reload # Reload to get the latest state including attachments
+          # puts "[DEBUG] task.attachments.attached? after attach: #{task.attachments.attached?}"
+          # if task.attachments.attached?
+          #   task.attachments.each do |attachment|
+          #     puts "[DEBUG] Attached file confirmed: #{attachment.filename}, size: #{attachment.byte_size}, content_type: #{attachment.content_type}"
+          #   end
+          # else 
+          #   puts "[DEBUG] No attachments found after attach attempt."
+          # end
           # --- デバッグコード追加 終了 ---
 
           # サブタスクの処理 (Attachmentエラーがなければ実行)
@@ -654,6 +759,14 @@ module Api
         retained_attachment_ids: [], # 残したい既存ファイルのIDリストを許可
         subtasks: [] # サブタスクパラメータを許可
       )
+
+      # 直接パラメータに添付ファイルがある場合に処理を追加
+      if params[:attachment].present?
+        puts "[DEBUG] Found direct attachment parameter: #{params[:attachment].original_filename}"
+        # task_paramsにはattachmentsという配列形式で格納
+        permitted_params[:attachments] ||= []
+        permitted_params[:attachments] << params[:attachment]
+      end
 
       # --- 添付ファイルの処理 (既存のデバッグコードとロジックは維持) ---
       if permitted_params[:attachments].present? && !permitted_params[:attachments].is_a?(Array)
