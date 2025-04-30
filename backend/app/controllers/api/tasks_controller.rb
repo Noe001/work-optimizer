@@ -7,7 +7,7 @@ module Api
     # Task コントローラでパラメータを許可する明示的な設定を追加
     wrap_parameters include: [:title, :description, :status, :priority, :due_date, 
                            :assigned_to, :tags, :organization_id, :parent_task_id, 
-                           :subtasks, :attachments, :retained_attachment_ids]
+                           :subtasks]
 
     # タスク一覧の取得
     def index
@@ -15,6 +15,7 @@ module Api
         if params[:dashboard].present?
           # ダッシュボード用のタスク一覧を返す
           tasks = Task.where(assigned_to: current_user.id)
+                  .includes(:user, :organization, :subtasks)
                   .where(parent_task_id: nil)
                   .where('due_date IS NOT NULL AND due_date <= ?', 7.days.from_now)
                   .order(due_date: :asc)
@@ -22,25 +23,37 @@ module Api
           
           @tasks = {
             upcoming: tasks,
-            overdue: Task.where(assigned_to: current_user.id).where('due_date < ?', Date.today).where.not(status: 'completed').order(due_date: :asc).limit(5),
-            recent: Task.where(assigned_to: current_user.id).order(created_at: :desc).limit(5)
+            overdue: Task.where(assigned_to: current_user.id)
+                      .includes(:user, :organization, :subtasks)
+                      .where('due_date < ?', Date.today)
+                      .where.not(status: 'completed')
+                      .order(due_date: :asc)
+                      .limit(5),
+            recent: Task.where(assigned_to: current_user.id)
+                    .includes(:user, :organization, :subtasks)
+                    .order(created_at: :desc)
+                    .limit(5)
           }
           
           render json: { 
             success: true, 
             data: @tasks.transform_values { |tasks| ActiveModel::Serializer::CollectionSerializer.new(tasks, serializer: TaskSerializer) }
           }
-        elsif params[:calendar].present?
+        
           # カレンダー用のタスク一覧を返す
           start_date = params[:start_date].present? ? Date.parse(params[:start_date]) : Date.today.beginning_of_month
           end_date = params[:end_date].present? ? Date.parse(params[:end_date]) : Date.today.end_of_month
           
-          tasks = Task.where(assigned_to: current_user.id).where('due_date >= ? AND due_date <= ?', start_date, end_date)
+          tasks = Task.where(assigned_to: current_user.id)
+                    .includes(:user, :organization, :subtasks)
+                    .where('due_date >= ? AND due_date <= ?', start_date, end_date)
           
           render json: { success: true, data: ActiveModel::Serializer::CollectionSerializer.new(tasks, serializer: TaskSerializer) }
         elsif params[:my].present?
           # 自分のタスク一覧を返す
-          tasks = Task.where(assigned_to: current_user.id).order(created_at: :desc)
+          tasks = Task.where(assigned_to: current_user.id)
+                    .includes(:user, :organization, :subtasks)
+                    .order(created_at: :desc)
 
           # 通常のページネーションを適用
           page = (params[:page] || 1).to_i
@@ -65,8 +78,10 @@ module Api
           # 通常のタスク一覧を返す
           tasks = if params[:search].present?
                    Task.where('title LIKE ? OR description LIKE ?', "%#{params[:search]}%", "%#{params[:search]}%")
+                      .includes(:user, :organization, :subtasks)
                  else
                    Task.where(parent_task_id: nil)
+                      .includes(:user, :organization, :subtasks)
                  end
   
           # ソート順を設定
@@ -119,7 +134,10 @@ module Api
     # 自分のタスク一覧
     def my
       puts "Getting tasks for user: #{current_user.id} (#{current_user.email})" if Rails.env.development?
-      tasks = current_user.tasks.parent_tasks.order(created_at: :desc)  # 親タスクのみ取得
+      tasks = current_user.tasks
+              .includes(:user, :organization, :subtasks)
+              .parent_tasks
+              .order(created_at: :desc)  # 親タスクのみ取得
       
       # タスクをシリアライズ
       serialized_tasks = tasks.map { |task| TaskSerializer.new(task).as_json }
@@ -132,33 +150,11 @@ module Api
 
     # タスク詳細の取得
     def show
-      # タスクをリロードして最新の情報（添付ファイルを含む）を取得
+      # タスクをリロードして最新の情報を取得
       @task.reload
       
-      # TaskSerializerを使用してタスク情報をJSONに変換（添付ファイルURLを含む）
-      # serialized_task = TaskSerializer.new(@task).as_json # 事前変換をやめる
-      
-      # === デバッグログ追加 (修正) ===
-      # puts "[Controller Debug] Serialized Task JSON before render:"
-      # puts serialized_task.inspect # オブジェクトの内容を出力
       puts "[Controller Debug] Rendering task with ID: #{@task.id}"
-      puts "[Controller Debug] Task attachments attached?: #{@task.attachments.attached?}"
-      # === デバッグログ追加 終了 ===
       
-      # デバッグログを追加 (修正：シンボルでキーを確認)
-      # puts "[DEBUG] show - Serialized task includes attachment_urls: #{serialized_task.key?(:attachment_urls)}"
-      # if serialized_task[:attachment_urls].present?
-      #   puts "[DEBUG] show - Number of attachment URLs: #{serialized_task[:attachment_urls].size}"
-      #   serialized_task[:attachment_urls].each_with_index do |url_data, index|
-      #     puts "[DEBUG] show - Attachment URL #{index+1}: #{url_data[:url]}"
-      #   end
-      # end
-      
-      # render json: { # render 呼び出し方を変更
-      #   success: true,
-      #   data: serialized_task,
-      #   message: "Task fetched successfully"
-      # }
       render json: @task, serializer: TaskSerializer, success: true, message: "Task fetched successfully", include: '**' # シリアライザーを直接指定
     end
 

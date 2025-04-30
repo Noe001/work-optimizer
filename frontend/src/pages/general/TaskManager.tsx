@@ -13,13 +13,14 @@ import { Progress } from "@/components/ui/progress";
 import { Calendar, Search, Plus, Filter, List, CalendarDays, ChevronUp, ChevronDown, Edit, Trash2, Loader2, File, FileX, Image, Download } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { taskService } from "@/services";
 import { Task as ApiTask } from "@/types/api";
 import { usePaginatedApi } from "@/hooks";
 import { ApiError } from "@/components/ui/api-error";
 import { LoadingIndicator } from "@/components/ui/loading-indicator";
 import { useToast } from "@/hooks";
+import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 
 interface User {
   id: number;
@@ -39,20 +40,6 @@ interface UITask {
   assignee?: User;
   tags: string[];
   subtasks: { id: string | number; title: string; completed: boolean }[];
-  attachment_urls?: { 
-    id: string | number; 
-    name: string; 
-    url: string; 
-    content_type?: string; 
-    error?: string; 
-    error_info?: string;
-    blob_id?: number;
-    blob_signed_id?: string;
-    blob_key?: string;
-    created_at?: string;
-    file_exists?: boolean;
-    preview_url?: string;
-  }[];
   comments?: { id: number; user: User; text: string; timestamp: string }[];
   createdAt: string;
 }
@@ -74,10 +61,10 @@ const priorityMapping: Record<string, "低" | "中" | "高" | "緊急"> = {
 };
 
 const priorityColors = {
-  "低": "bg-green-100 text-green-800",
-  "中": "bg-blue-100 text-blue-800",
-  "高": "bg-amber-100 text-amber-800",
-  "緊急": "bg-red-100 text-red-800"
+  "低": "bg-blue-100 text-blue-700",
+  "中": "bg-yellow-100 text-yellow-700",
+  "高": "bg-orange-100 text-orange-700",
+  "緊急": "bg-red-100 text-red-700"
 };
 
 const statusColors = {
@@ -153,19 +140,23 @@ const TaskManagerView: React.FC = () => {
     });
   }, [activeTab, searchTerm, filterPriority, filterAssignee, updateParams]);
 
-  // APIのタスクデータをUI用に変換
+  // APIタスクをUIタスク形式に変換する
   const convertApiTaskToUITask = (apiTask: ApiTask): UITask => {
-    // 添付ファイルのデバッグ
-    console.log('変換開始 - 元のタスクデータ:', apiTask);
-    console.log('変換開始 - 添付ファイル:', apiTask.attachment_urls);
-
-    // 担当者を見つける（実際のAPIでユーザーIDが返ってくると仮定）
-    const assignee = apiTask.assigned_to 
-      ? users.find(user => user.id.toString() === apiTask.assigned_to) 
-      : undefined;
-
-    // タグを変換（APIではタグが配列または文字列で返ってくる可能性がある）
+    let assignee: User | undefined = undefined;
     let tags: string[] = [];
+    
+    // 担当者情報がある場合
+    if (apiTask.assigned_to && apiTask.assignee_name) {
+      assignee = {
+        id: parseInt(apiTask.assigned_to),
+        name: apiTask.assignee_name,
+        initials: apiTask.assignee_name
+          .split(' ')
+          .map(name => name.charAt(0))
+          .join('')
+          .toUpperCase()
+      };
+    }
     
     // APIのタグデータを安全に処理
     try {
@@ -211,15 +202,6 @@ const TaskManagerView: React.FC = () => {
     // 日付フォーマット
     const dueDate = apiTask.due_date;
       
-    // 添付ファイルのチェック
-    if (!apiTask.attachment_urls) {
-      console.log('添付ファイルなし - undefined');
-    } else if (Array.isArray(apiTask.attachment_urls) && apiTask.attachment_urls.length === 0) {
-      console.log('添付ファイルなし - 空配列');
-    } else {
-      console.log('添付ファイルあり:', apiTask.attachment_urls);
-    }
-      
     const result = {
       id: apiTask.id, // UUIDはそのまま使用する
       title: apiTask.title,
@@ -231,11 +213,9 @@ const TaskManagerView: React.FC = () => {
       tags,
       subtasks,
       createdAt: apiTask.created_at,
-      attachment_urls: apiTask.attachment_urls,
       // 他のプロパティは必要に応じて追加
     };
     
-    console.log('変換結果 - 添付ファイル:', result.attachment_urls);
     return result;
   };
 
@@ -262,45 +242,31 @@ const TaskManagerView: React.FC = () => {
       // タスクの最新情報を取得
       const response = await taskService.getTask(taskId.toString());
       
-      // デバッグログを追加
-      console.log('タスク詳細レスポンス:', response);
-      if (response.data) {
-        console.log('取得したタスク attachment_urls:', response.data.attachment_urls);
-      }
-      
       if (response.success && response.data) {
         // データをUIタスクに変換
         const uiTask = convertApiTaskToUITask(response.data);
-        console.log('変換後のUIタスク attachment_urls:', uiTask.attachment_urls);
         
-        // データが正しく変換されていることを確認
-        if (!uiTask.attachment_urls && response.data.attachment_urls) {
-          console.warn('変換中に添付ファイル情報が失われています。直接設定します。');
-          uiTask.attachment_urls = response.data.attachment_urls;
-        }
-        
-        // 変換後にattachment_urlsが存在するがnullまたは空配列の場合に警告
-        if (uiTask.attachment_urls === null || (Array.isArray(uiTask.attachment_urls) && uiTask.attachment_urls.length === 0)) {
-          if (response.data.attachment_urls && Array.isArray(response.data.attachment_urls) && response.data.attachment_urls.length > 0) {
-            console.warn('APIからは添付ファイルが返されましたが、変換後に空になりました。問題を修正します。');
-            uiTask.attachment_urls = response.data.attachment_urls;
-          }
-        }
-        
-        // タスク一覧を更新して最新のデータを反映
-        const updatedTasks = tasks.map(task => 
-          task.id === taskId ? uiTask : task
+        // タスク一覧を効率的に更新（スプレッド演算子ではなくmapを使用してパフォーマンス向上）
+        setTasks(prevTasks => 
+          prevTasks.map(task => task.id === taskId ? uiTask : task)
         );
-        setTasks(updatedTasks);
         
       setSelectedTaskId(taskId);
       setIsTaskDialogOpen(true);
       } else {
-        showErrorToast("タスク情報の取得に失敗しました");
+        toast({
+          title: "エラー",
+          description: response.message || "タスクの読み込みに失敗しました",
+          variant: "destructive"
+        });
       }
     } catch (error) {
-      console.error("タスク詳細を開く際にエラーが発生しました:", error);
-      showErrorToast("タスク詳細を表示できませんでした");
+      console.error("タスク詳細の取得中にエラーが発生しました", error);
+      toast({
+        title: "エラー",
+        description: "タスクの読み込み中にエラーが発生しました",
+        variant: "destructive"
+      });
     } finally {
       setTaskOperationLoading(false);
     }
@@ -450,7 +416,7 @@ const TaskManagerView: React.FC = () => {
                     <CardContent className="p-3 pt-2">
                       {task.description && (
                         <CardDescription className="line-clamp-2 mb-2">
-                          {task.description}
+                          <MarkdownRenderer content={task.description} className="line-clamp-2" />
                         </CardDescription>
                       )}
                       <div className="flex flex-wrap gap-1 mb-2">
@@ -547,7 +513,11 @@ const TaskManagerView: React.FC = () => {
             </div>
             {expandedTasks[task.id] && (
               <CardContent className="pt-0">
-                {task.description && <p className="mb-4">{task.description}</p>}
+                {task.description && (
+                  <div className="mb-4">
+                    <MarkdownRenderer content={task.description} />
+                  </div>
+                )}
                 
                 {task.subtasks.length > 0 && (
                   <div className="mb-4">
@@ -586,14 +556,32 @@ const TaskManagerView: React.FC = () => {
                   </div>
                 )}
                 
-                <div className="flex justify-end space-x-2">
-                  <Button variant="outline" size="sm" className="h-8" onClick={() => openTaskDetails(task.id)}>
-                    詳細を見る
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-8">
+                <div className="flex justify-end space-x-3 mt-8">
+                  <Button 
+                    variant="outline" 
+                    className="h-11 px-5 text-base"
+                    asChild
+                  >
                     <Link to={`/tasks/edit/${task.id}`}>
-                      <Edit className="h-4 w-4 mr-2" /> 編集
+                      <Edit className="h-5 w-5 mr-2" /> 編集
                     </Link>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="h-11 px-5 text-base text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => deleteTask(task.id)}
+                    disabled={taskOperationLoading}
+                  >
+                    {taskOperationLoading ? (
+                      <>
+                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                        処理中...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-5 w-5 mr-2" /> 削除
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -784,7 +772,7 @@ const TaskManagerView: React.FC = () => {
 
         {/* タスク詳細ダイアログ */}
         <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
-          <DialogContent className="max-w-5xl max-h-[90vh] p-6">
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
             {selectedTaskId && (
               <>
                 {tasks.find((t) => t.id === selectedTaskId) ? (
@@ -831,11 +819,6 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
   updatingSubtasks = {},
   handleToggleSubtask = async () => {} 
 }) => {
-  // TaskDetailsコンポーネントが受け取ったタスクデータをログに記録
-  console.log('TaskDetails - 受け取ったタスクデータ全体:', task);
-  console.log('TaskDetails - タスクID:', task.id);
-  console.log('TaskDetails - 添付ファイル情報:', task.attachment_urls);
-
   // 削除確認
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -856,505 +839,150 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
   };
 
   return (
-    <div className="max-h-[80vh] overflow-hidden flex flex-col">
-      <DialogHeader className="pb-6">
-        <div className="flex items-center justify-between">
-          <DialogTitle className="text-2xl font-bold">{task.title}</DialogTitle>
-          <Badge className={`${statusColors[task.status]} mr-5 text-base px-3 py-1`}>
-            {task.status}
-          </Badge>
+    <div className="p-4 max-h-[calc(90vh-2rem)] overflow-y-auto">
+      <div className="mb-4">
+        <h2 className="text-2xl font-bold">{task.title}</h2>
+        <div className="text-sm text-muted-foreground mt-1">
+          作成日: {new Date(task.createdAt).toLocaleDateString('ja-JP', {year: 'numeric', month: '2-digit', day: '2-digit'})}
         </div>
-        <DialogDescription className="text-base mt-2">
-          作成日: {new Date(task.createdAt).toISOString().split('T')[0]} {task.dueDate && `/ 期限: ${task.dueDate}`}
-        </DialogDescription>
-      </DialogHeader>
-      
-      <div className="overflow-y-auto pr-4 flex-1">
-        {/* 説明は全幅で表示 */}
-        <div className="mb-8 p-4 bg-muted/20 rounded-lg">
-          <h3 className="text-xl font-medium mb-3">説明</h3>
-          {task.description ? (
-            <div className="whitespace-pre-wrap break-words text-base">{task.description}</div>
+      </div>
+
+      <div className="mb-6">
+        <h3 className="text-lg font-medium mb-2">説明</h3>
+        {task.description ? (
+          <MarkdownRenderer content={task.description} />
+        ) : (
+          <div className="text-base text-muted-foreground italic">説明なし</div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          <h3 className="text-lg font-medium mb-2">サブタスク</h3>
+          {task.subtasks && task.subtasks.length > 0 ? (
+            <div className="space-y-2">
+              {task.subtasks.map((subtask) => (
+                <div key={subtask.id} className="flex items-center p-2 hover:bg-muted/40 rounded-md">
+                  <Checkbox 
+                    checked={subtask.completed} 
+                    className="mr-3 h-5 w-5" 
+                    disabled={updatingSubtasks[subtask.id]}
+                    onCheckedChange={() => toggleSubtask(subtask.id)}
+                  />
+                  <span className={`text-base ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
+                    {subtask.title}
+                    {updatingSubtasks[subtask.id] && (
+                      <Loader2 className="h-3 w-3 inline ml-2 animate-spin" />
+                    )}
+                  </span>
+                </div>
+              ))}
+              <div className="mt-4">
+                <div className="flex justify-between items-center text-sm mb-2">
+                  <span>{calculateTaskProgress(task)}% 完了</span>
+                  <span>
+                    {task.subtasks.filter((st) => st.completed).length}/{task.subtasks.length}
+                  </span>
+                </div>
+                <Progress value={calculateTaskProgress(task)} className="h-2.5" />
+              </div>
+            </div>
           ) : (
-            <div className="text-muted-foreground italic text-base">説明は設定されていません</div>
+            <div className="text-muted-foreground italic text-base">サブタスクはありません</div>
           )}
         </div>
 
-        {/* 2列のグリッドレイアウト */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* 左側（2/3幅） - サブタスク・添付ファイル・コメント */}
-          <div className="md:col-span-2 space-y-8">
-            <div className="p-4 bg-muted/20 rounded-lg">
-              <h3 className="text-xl font-medium mb-3">サブタスク</h3>
-              {task.subtasks && task.subtasks.length > 0 ? (
-                <>
-                  {task.subtasks.map((subtask) => (
-                    <div key={subtask.id} className="flex items-center p-2 hover:bg-muted/40 rounded-md">
-                      <Checkbox 
-                        checked={subtask.completed} 
-                        className="mr-3 h-5 w-5" 
-                        disabled={updatingSubtasks[subtask.id]}
-                        onCheckedChange={() => toggleSubtask(subtask.id)}
-                      />
-                      <span className={`text-base ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
-                        {subtask.title}
-                        {updatingSubtasks[subtask.id] && (
-                          <Loader2 className="h-3 w-3 inline ml-2 animate-spin" />
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="mt-4">
-                    <div className="flex justify-between items-center text-sm mb-2">
-                      <span>{calculateTaskProgress(task)}% 完了</span>
-                      <span>
-                        {task.subtasks.filter((st) => st.completed).length}/{task.subtasks.length}
-                      </span>
-                    </div>
-                    <Progress value={calculateTaskProgress(task)} className="h-2.5" />
-                  </div>
-                </>
-              ) : (
-                <div className="text-muted-foreground italic text-base">サブタスクはありません</div>
-              )}
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-lg font-medium mb-2">優先度</h3>
+              <Badge className={`${priorityColors[task.priority]} text-sm px-2 py-0.5`}>
+                {task.priority}
+              </Badge>
             </div>
-            
-            <div className="p-4 bg-muted/20 rounded-lg">
-              <h3 className="text-xl font-medium mb-3">添付ファイル</h3>
-              {/* デバッグログを追加 */}
-              {(() => {
-                console.log('添付ファイル表示時のデータ:', task.attachment_urls);
-                return null;
-              })()}
-              {(() => {
-                if (!task.attachment_urls) {
-                  console.log('添付ファイル表示条件: task.attachment_urls は undefined または null');
-                  return <div className="text-muted-foreground italic text-base">添付ファイルはありません (undefined)</div>;
-                } else if (!Array.isArray(task.attachment_urls)) {
-                  console.log('添付ファイル表示条件: task.attachment_urls は配列ではない', typeof task.attachment_urls);
-                  return <div className="text-muted-foreground italic text-base">添付ファイルはありません (配列ではない)</div>;
-                } else if (task.attachment_urls.length === 0) {
-                  console.log('添付ファイル表示条件: task.attachment_urls は空配列');
-                  return <div className="text-muted-foreground italic text-base">添付ファイルはありません (空配列)</div>;
-                } else {
-                  console.log('添付ファイル表示条件: task.attachment_urls に要素があります', task.attachment_urls.length, '個');
-                  return (
-                <div className="space-y-3">
-                      {task.attachment_urls.map((attachment, index) => {
-                        // URL が null または undefined の場合のチェック
-                        if (!attachment.url) {
-                          console.error(`添付ファイル ${attachment.name} のURLが無効: ${attachment.url}`);
-                          return (
-                            <div key={index} className="flex items-center p-3 border rounded-md bg-red-50">
-                              <FileX className="h-5 w-5 mr-2 text-red-500" />
-                              <span className="text-base text-red-700">{attachment.name} (URLエラー)</span>
-                              {attachment.error && <p className="text-xs text-red-600 ml-2">{attachment.error}</p>}
-                            </div>
-                          );
-                        }
 
-                        // ファイルが画像かどうかを判断
-                        // 拡張子だけでなくContent-Typeも考慮
-                        const isImage = attachment.content_type 
-                          ? attachment.content_type.startsWith('image/') 
-                          : attachment.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i);
-                          
-                          // ファイルが存在しない場合または問題がある場合は警告表示
-                          if (attachment.file_exists === false) {
-                            return (
-                              <div key={index} className="flex items-center p-3 border rounded-md bg-yellow-50">
-                                <FileX className="h-5 w-5 mr-2 text-yellow-500" />
-                                <div className="flex flex-col">
-                                  <span className="text-base">{attachment.name}</span>
-                                  <span className="text-xs text-yellow-700">ファイルが見つかりません。管理者に連絡してください。</span>
-                                </div>
-                              </div>
-                            );
-                          }
-                          
-                          if (isImage) {
-                            // 画像の場合はプレビューを表示
-                            return (
-                              <div key={index} className="flex flex-col p-3 border rounded-md hover:bg-accent">
-                                <div className="flex items-center mb-2">
-                                  <Image className="h-5 w-5 mr-2 text-gray-500" />
-                                  <span className="text-base">{attachment.name}</span>
-                                </div>
-                                <div className="mt-2">
-                                  <img 
-                                    src={attachment.preview_url || attachment.url} 
-                                    alt={attachment.name}
-                                    className="max-w-full h-auto max-h-48 rounded"
-                                    onError={(e) => {
-                                      console.error(`画像の読み込みエラー: ${attachment.url}`);
-                                      
-                                      // URLが正しく機能しない場合、代替URLを試す
-                                      if (attachment.url && !e.currentTarget.getAttribute('data-tried-alt')) {
-                                        // まだ代替URLを試していない場合、複数のパターンを順番に試す
-                                        const tryNextUrl = (urlIndex: number) => {
-                                          // 画像が既に表示されていれば終了
-                                          if (!e.currentTarget.getAttribute('data-error')) return;
-                                          
-                                          const domain = new URL(attachment.url).origin;
-                                          const filename = attachment.name;
-                                          const alternativeUrls = [];
-                                          
-                                          // データURLを追加（コンテンツレングスエラー対策）
-                                          if (attachment.blob_signed_id) {
-                                            alternativeUrls.push(
-                                              // fetch APIを使って別途取得してデータURLに変換するパターン
-                                              `${domain}/rails/active_storage/blobs/proxy/${attachment.blob_signed_id}/${encodeURIComponent(filename)}?disposition=inline`,
-                                              `${domain}/rails/active_storage/blobs/proxy/${attachment.blob_signed_id}/${encodeURIComponent(filename)}?content=inline`
-                                            );
-                                          }
-                                          
-                                          // Blobの各種情報を使用する場合
-                                          if (attachment.blob_signed_id) {
-                                            alternativeUrls.push(
-                                              `${domain}/rails/active_storage/blobs/proxy/${attachment.blob_signed_id}/${encodeURIComponent(filename)}`,
-                                              `${domain}/rails/active_storage/blobs/proxy/${attachment.blob_signed_id}/${encodeURIComponent(filename)}?disposition=attachment`,
-                                              `${domain}/rails/active_storage/blobs/redirect/${attachment.blob_signed_id}/${encodeURIComponent(filename)}`
-                                            );
-                                          }
-                                          
-                                          if (attachment.blob_key) {
-                                            alternativeUrls.push(
-                                              `${domain}/rails/active_storage/blobs/proxy/${attachment.blob_key}/${encodeURIComponent(filename)}`,
-                                              `${domain}/rails/active_storage/blobs/proxy/${attachment.id}/${encodeURIComponent(filename)}`
-                                            );
-                                          }
-                                          
-                                          // 通常のIDベースのURL
-                                          alternativeUrls.push(
-                                            `${domain}/rails/active_storage/blobs/proxy/${attachment.id}/${encodeURIComponent(filename)}`,
-                                            `${domain}/rails/active_storage/blobs/redirect/${attachment.id}/${encodeURIComponent(filename)}`
-                                          );
-                                          
-                                          // さらに再度オリジナルURLも試す
-                                          alternativeUrls.push(attachment.url);
-                                          
-                                          // インデックスが有効範囲内なら次のURLを試す
-                                          if (urlIndex < alternativeUrls.length) {
-                                            const nextUrl = alternativeUrls[urlIndex];
-                                            console.log(`代替URL(${urlIndex+1}/${alternativeUrls.length}): ${nextUrl}`);
-                                            
-                                            // 特別なケース：最初の2つのURLはfetch APIを使用してデータURLに変換
-                                            if (urlIndex < 2) {
-                                              // 特殊パターン：データURLに変換してContent-Length問題を回避
-                                              fetch(nextUrl)
-                                                .then(response => {
-                                                  if (!response.ok) {
-                                                    throw new Error('Network response was not ok');
-                                                  }
-                                                  return response.blob();
-                                                })
-                                                .then(blob => {
-                                                  const dataUrl = URL.createObjectURL(blob);
-                                                  console.log(`データURL生成成功: ${dataUrl}`);
-                                                  e.currentTarget.src = dataUrl;
-                                                  e.currentTarget.removeAttribute('data-error');
-                                                })
-                                                .catch(error => {
-                                                  console.error('データURL変換エラー:', error);
-                                                  // エラーの場合は次のURLを試す
-                                                  setTimeout(() => tryNextUrl(urlIndex + 1), 500);
-                                                });
-                                              return;
-                                            }
-                                            
-                                            // 数秒後に次を試す
-                                            const nextTimeout = setTimeout(() => {
-                                              tryNextUrl(urlIndex + 1);
-                                            }, 2000);
-                                            
-                                            // イベントリスナーを設定して成功したらタイムアウトをクリア
-                                            const loadHandler = () => {
-                                              console.log(`URL成功: ${nextUrl}`);
-                                              e.currentTarget.removeAttribute('data-error');
-                                              clearTimeout(nextTimeout);
-                                              e.currentTarget.removeEventListener('load', loadHandler);
-                                            };
-                                            
-                                            e.currentTarget.addEventListener('load', loadHandler);
-                                            e.currentTarget.setAttribute('data-error', 'true');
-                                            e.currentTarget.src = nextUrl;
-                                          } else {
-                                            // 全てのURLを試したがどれも成功しなかった場合
-                                            showErrorMessage();
-                                          }
-                                        };
-                                        
-                                        // 最初のURLから開始
-                                        e.currentTarget.setAttribute('data-tried-alt', 'true');
-                                        tryNextUrl(0);
-                                        return;
-                                      }
-                                      
-                                      // エラーメッセージを表示する関数
-                                      function showErrorMessage() {
-                                        // エラーメッセージを表示
-                                        const parent = e.currentTarget.parentElement;
-                                        if (parent) {
-                                          e.currentTarget.style.display = 'none';
-                                          const errorMessage = document.createElement('div');
-                                          errorMessage.className = 'p-3 bg-red-50 text-red-600 rounded mt-2 text-sm flex items-center';
-                                          errorMessage.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" /></svg>画像の読み込みに失敗しました`;
-                                          
-                                          // 代替ダウンロードリンクを追加
-                                          const downloadLink = document.createElement('a');
-                                          downloadLink.href = attachment.url;
-                                          downloadLink.target = '_blank';
-                                          downloadLink.rel = 'noopener noreferrer';
-                                          downloadLink.className = 'p-3 bg-blue-50 text-blue-600 rounded mt-2 text-sm flex items-center';
-                                          downloadLink.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>代わりにダウンロード`;
-                                          
-                                          parent.appendChild(errorMessage);
-                                          parent.appendChild(downloadLink);
-                                        }
-                                      }
-                                    }}
-                                  />
-                                </div>
-                                <a
-                                  href={attachment.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="mt-2 text-sm text-blue-600 hover:underline"
-                                >
-                                  フルサイズで表示
-                                </a>
-                              </div>
-                            );
-                          } else {
-                            // その他のファイルはリンクとして表示
-                            return (
-                    <a
-                      key={index}
-                      href={attachment.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center p-3 border rounded-md hover:bg-accent cursor-pointer"
-                                onClick={(e) => {
-                                  // エラーの可能性があるリンクの場合は確認
-                                  if (attachment.error_info) {
-                                    const confirmed = window.confirm(`警告: ${attachment.error_info}\n続行しますか？`);
-                                    if (!confirmed) {
-                                      e.preventDefault();
-                                    }
-                                  }
-                                }}
-                    >
-                      <File className="h-5 w-5 mr-2 text-gray-500" />
-                      <span className="text-base">{attachment.name}</span>
-                                <Download className="h-4 w-4 ml-auto text-gray-400" />
-                    </a>
-                            );
-                          }
-                        })}
-                </div>
-                    );
-                  }
-                })()}
+            <div>
+              <h3 className="text-lg font-medium mb-2">ステータス</h3>
+              <Badge variant="outline" className="text-sm px-2 py-0.5">
+                {task.status}
+              </Badge>
             </div>
-            
-            <div className="p-4 bg-muted/20 rounded-lg">
-              <h3 className="text-xl font-medium mb-3">コメント</h3>
-              {task.comments && task.comments.length > 0 ? (
-                <>
-                  <div className="space-y-4">
-                    {task.comments.map((comment) => (
-                      <div key={comment.id} className="flex space-x-3 p-3 bg-background rounded-md">
-                        <Avatar className="h-10 w-10">
-                          {comment.user.avatar ? (
-                            <AvatarImage src={comment.user.avatar} alt={comment.user.name} />
-                          ) : null}
-                          <AvatarFallback>{comment.user.initials}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="flex items-baseline">
-                            <span className="font-medium text-base mr-2">{comment.user.name}</span>
-                            <span className="text-sm text-muted-foreground">{comment.timestamp}</span>
-                          </div>
-                          <p className="text-base mt-1">{comment.text}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
+
+            <div>
+              <h3 className="text-lg font-medium mb-2">担当者</h3>
+              {task.assignee ? (
+                <div className="flex items-center space-x-3">
+                  <Avatar className="h-8 w-8">
+                    {task.assignee.avatar ? (
+                      <AvatarImage
+                        src={task.assignee.avatar}
+                        alt={task.assignee.name}
+                      />
+                    ) : null}
+                    <AvatarFallback>{task.assignee.initials}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-base">{task.assignee.name}</span>
+                </div>
               ) : (
-                <div className="text-muted-foreground italic mb-4 text-base">コメントはありません</div>
+                <div className="text-muted-foreground italic text-base">未着手</div>
               )}
-              <div className="mt-4">
-                <Textarea placeholder="コメントを追加..." className="resize-none text-base" />
-                <Button className="mt-3">コメントを送信</Button>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium mb-2">期限日</h3>
+              {task.dueDate ? (
+                <div className="flex items-center text-sm">
+                  <Calendar className="h-4 w-4 mr-1" />
+                  {task.dueDate}
+                </div>
+              ) : (
+                <div className="text-muted-foreground italic text-base">期限日は未設定です</div>
+              )}
+            </div>
+          </div>
+
+          {task.tags && task.tags.length > 0 && (
+            <div>
+              <h3 className="text-lg font-medium mb-2">タグ</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {task.tags.map((tag, index) => (
+                  <Badge key={index} variant="secondary" className="text-xs">
+                    {tag}
+                  </Badge>
+                ))}
               </div>
             </div>
-          </div>
-          
-          {/* 右側（1/3幅） - 優先度・担当者・期限日・タグ */}
-          <div className="space-y-6">
-            <div className="p-4 bg-muted/20 rounded-lg">
-              <h3 className="text-xl font-medium mb-3">優先度</h3>
-              <Badge className={`${priorityColors[task.priority]} text-base px-3 py-1`}>
-                {task.priority}
-              </Badge>
-            </div>
-            
-            <div className="p-4 bg-muted/20 rounded-lg">
-              <h3 className="text-xl font-medium mb-3">担当者</h3>
-              {task.assignee ? (
-                <div className="flex items-center space-x-3">
-                  <Avatar className="h-10 w-10">
-                    {task.assignee.avatar ? (
-                      <AvatarImage
-                        src={task.assignee.avatar}
-                        alt={task.assignee.name}
-                      />
-                    ) : null}
-                    <AvatarFallback>{task.assignee.initials}</AvatarFallback>
-                  </Avatar>
-                  <span className="text-base">{task.assignee.name}</span>
-                </div>
-              ) : (
-                <div className="text-muted-foreground italic text-base">担当者は未設定です</div>
-              )}
-            </div>
-            
-            <div className="p-4 bg-muted/20 rounded-lg">
-              <h3 className="text-xl font-medium mb-3">期限日</h3>
-              {task.dueDate ? (
-                <div className="flex items-center">
-                  <Calendar className="h-5 w-5 mr-2" />
-                  <span className="text-base">{task.dueDate}</span>
-                </div>
-              ) : (
-                <div className="text-muted-foreground italic text-base">期限日は未設定です</div>
-              )}
-            </div>
-            
-            <div className="p-4 bg-muted/20 rounded-lg">
-              <h3 className="text-xl font-medium mb-3">タグ</h3>
-              {task.tags && task.tags.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {task.tags.map((tag, index) => (
-                    <Badge key={index} variant="outline" className="text-base px-3 py-1">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-muted-foreground italic text-base">タグはありません</div>
-              )}
-            </div>
-            
-            <div className="pt-6 mt-4 border-t space-y-3">
-              <Link to={`/tasks/edit/${task.id}`}>
-                <Button variant="outline" className="w-full flex items-center justify-center h-10 text-base">
-                  <Edit className="h-5 w-5 mr-2" /> 編集
-                </Button>
-              </Link>
-              <Button 
-                variant="outline" 
-                className="w-full h-10 flex items-center justify-center text-destructive hover:text-destructive hover:bg-destructive/10 text-base"
-                onClick={handleDelete}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    処理中...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="h-5 w-5 mr-2" /> {deleteConfirm ? "削除を確定" : "削除"}
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
+          )}
         </div>
-          
-          {/* 右側（1/3幅） - 優先度・担当者・期限日・タグ */}
-          <div className="space-y-6">
-            <div className="p-4 bg-muted/20 rounded-lg">
-              <h3 className="text-xl font-medium mb-3">優先度</h3>
-              <Badge className={`${priorityColors[task.priority]} text-base px-3 py-1`}>
-                {task.priority}
-              </Badge>
-            </div>
-            
-            <div className="p-4 bg-muted/20 rounded-lg">
-              <h3 className="text-xl font-medium mb-3">担当者</h3>
-              {task.assignee ? (
-                <div className="flex items-center space-x-3">
-                  <Avatar className="h-10 w-10">
-                    {task.assignee.avatar ? (
-                      <AvatarImage
-                        src={task.assignee.avatar}
-                        alt={task.assignee.name}
-                      />
-                    ) : null}
-                    <AvatarFallback>{task.assignee.initials}</AvatarFallback>
-                  </Avatar>
-                  <span className="text-base">{task.assignee.name}</span>
-                </div>
-              ) : (
-                <div className="text-muted-foreground italic text-base">担当者は未設定です</div>
-              )}
-            </div>
-            
-            <div className="p-4 bg-muted/20 rounded-lg">
-              <h3 className="text-xl font-medium mb-3">期限日</h3>
-              {task.dueDate ? (
-                <div className="flex items-center">
-                  <Calendar className="h-5 w-5 mr-2" />
-                  <span className="text-base">{task.dueDate}</span>
-                </div>
-              ) : (
-                <div className="text-muted-foreground italic text-base">期限日は未設定です</div>
-              )}
-            </div>
-            
-            <div className="p-4 bg-muted/20 rounded-lg">
-              <h3 className="text-xl font-medium mb-3">タグ</h3>
-              {task.tags && task.tags.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {task.tags.map((tag, index) => (
-                    <Badge key={index} variant="outline" className="text-base px-3 py-1">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-muted-foreground italic text-base">タグはありません</div>
-              )}
-            </div>
-            
-            <div className="pt-6 mt-4 border-t space-y-3">
-              <Link to={`/tasks/edit/${task.id}`}>
-                <Button variant="outline" className="w-full flex items-center justify-center h-10 text-base">
-                  <Edit className="h-5 w-5 mr-2" /> 編集
-                </Button>
-              </Link>
-              <Button 
-                variant="outline" 
-                className="w-full h-10 flex items-center justify-center text-destructive hover:text-destructive hover:bg-destructive/10 text-base"
-                onClick={handleDelete}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    処理中...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="h-5 w-5 mr-2" /> {deleteConfirm ? "削除を確定" : "削除"}
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
+      </div>
+
+      <div className="flex justify-end space-x-3 mt-8">
+        <Button 
+          variant="outline" 
+          className="h-11 px-5 text-base"
+          asChild
+        >
+          <Link to={`/tasks/edit/${task.id}`}>
+            <Edit className="h-5 w-5 mr-2" /> 編集
+          </Link>
+        </Button>
+        <Button 
+          variant="outline" 
+          className="h-11 px-5 text-base text-destructive hover:text-destructive hover:bg-destructive/10"
+          onClick={handleDelete}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+              処理中...
+            </>
+          ) : (
+            <>
+              <Trash2 className="h-5 w-5 mr-2" /> {deleteConfirm ? "削除を確定" : "削除"}
+            </>
+          )}
+        </Button>
       </div>
     </div>
   );

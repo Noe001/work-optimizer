@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import {
   FilePlus,
   BookOpen,
@@ -824,6 +824,7 @@ const MeetingsTab: React.FC = () => {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{meeting.title} - タイマー</DialogTitle>
+          <DialogDescription>アジェンダに沿って会議を進行するためのタイマーです。</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="text-center">
@@ -862,6 +863,7 @@ const MeetingsTab: React.FC = () => {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{meeting.title} - 議事録</DialogTitle>
+          <DialogDescription>会議の議事録を作成してください。</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>

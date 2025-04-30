@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Plus, Tag, X, Loader2, Upload, Paperclip, File } from "lucide-react";
+import { ArrowLeft, Plus, Tag, X, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "@radix-ui/react-icons";
@@ -17,7 +17,7 @@ import { format, parseISO } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { taskService } from "@/services";
 import { useToast } from "@/hooks";
-import { AttachmentFile } from "@/types/api";
+import { Task } from "@/types/api";
 
 // APIステータスとUIステータスのマッピング
 const statusToApiMapping: Record<string, string> = {
@@ -66,17 +66,21 @@ interface SubTask {
   _destroy?: boolean;
 }
 
-interface TaskFormData {
+// フォームデータの型定義
+interface FormState {
   title: string;
   description: string;
   status: "未着手" | "進行中" | "レビュー中" | "完了";
   priority: "低" | "中" | "高" | "緊急";
-  dueDate: Date | undefined;
+  dueDate?: Date;
   assigneeId: string | null;
   tags: string[];
-  subtasks: SubTask[];
-  attachments: File[];   // 新規ファイルアップロード用
-  existingAttachments: AttachmentFile[];  // 既存の添付ファイル用
+  subtasks: {
+    id: string | number;
+    title: string;
+    completed: boolean;
+    _destroy?: boolean;
+  }[];
 }
 
 const CreateTaskView: React.FC = () => {
@@ -90,9 +94,8 @@ const CreateTaskView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // サンプルユーザーデータ（後でAPIから取得する）
   const users: User[] = [
@@ -103,7 +106,7 @@ const CreateTaskView: React.FC = () => {
   ];
   
   // フォームの初期状態
-  const [formData, setFormData] = useState<TaskFormData>({
+  const [formData, setFormData] = useState<FormState>({
     title: "",
     description: "",
     status: "未着手",
@@ -112,8 +115,6 @@ const CreateTaskView: React.FC = () => {
     assigneeId: null,
     tags: [],
     subtasks: [],
-    attachments: [],
-    existingAttachments: [],
   });
 
   // 編集モードの場合、既存のタスクデータを取得
@@ -177,8 +178,6 @@ const CreateTaskView: React.FC = () => {
                   completed: subtask.status === 'completed'
                 }))
               : [],
-            attachments: [],
-            existingAttachments: task.attachment_urls || [],
           });
         } else {
           toast({
@@ -257,40 +256,6 @@ const CreateTaskView: React.FC = () => {
     });
   };
   
-  // 添付ファイルを追加
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files);
-      setFormData({
-        ...formData,
-        attachments: [...formData.attachments, ...newFiles]
-      });
-    }
-  };
-  
-  // 新規添付ファイルを削除
-  const removeFile = (indexToRemove: number) => {
-    setFormData({
-      ...formData,
-      attachments: formData.attachments.filter((_, index) => index !== indexToRemove)
-    });
-  };
-  
-  // 既存の添付ファイルを削除
-  const removeExistingFile = (idToRemove: string | number) => {
-    setFormData({
-      ...formData,
-      existingAttachments: formData.existingAttachments.filter(file => file.id !== idToRemove)
-    });
-  };
-  
-  // ファイル選択ダイアログを開く
-  const openFileDialog = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-  
   // フォーム送信
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -309,86 +274,66 @@ const CreateTaskView: React.FC = () => {
         const taskData = {
           title: formData.title,
           description: formData.description,
-          status: statusToApiMapping[formData.status],
-          priority: priorityToApiMapping[formData.priority],
+          status: statusToApiMapping[formData.status] as 'pending' | 'in_progress' | 'completed',
+          priority: priorityToApiMapping[formData.priority] as 'low' | 'medium' | 'high',
           due_date: formData.dueDate ? format(formData.dueDate, 'yyyy-MM-dd') : undefined,
           assigned_to: formData.assigneeId || undefined,
           tags: formData.tags.join(','),
-          subtasks: formData.subtasks.map(st => ({
+          subtasks_attributes: formData.subtasks.map(st => ({
             id: st.id,
             title: st.title,
             completed: st.completed,
             _destroy: st._destroy
           })),
-          attachments: formData.existingAttachments,
-          newAttachmentFiles: formData.attachments
         };
 
         console.log('タスク更新データ:', taskData);
-        
-        // デバッグ: 添付ファイル情報をログに出力
-        if (formData.attachments && formData.attachments.length > 0) {
-          formData.attachments.forEach((file, index) => {
-            if (file && typeof file === 'object' && file.size > 0) {
-              console.log(`送信する添付ファイル[${index}]:`, {
-                name: file.name,
-                type: file.type,
-                size: file.size
-              });
-            }
-          });
-        }
 
         // タスクサービスを使用して更新
-        const result = await taskService.updateTask(taskId, taskData);
+        const response = await taskService.updateTask(taskId, taskData);
         
+        if (response.success) {
         toast({
           title: "成功",
           description: "タスクが更新されました！"
         });
+          // 一覧画面に戻る
+          navigate('/tasks');
+        } else {
+          throw new Error(response.message || 'タスクの更新に失敗しました');
+        }
       } else {
         // 新規作成の場合
         const taskData = {
           title: formData.title,
           description: formData.description,
-          status: statusToApiMapping[formData.status],
-          priority: priorityToApiMapping[formData.priority],
+          status: statusToApiMapping[formData.status] as 'pending' | 'in_progress' | 'completed',
+          priority: priorityToApiMapping[formData.priority] as 'low' | 'medium' | 'high',
           due_date: formData.dueDate ? format(formData.dueDate, 'yyyy-MM-dd') : undefined,
           assigned_to: formData.assigneeId || undefined,
           tags: formData.tags.join(','),
-          subtasks: formData.subtasks.map(st => ({
+          subtasks_attributes: formData.subtasks.map(st => ({
             title: st.title,
             completed: st.completed
           })),
-          newAttachmentFiles: formData.attachments
         };
 
         console.log('新規タスクデータ:', taskData);
-        
-        // デバッグ: 添付ファイル情報をログに出力
-        if (formData.attachments && formData.attachments.length > 0) {
-          formData.attachments.forEach((file, index) => {
-            if (file && typeof file === 'object' && file.size > 0) {
-              console.log(`送信する添付ファイル[${index}]:`, {
-                name: file.name,
-                type: file.type,
-                size: file.size
-              });
-            }
-          });
-        }
 
         // タスクサービスを使用して作成
-        const result = await taskService.createTask(taskData);
+        const response = await taskService.createTask(taskData);
         
+        if (response.success) {
         toast({
           title: "成功",
           description: "新しいタスクが作成されました！"
         });
+          // 一覧画面に戻る
+          navigate('/tasks');
+        } else {
+          throw new Error(response.message || 'タスクの作成に失敗しました');
+        }
       }
-
-      // 一覧画面に戻る
-      navigate('/tasks');
     } catch (err: any) {
       console.error('タスク送信エラー:', err);
       setError(err.message || 'タスクの送信中にエラーが発生しました');
@@ -640,89 +585,6 @@ const CreateTaskView: React.FC = () => {
                       </div>
                     )}
                   </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>添付ファイル</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    multiple
-                    className="hidden"
-                  />
-                  
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={openFileDialog}
-                    className="w-full border-dashed border-2 h-24 flex flex-col items-center justify-center"
-                  >
-                    <Upload className="h-6 w-6 mb-2" />
-                    <span>ファイルをドラッグ＆ドロップまたはクリックして選択</span>
-                    <span className="text-xs text-gray-500 mt-1">最大ファイルサイズ: 10MB</span>
-                  </Button>
-                  
-                  {/* 既存の添付ファイルのリスト */}
-                  {formData.existingAttachments.length > 0 && (
-                    <div className="space-y-2">
-                      <Label>既存の添付ファイル</Label>
-                      <div className="space-y-2">
-                        {formData.existingAttachments.map((file) => (
-                          <div
-                            key={file.id}
-                            className="flex items-center justify-between p-3 bg-gray-50 rounded-md"
-                          >
-                            <div className="flex items-center">
-                              <File className="h-5 w-5 mr-2 text-gray-500" />
-                              <span>{file.name}</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeExistingFile(file.id)}
-                              className="text-gray-500 hover:text-red-500"
-                            >
-                              <X className="h-5 w-5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* 新規アップロードファイルのリスト */}
-                  {formData.attachments.length > 0 && (
-                    <div className="space-y-2">
-                      <Label>新規アップロードファイル</Label>
-                      <div className="space-y-2">
-                        {formData.attachments.map((file, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between p-3 bg-gray-50 rounded-md"
-                          >
-                            <div className="flex items-center">
-                              <File className="h-5 w-5 mr-2 text-gray-500" />
-                              <span>{file.name}</span>
-                              <span className="ml-2 text-xs text-gray-500">
-                                ({Math.round(file.size / 1024)} KB)
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeFile(index)}
-                              className="text-gray-500 hover:text-red-500"
-                            >
-                              <X className="h-5 w-5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             </div>

@@ -12,29 +12,46 @@ interface TaskData {
   tags?: string;
   organization_id?: string;
   parent_task_id?: string;
-  subtasks?: {id: string | number; title: string; completed: boolean}[];
-  attachments?: File[];
+  subtasks?: {id?: string | number; title: string; completed: boolean}[];
 }
 
-// FormDataを作成するヘルパー関数 (createTask用)
-const createTaskFormData = (taskData: TaskData): FormData => {
-  const formData = new FormData();
-  Object.entries(taskData).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      if (key === 'attachments' && Array.isArray(value)) {
-        // 空でないファイルのみを添付
-        value.filter((file: File) => file && typeof file === 'object' && 'size' in file && file.size > 0)
-             .forEach((file: File) => formData.append(`task[${key}][]`, file));
-      } else if (key === 'subtasks' && Array.isArray(value)) {
-        formData.append(`task[${key}]`, JSON.stringify(value));
-      } else if (key === 'assigned_to' && value === null) {
-         // Do not append null assigned_to, backend handles this
-      } else {
-        formData.append(`task[${key}]`, String(value));
-      }
-    }
-  });
-  return formData;
+// タスクキャッシュ
+const taskCache: Record<string, {data: Task, timestamp: number}> = {};
+const CACHE_TTL = 1000 * 60 * 5; // 5分間キャッシュを保持
+
+// レスポンス構造の正規化ヘルパー関数
+const normalizeResponse = <T>(response: any): ApiResponse<T> => {
+  if (!response) {
+    return { success: false, message: 'レスポンスが空です' };
+  }
+
+  // レスポンスに直接dataがあるケース
+  if (response.success === true && response.data) {
+    return response as ApiResponse<T>;
+  }
+  
+  // APIからのデータ形式が不一致の場合に正規化
+  if (response.data && response.data.data) {
+    return {
+      success: true,
+      data: response.data.data as T,
+      message: response.message || response.data.message || 'Success'
+    };
+  }
+  
+  // データ形式が予期せぬ形式の場合のフォールバック
+  if (response.data) {
+    return {
+      success: true,
+      data: response.data as T,
+      message: response.message || 'Success'
+    };
+  }
+
+  return { 
+    success: false, 
+    message: response.message || 'データの形式が不正です' 
+  };
 };
 
 /**
@@ -48,14 +65,16 @@ const taskService = {
    * @param filters フィルタ条件
    */
   async getTasks(page = 1, perPage = 10, filters?: Record<string, any>): Promise<ApiResponse<PaginatedResponse<Task>>> {
+    try {
     const response = await api.get<any>('/api/tasks', { 
       page, 
       per_page: perPage,
       ...filters
     });
 
-    // APIレスポンスの構造を調整
-    if (response.success && response.data && response.data.data && response.data.meta) {
+      if (response.success && response.data) {
+        // データとメタ情報があるケース
+        if (response.data.data && response.data.meta) {
       return {
         success: true,
         data: {
@@ -67,240 +86,175 @@ const taskService = {
             total: response.data.meta.total_count
           }
         },
-        message: response.message
+            message: response.message || 'タスクを取得しました'
       };
-    } else if (response.success && response.data) {
-      // Handle cases where response might not have nested data/meta (adjust as needed)
-      console.warn("Unexpected response structure in getTasks:", response.data);
-      // Attempt to return data if it's an array, otherwise return failure
+        }
+        
+        // データが配列で直接返ってくるケース
       if (Array.isArray(response.data)) {
         return { 
           success: true, 
-          data: { data: response.data as Task[], meta: { current_page: 1, last_page: 1, per_page: response.data.length, total: response.data.length } }, 
-          message: response.message 
+            data: { 
+              data: response.data as Task[], 
+              meta: { 
+                current_page: 1, 
+                last_page: 1, 
+                per_page: response.data.length, 
+                total: response.data.length 
+              } 
+            }, 
+            message: response.message || 'タスクを取得しました' 
         };
-      } else {
-         return { ...response, success: false, message: response.message || "Failed to parse tasks data" };
+        }
       }
-    } 
-    
-    return { ...response, success: false }; // Ensure success: false if structure is wrong
+      
+      return { 
+        success: false, 
+        message: response.message || 'タスクデータの形式が不正です' 
+      };
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'タスク取得中にエラーが発生しました' 
+      };
+    }
   },
 
   /**
-   * 特定のタスクを取得
+   * 特定のタスクを取得（キャッシュ対応）
    * @param id タスクID
+   * @param forceRefresh キャッシュを無視して強制的に再取得するか
    */
-  async getTask(id: string): Promise<ApiResponse<Task>> {
-    const response = await api.get<any>(`/api/tasks/${id}`);
-    
-    // デバッグログを追加
-    console.log('getTask API response:', response);
-    if (response.success && response.data) {
-      console.log('getTask data structure:', response.data);
-      console.log('getTask response type:', typeof response.data);
+  async getTask(id: string, forceRefresh = false): Promise<ApiResponse<Task>> {
+    try {
+      // キャッシュチェック
+      const cachedTask = taskCache[id];
+      const now = Date.now();
       
-      let finalData: Task;
-      
-      if (response.data.data) {
-        console.log('getTask nested data: data内にdataキーが存在します');
-        console.log('getTask nested attachments:', response.data.data.attachment_urls);
-        finalData = response.data.data as Task;
-      } else {
-        console.log('getTask direct data: dataキーが直接データを格納しています');
-        console.log('getTask direct attachments:', response.data.attachment_urls);
-        finalData = response.data as Task;
-      }
-      
-      // 添付ファイルの構造を検証
-      if (finalData.attachment_urls) {
-        console.log('添付ファイルあり、構造:', finalData.attachment_urls);
-        console.log('添付ファイル type:', typeof finalData.attachment_urls);
-        console.log('添付ファイル isArray:', Array.isArray(finalData.attachment_urls));
-        
-        if (Array.isArray(finalData.attachment_urls)) {
-          console.log('添付ファイル数:', finalData.attachment_urls.length);
-          finalData.attachment_urls.forEach((attachment, index) => {
-            console.log(`添付ファイル[${index}]:`, attachment);
-          });
-        }
-      } else {
-        console.log('添付ファイルなし');
-      }
-      
-      if (response.data.data) {
+      // キャッシュが有効で、強制再取得でない場合はキャッシュから返す
+      if (!forceRefresh && cachedTask && (now - cachedTask.timestamp) < CACHE_TTL) {
+        console.log('Using cached task data for:', id);
         return {
           success: true,
-          data: finalData,
-          message: response.message
+          data: cachedTask.data,
+          message: 'キャッシュからタスクを取得しました'
         };
-      } else {
-        return { ...response, data: finalData };
       }
-    }
-    
-    return { ...response, success: false };
+      
+      const response = await api.get<any>(`/api/tasks/${id}`);
+      
+      if (response.success && response.data) {
+        let taskData: Task;
+        
+        // レスポンス構造に応じてデータを取得
+      if (response.data.data) {
+          console.log('Response has nested data structure');
+          taskData = response.data.data as Task;
+      } else {
+          console.log('Response has flat data structure');
+          taskData = response.data as Task;
+      }
+      
+        // キャッシュを更新
+        taskCache[id] = {
+          data: taskData,
+          timestamp: now
+        };
+        
+        return {
+          success: true,
+          data: taskData,
+          message: response.message || 'タスクを取得しました'
+        };
+      }
+      
+      return { 
+        success: false, 
+        message: response.message || 'タスクの取得に失敗しました' 
+      };
+    } catch (error) {
+      console.error('Error fetching task:', error);
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'タスク取得中にエラーが発生しました' 
+      };
+      }
   },
 
   /**
-   * 新しいタスクを作成（添付ファイル対応）
+   * キャッシュを無効化（更新や削除後に呼び出す）
+   * @param id タスクID
+   */
+  invalidateCache(id?: string) {
+    if (id) {
+      // 特定のタスクのキャッシュを削除
+      delete taskCache[id];
+    } else {
+      // すべてのタスクキャッシュをクリア
+      Object.keys(taskCache).forEach(key => delete taskCache[key]);
+    }
+  },
+
+  /**
+   * 新しいタスクを作成
    * @param taskData タスクデータ
    */
-  async createTask(taskData: any): Promise<ApiResponse<Task>> {
+  async createTask(taskData: TaskData): Promise<ApiResponse<Task>> {
     try {
-      const formData = new FormData();
+      const response = await api.post('/api/tasks', { task: taskData });
       
-      // 通常のフィールドをFormDataに追加
-      for (const key in taskData) {
-        if (key === 'newAttachmentFiles') continue;
-        
-        if (Array.isArray(taskData[key])) {
-          taskData[key].forEach((item: any, index: number) => {
-            formData.append(`task[${key}][]`, item);
-          });
-        } else if (taskData[key] !== null && taskData[key] !== undefined) {
-          formData.append(`task[${key}]`, taskData[key]);
-        }
-      }
-
-      // 新しい添付ファイルを追加
-      if (taskData.newAttachmentFiles && Array.isArray(taskData.newAttachmentFiles)) {
-        console.log(`ファイル送信前チェック: ${taskData.newAttachmentFiles.length}個のファイル`, taskData.newAttachmentFiles);
-        
-        taskData.newAttachmentFiles.forEach((file: any, index: number) => {
-          // ファイルの検証と詳細ログ
-          console.log(`処理中のファイル[${index}]:`, file, 
-            typeof file, 
-            file instanceof File, 
-            file && typeof file === 'object' ? `size:${file.size}` : 'no-size');
-          
-          // ファイルの検証
-          if (file && typeof file === 'object' && file.size > 0) {
-            try {
-              // Content-Dispositionヘッダーがファイル名を保持するよう明示的に指定
-              formData.append('task[attachments][]', file, file.name);
-              console.log(`添付ファイル[${index}]をFormDataに追加:`, file.name, file.type, file.size);
-            } catch (e) {
-              console.error(`ファイル追加エラー:`, e);
-            }
-          }
-        });
-      }
-      
-      // デバッグ用: 送信するFormDataの内容をコンソールに表示
-      console.log('FormData entries:');
-      for (const pair of formData.entries()) {
-        console.log(pair[0], pair[1]);
-      }
-
-      // POSTリクエストを送信
-      const response = await api.post('/api/tasks', formData, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
-      // APIレスポンスを適切な型に変換して返す
-      if (response.data && typeof response.data === 'object') {
+      if (response.success && response.data) {
         return {
           success: true,
           message: 'タスクが作成されました',
           data: response.data as Task
-        } as ApiResponse<Task>;
+        };
       }
 
-      return response.data as ApiResponse<Task>;
+      return {
+        success: false,
+        message: response.message || 'タスクの作成に失敗しました'
+      };
     } catch (error) {
       console.error('Error creating task:', error);
-      throw error;
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'タスク作成中にエラーが発生しました'
+      };
     }
   },
 
   /**
-   * タスクを更新（添付ファイル対応）
+   * タスクを更新
    * @param id タスクID
    * @param taskData 更新データ
    */
-  async updateTask(id: string, taskData: any): Promise<ApiResponse<Task>> {
+  async updateTask(id: string, taskData: TaskData): Promise<ApiResponse<Task>> {
     try {
-      const formData = new FormData();
+      const response = await api.patch(`/api/tasks/${id}`, { task: taskData });
       
-      // 通常のフィールドをFormDataに追加
-      for (const key in taskData) {
-        if (key === 'attachments' || key === 'newAttachmentFiles') continue;
+      if (response.success && response.data) {
+        // キャッシュを無効化
+        this.invalidateCache(id);
         
-        if (Array.isArray(taskData[key])) {
-          taskData[key].forEach((item: any, index: number) => {
-            formData.append(`task[${key}][]`, item);
-          });
-        } else if (taskData[key] !== null && taskData[key] !== undefined) {
-          formData.append(`task[${key}]`, taskData[key]);
-        }
-      }
-
-      // 保持する添付ファイルのIDを追加
-      if (taskData.attachments && Array.isArray(taskData.attachments)) {
-        const retainedIds = taskData.attachments
-          .filter((a: any) => a && a.id)
-          .map((a: any) => a.id);
-        
-        retainedIds.forEach((id: string, index: number) => {
-          formData.append(`task[retained_attachment_ids][]`, id);
-        });
-      }
-
-      // 新しい添付ファイルを追加
-      if (taskData.newAttachmentFiles && Array.isArray(taskData.newAttachmentFiles)) {
-        console.log(`ファイル送信前チェック: ${taskData.newAttachmentFiles.length}個のファイル`, taskData.newAttachmentFiles);
-        
-        taskData.newAttachmentFiles.forEach((file: any, index: number) => {
-          // ファイルの検証と詳細ログ
-          console.log(`処理中のファイル[${index}]:`, file, 
-            typeof file, 
-            file instanceof File, 
-            file && typeof file === 'object' ? `size:${file.size}` : 'no-size');
-          
-          // ファイルの検証
-          if (file && typeof file === 'object' && file.size > 0) {
-            try {
-              // Content-Dispositionヘッダーがファイル名を保持するよう明示的に指定
-              formData.append('task[attachments][]', file, file.name);
-              console.log(`添付ファイル[${index}]をFormDataに追加:`, file.name, file.type, file.size);
-            } catch (e) {
-              console.error(`ファイル追加エラー:`, e);
-            }
-          }
-        });
-      }
-      
-      // デバッグ用: 送信するFormDataの内容をコンソールに表示
-      console.log('FormData entries:');
-      for (const pair of formData.entries()) {
-        console.log(pair[0], pair[1]);
-      }
-
-      // PATCHリクエストを送信
-      const response = await api.patch(`/api/tasks/${id}`, formData, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
-      // APIレスポンスを適切な型に変換して返す
-      if (response.data && typeof response.data === 'object') {
         return {
           success: true,
           message: 'タスクが更新されました',
           data: response.data as Task
-        } as ApiResponse<Task>;
+        };
       }
 
-      return response.data as ApiResponse<Task>;
+      return {
+        success: false,
+        message: response.message || 'タスクの更新に失敗しました'
+      };
     } catch (error) {
       console.error('Error updating task:', error);
-      throw error;
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'タスク更新中にエラーが発生しました'
+      };
     }
   },
 
@@ -309,31 +263,58 @@ const taskService = {
    * @param id タスクID
    */
   async deleteTask(id: string): Promise<ApiResponse<null>> {
-    return api.delete<null>(`/api/tasks/${id}`);
+    try {
+      const response = await api.delete<null>(`/api/tasks/${id}`);
+      
+      // キャッシュを無効化
+      this.invalidateCache(id);
+      
+      return response as ApiResponse<null>;
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'タスク削除中にエラーが発生しました'
+      };
+    }
   },
   
   /**
    * 自分のタスク一覧を取得
    */
   async getMyTasks(): Promise<ApiResponse<Task[]>> {
+    try {
     const response = await api.get<any>('/api/tasks/my');
     
-    if (response.success && response.data && response.data.data) {
+      if (response.success && response.data) {
+        if (response.data.data) {
       return {
         success: true,
         data: response.data.data as Task[],
-        message: response.message
+            message: response.message || 'マイタスクを取得しました'
       };
-    } else if (response.success && response.data) {
-       console.warn("Unexpected response structure in getMyTasks:", response.data);
+        }
+        
        if (Array.isArray(response.data)) {
-           return { ...response, data: response.data as Task[] };
-       } else {
-           return { ...response, success: false, message: response.message || "Failed to parse my tasks data" };
-       }
+          return {
+            success: true,
+            data: response.data as Task[],
+            message: response.message || 'マイタスクを取得しました'
+          };
+        }
+      }
+      
+      return {
+        success: false,
+        message: response.message || 'マイタスクの取得に失敗しました'
+      };
+    } catch (error) {
+      console.error('Error fetching my tasks:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'マイタスク取得中にエラーが発生しました'
+      };
     }
-    
-    return { ...response, success: false };
   },
   
   /**
@@ -342,20 +323,32 @@ const taskService = {
    * @param status 新しいステータス
    */
   async updateTaskStatus(id: string, status: 'pending' | 'in_progress' | 'completed'): Promise<ApiResponse<Task>> {
+    try {
     const response = await api.put<any>(`/api/tasks/${id}/status`, { status });
     
-    if (response.success && response.data && response.data.data) {
+      // キャッシュを無効化
+      this.invalidateCache(id);
+      
+      if (response.success && response.data) {
+        const taskData = response.data.data || response.data;
+        return {
+          success: true,
+          data: taskData as Task,
+          message: response.message || 'ステータスが更新されました'
+        };
+      }
+      
       return {
-        success: true,
-        data: response.data.data as Task,
-        message: response.message
+        success: false,
+        message: response.message || 'ステータスの更新に失敗しました'
       };
-    } else if (response.success && response.data) {
-       console.warn("Unexpected response structure in updateTaskStatus:", response.data);
-       return { ...response, data: response.data as Task };
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'ステータス更新中にエラーが発生しました'
+      };
     }
-    
-    return { ...response, success: false };
   },
   
   /**
@@ -364,77 +357,133 @@ const taskService = {
    * @param userId 新しい担当者のID
    */
   async assignTask(id: string, userId: string): Promise<ApiResponse<Task>> {
+    try {
     const response = await api.put<any>(`/api/tasks/${id}/assign`, { user_id: userId });
     
-    if (response.success && response.data && response.data.data) {
+      // キャッシュを無効化
+      this.invalidateCache(id);
+      
+      if (response.success && response.data) {
+        const taskData = response.data.data || response.data;
+        return {
+          success: true,
+          data: taskData as Task,
+          message: response.message || '担当者が変更されました'
+        };
+      }
+      
       return {
-        success: true,
-        data: response.data.data as Task,
-        message: response.message
+        success: false,
+        message: response.message || '担当者の変更に失敗しました'
       };
-    } else if (response.success && response.data) {
-       console.warn("Unexpected response structure in assignTask:", response.data);
-       return { ...response, data: response.data as Task };
+    } catch (error) {
+      console.error('Error assigning task:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : '担当者変更中にエラーが発生しました'
+      };
     }
-    
-    return { ...response, success: false };
   },
   
   /**
    * ダッシュボード用のタスク統計情報を取得
    */
   async getTasksDashboard(): Promise<ApiResponse<any>> {
+    try {
     const response = await api.get<any>('/api/tasks/dashboard');
     
-    if (response.success && response.data && response.data.data) {
+      if (response.success && response.data) {
+        const dashboardData = response.data.data || response.data;
+        return {
+          success: true,
+          data: dashboardData,
+          message: response.message || 'ダッシュボードデータを取得しました'
+        };
+      }
+      
       return {
-        success: true,
-        data: response.data.data,
-        message: response.message
+        success: false,
+        message: response.message || 'ダッシュボードデータの取得に失敗しました'
       };
-    } else if (response.success && response.data) {
-       console.warn("Unexpected response structure in getTasksDashboard:", response.data);
-       return { ...response, data: response.data };
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'ダッシュボードデータ取得中にエラーが発生しました'
+      };
     }
-    
-    return { ...response, success: false };
   },
   
   /**
    * カレンダービュー用のタスクデータを取得
    */
   async getTasksCalendar(startDate?: string, endDate?: string): Promise<ApiResponse<any>> {
+    try {
     const response = await api.get<any>('/api/tasks/calendar', {
       start_date: startDate,
       end_date: endDate
     });
     
-    if (response.success && response.data && response.data.data) {
+      if (response.success && response.data) {
+        const calendarData = response.data.data || response.data;
+        return {
+          success: true,
+          data: calendarData,
+          message: response.message || 'カレンダーデータを取得しました'
+        };
+      }
+      
       return {
-        success: true,
-        data: response.data.data,
-        message: response.message
+        success: false,
+        message: response.message || 'カレンダーデータの取得に失敗しました'
       };
-    } else if (response.success && response.data) {
-       console.warn("Unexpected response structure in getTasksCalendar:", response.data);
-       return { ...response, data: response.data };
+    } catch (error) {
+      console.error('Error fetching calendar data:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'カレンダーデータ取得中にエラーが発生しました'
+      };
     }
-    
-    return { ...response, success: false };
   },
   
   /**
    * 複数タスクを一括更新
    */
   async batchUpdateTasks(tasks: Array<{id: string} & Partial<TaskData>>): Promise<ApiResponse<any>> {
-    return api.post<any>('/api/tasks/batch_update', { tasks });
+    try {
+      const response = await api.post<any>('/api/tasks/batch_update', { tasks });
+      
+      // 更新したタスクのキャッシュをすべて無効化
+      tasks.forEach(task => this.invalidateCache(task.id));
+      
+      return response;
+    } catch (error) {
+      console.error('Error batch updating tasks:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'タスク一括更新中にエラーが発生しました'
+      };
+    }
   },
   
   /**
    * タスクの並び替え
    */
   async reorderTasks(taskIds: string[]): Promise<ApiResponse<any>> {
-    return api.put<any>('/api/tasks/reorder', { task_ids: taskIds });
+    try {
+      const response = await api.put<any>('/api/tasks/reorder', { task_ids: taskIds });
+      
+      // すべてのタスクキャッシュを無効化
+      this.invalidateCache();
+      
+      return response;
+    } catch (error) {
+      console.error('Error reordering tasks:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'タスク並び替え中にエラーが発生しました'
+      };
+    }
   },
   
   /**
@@ -443,21 +492,33 @@ const taskService = {
    * @param subtaskId サブタスクID
    */
   async toggleSubtaskStatus(taskId: string, subtaskId: string): Promise<ApiResponse<{subtask: Task, parent_task: Task}>> {
+    try {
     const response = await api.put<any>(`/api/tasks/${taskId}/subtask/${subtaskId}/toggle`);
     
-    if (response.success && response.data && response.data.data) {
+      // 親タスクと対象サブタスクのキャッシュを無効化
+      this.invalidateCache(taskId);
+      this.invalidateCache(subtaskId);
+      
+      if (response.success && response.data) {
+        const resultData = response.data.data || response.data;
+        return {
+          success: true,
+          data: resultData as {subtask: Task, parent_task: Task},
+          message: response.message || 'サブタスクのステータスを切り替えました'
+        };
+      }
+      
       return {
-        success: true,
-        data: response.data.data as {subtask: Task, parent_task: Task},
-        message: response.message
+        success: false,
+        message: response.message || 'サブタスクのステータス切り替えに失敗しました'
       };
-    } else if (response.success && response.data) {
-       console.warn("Unexpected response structure in toggleSubtaskStatus:", response.data);
-       // Assuming the structure might not be nested
-       return { ...response, data: response.data as {subtask: Task, parent_task: Task} }; 
+    } catch (error) {
+      console.error('Error toggling subtask status:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'サブタスクのステータス切り替え中にエラーが発生しました'
+      };
     }
-    
-    return { ...response, success: false };
   }
 };
 
