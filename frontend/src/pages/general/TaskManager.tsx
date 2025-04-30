@@ -416,7 +416,10 @@ const TaskManagerView: React.FC = () => {
                     <CardContent className="p-3 pt-2">
                       {task.description && (
                         <CardDescription className="line-clamp-2 mb-2">
-                          <MarkdownRenderer content={task.description} className="line-clamp-2" />
+                          <MarkdownRenderer 
+                            content={task.description} 
+                            className="text-sm !line-clamp-2 !p-0 !m-0 [&_h1]:!text-sm [&_h2]:!text-sm [&_h3]:!text-sm [&_h4]:!text-sm [&_h5]:!text-sm [&_h6]:!text-sm [&_h1]:!font-normal [&_h2]:!font-normal [&_h3]:!font-normal [&_h4]:!font-normal [&_h5]:!font-normal [&_h6]:!font-normal [&_h1]:!my-0 [&_h2]:!my-0 [&_h3]:!my-0 [&_h4]:!my-0 [&_h5]:!my-0 [&_h6]:!my-0 [&_h1]:!mt-0 [&_h1]:!mb-0 [&_p]:!my-0 [&_ul]:!my-0 [&_ol]:!my-0 [&_blockquote]:!my-0" 
+                          />
                         </CardDescription>
                       )}
                       <div className="flex flex-wrap gap-1 mb-2">
@@ -515,7 +518,10 @@ const TaskManagerView: React.FC = () => {
               <CardContent className="pt-0">
                 {task.description && (
                   <div className="mb-4">
-                    <MarkdownRenderer content={task.description} />
+                    <h4 className="text-sm font-medium mb-2">説明</h4>
+                    <div className="border-t border-b border-border py-3 my-1">
+                      <MarkdownRenderer content={task.description} preserveLineBreaks={true} />
+                    </div>
                   </div>
                 )}
                 
@@ -849,11 +855,13 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
 
       <div className="mb-6">
         <h3 className="text-lg font-medium mb-2">説明</h3>
-        {task.description ? (
-          <MarkdownRenderer content={task.description} />
-        ) : (
-          <div className="text-base text-muted-foreground italic">説明なし</div>
-        )}
+        <div className="border-t border-b border-border py-4 my-2">
+          {task.description ? (
+            <MarkdownRenderer content={task.description} preserveLineBreaks={true} />
+          ) : (
+            <div className="text-base text-muted-foreground italic">説明なし</div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
