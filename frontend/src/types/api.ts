@@ -4,9 +4,10 @@
 
 // APIレスポンス共通インターフェース
 export interface ApiResponse<T> {
-  data: T;
-  message?: string;
   success: boolean;
+  data?: T;
+  message?: string;
+  errors?: string[];
 }
 
 // エラーレスポンスの型
@@ -51,8 +52,8 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  status: 'pending' | 'in_progress' | 'completed';
-  priority: 'low' | 'medium' | 'high';
+  status: 'pending' | 'in_progress' | 'review' | 'completed';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
   due_date?: string;
   assigned_to?: string;
   organization_id?: string;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,7 @@ import { format, parseISO } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { taskService } from "@/services";
 import { useToast } from "@/hooks";
+import { Task } from "@/types/api";
 
 // APIステータスとUIステータスのマッピング
 const statusToApiMapping: Record<string, string> = {
@@ -62,17 +63,24 @@ interface SubTask {
   id: number | string;
   title: string;
   completed: boolean;
+  _destroy?: boolean;
 }
 
-interface TaskFormData {
+// フォームデータの型定義
+interface FormState {
   title: string;
   description: string;
   status: "未着手" | "進行中" | "レビュー中" | "完了";
   priority: "低" | "中" | "高" | "緊急";
-  dueDate: Date | undefined;
+  dueDate?: Date;
   assigneeId: string | null;
   tags: string[];
-  subtasks: SubTask[];
+  subtasks: {
+    id: string | number;
+    title: string;
+    completed: boolean;
+    _destroy?: boolean;
+  }[];
 }
 
 const CreateTaskView: React.FC = () => {
@@ -86,6 +94,7 @@ const CreateTaskView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [, setError] = useState<string | null>(null);
   const { toast } = useToast();
   
   // サンプルユーザーデータ（後でAPIから取得する）
@@ -97,7 +106,7 @@ const CreateTaskView: React.FC = () => {
   ];
   
   // フォームの初期状態
-  const [formData, setFormData] = useState<TaskFormData>({
+  const [formData, setFormData] = useState<FormState>({
     title: "",
     description: "",
     status: "未着手",
@@ -217,7 +226,7 @@ const CreateTaskView: React.FC = () => {
   const addSubtask = () => {
     if (subtaskInput.trim()) {
       const newSubtask: SubTask = {
-        id: Date.now(), // 一時的なIDとして現在のタイムスタンプを使用
+        id: `temp_${Date.now()}`, // 一時的なIDに'temp_'プレフィックスを追加
         title: subtaskInput.trim(),
         completed: false
       };
@@ -229,12 +238,23 @@ const CreateTaskView: React.FC = () => {
     }
   };
   
-  // サブタスクを削除
+  // サブタスクを削除（編集モード用）
+  const markSubtaskForRemoval = (id: number | string) => {
+    setFormData(prev => ({
+      ...prev,
+      subtasks: prev.subtasks.map(subtask => 
+        subtask.id === id ? { ...subtask, _destroy: true } : subtask
+      )
+    }));
+  };
+  
+  // サブタスクを削除（新規作成モード用 - UIから完全に消す）
   const removeSubtask = (id: number | string) => {
-    setFormData({
-      ...formData,
-      subtasks: formData.subtasks.filter(subtask => subtask.id !== id)
-    });
+    setFormData(prev => ({
+      ...prev,
+      // 削除対象外のサブタスクのみ残す（_destroyフラグが付いているものも除く）
+      subtasks: prev.subtasks.filter(subtask => subtask.id !== id && !subtask._destroy)
+    }));
   };
   
   // サブタスクの完了状態を切り替え
@@ -247,72 +267,94 @@ const CreateTaskView: React.FC = () => {
     });
   };
   
-  // フォームデータをAPIフォーマットに変換
-  const convertFormDataToApiFormat = () => {
-    return {
-      title: formData.title,
-      description: formData.description || "",
-      status: statusToApiMapping[formData.status] as 'pending' | 'in_progress' | 'completed',
-      priority: priorityToApiMapping[formData.priority] as 'low' | 'medium' | 'high',
-      due_date: formData.dueDate ? format(formData.dueDate, 'yyyy-MM-dd') : undefined,
-      assigned_to: formData.assigneeId,
-      // APIが期待する形式でタグを送信
-      tags: formData.tags.join(','),
-      // サブタスクを送信
-      subtasks: formData.subtasks.map(subtask => ({
-        id: subtask.id,  // 既存のIDを保持
-        title: subtask.title,
-        completed: subtask.completed
-      }))
-    };
-  };
-  
-  // フォーム送信ハンドラ
+  // フォーム送信
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    // バリデーション（例：タイトルが空でないか）
     if (!formData.title.trim()) {
       toast({
         title: "入力エラー",
-        description: "タイトルは必須項目です",
+        description: "タスクタイトルを入力してください。",
         variant: "destructive"
       });
       return;
     }
-    
+
+    // API送信用のデータ形式に変換
+    const formDataToSubmit = {
+      title: formData.title,
+      description: formData.description,
+      status: statusToApiMapping[formData.status] as 'pending' | 'in_progress' | 'review' | 'completed',
+      priority: priorityToApiMapping[formData.priority] as 'low' | 'medium' | 'high' | 'urgent',
+      due_date: formData.dueDate ? format(formData.dueDate, 'yyyy-MM-dd') : undefined,
+      assigned_to: formData.assigneeId,
+      tags: formData.tags.join(','), // tagsを文字列に変換
+    };
+
+    const payload = {
+      task: {
+        ...formDataToSubmit,
+        // サブタスクの送信形式を調整
+        subtasks_attributes: formData.subtasks.map(subtask => {
+          const subtaskPayload: any = {
+            title: subtask.title,
+            // completed を status に変換
+            status: subtask.completed ? 'completed' : 'pending',
+            _destroy: subtask._destroy // 削除フラグ
+          };
+          // 既存のサブタスク（数値IDまたはUUID）の場合のみIDを含める
+          // 一時的なID（temp_...）は含めない
+          if (typeof subtask.id === 'number' || (typeof subtask.id === 'string' && !subtask.id.startsWith('temp_'))) {
+            subtaskPayload.id = subtask.id;
+          }
+          return subtaskPayload;
+        }).filter(subtask => !subtask._destroy || subtask.id) // _destroyがtrueでもIDがあれば送信（削除のため）, IDがなければ送信しない（新規追加をキャンセルした場合など）
+      }
+    };
+
+    // TaskData型に合わせる (taskServiceが期待する形式)
+    const taskDataPayload = payload.task;
+
+    // デバッグログ
+    console.log("送信ペイロード (TaskData):", JSON.stringify(taskDataPayload, null, 2));
+
     setLoading(true);
+    setError(null);
     
     try {
-      const apiTaskData = convertFormDataToApiFormat();
       let response;
-      
       if (isEditMode && taskId) {
-        // 編集モード: 既存タスクを更新
-        const actualTaskId = taskId.toString();
-        response = await taskService.updateTask(actualTaskId, apiTaskData);
+        // 編集モード
+        response = await taskService.updateTask(taskId.toString(), taskDataPayload);
       } else {
-        // 新規作成モード: 新しいタスクを作成
-        response = await taskService.createTask(apiTaskData);
+        // 新規作成モード
+        response = await taskService.createTask(taskDataPayload);
       }
       
       if (response.success) {
         toast({
-          title: isEditMode ? "タスク更新成功" : "タスク作成成功",
-          description: isEditMode ? "タスクが更新されました" : "新しいタスクが作成されました",
+          title: isEditMode ? "成功" : "成功",
+          description: isEditMode ? "タスクが更新されました" : "タスクが作成されました",
         });
-        navigate("/tasks");
+        navigate('/tasks');
       } else {
+        const errorMessage = response.message || (response.errors ? response.errors.join(', ') : "不明なエラー");
+        setError(errorMessage);
         toast({
           title: "エラー",
-          description: response.message || (isEditMode ? "タスクの更新に失敗しました" : "タスクの作成に失敗しました"),
+          description: `タスクの送信に失敗しました: ${errorMessage}`,
           variant: "destructive"
         });
+        console.error("タスク送信エラー:", response);
       }
-    } catch (error) {
-      console.error(isEditMode ? "タスク更新エラー:" : "タスク作成エラー:", error);
+    } catch (error: any) {
+      console.error("タスク送信エラー:", error);
+      const message = error.response?.data?.message || error.response?.data?.errors?.join(', ') || error.message || "予期せぬエラーが発生しました";
+      setError(message);
       toast({
         title: "エラー",
-        description: isEditMode ? "タスクの更新中にエラーが発生しました" : "タスクの作成中にエラーが発生しました",
+        description: `タスクの送信に失敗しました: ${message}`,
         variant: "destructive"
       });
     } finally {
@@ -548,7 +590,7 @@ const CreateTaskView: React.FC = () => {
                             </div>
                             <button
                               type="button"
-                              onClick={() => removeSubtask(subtask.id)}
+                              onClick={() => isEditMode ? markSubtaskForRemoval(subtask.id) : removeSubtask(subtask.id)}
                               className="text-gray-500 hover:text-gray-700"
                             >
                               <X className="h-4 w-4" />

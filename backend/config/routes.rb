@@ -1,4 +1,11 @@
 Rails.application.routes.draw do
+  # Active Storageのルートを明示的にマウント（これだけで十分です）
+  mount ActiveStorage::Engine => "/rails/active_storage"
+  
+  # カスタムActiveStorageルート
+  get '/storage/proxy/:signed_id/*filename', to: 'api/active_storage#proxy', as: :custom_blob_proxy
+  get '/storage/download/:signed_id/*filename', to: 'api/active_storage#download', as: :custom_blob_download
+  
   # API routes
   namespace :api do
     get "invitations/create"
@@ -23,6 +30,7 @@ Rails.application.routes.draw do
     resources :manuals do
       collection do
         get 'search'
+        get 'categories'
         get 'my'  # 自分のマニュアル一覧
       end
     end
@@ -46,6 +54,7 @@ Rails.application.routes.draw do
     
     # ミーティング関連のエンドポイント
     resources :meetings do
+      resources :meeting_participants, only: [:index, :create, :destroy]
       collection do
         get 'my'  # 自分のミーティング一覧
       end
@@ -82,42 +91,6 @@ Rails.application.routes.draw do
         post 'use/:code', to: 'invitations#use'
       end
     end
-
-    # タスク管理
-    resources :tasks do
-      collection do
-        get :calendar
-        get :dashboard
-        get :my  # 自分のタスク一覧
-      end
-      
-      member do
-        put 'status', to: 'tasks#update_status'  # ステータス更新
-        put 'assign', to: 'tasks#assign'  # 担当者変更
-      end
-    end
-    
-    # マニュアル管理
-    resources :manuals do
-      collection do
-        get :search
-        get :categories
-        get :my  # 自分のマニュアル一覧
-      end
-    end
-    
-    # ミーティング管理
-    resources :meetings do
-      resources :meeting_participants, only: [:index, :create, :destroy]
-      collection do
-        get :my  # 自分のミーティング一覧
-      end
-      
-      member do
-        post 'participants', to: 'meetings#add_participants'
-        delete 'participants/:user_id', to: 'meetings#remove_participant'
-      end
-    end
     
     # 勤怠管理
     scope :attendance do
@@ -131,4 +104,7 @@ Rails.application.routes.draw do
       get '/summary', to: 'attendance#summary'
     end
   end
+  
+  # 画像ファイルアクセス用のルート
+  get 'images/:filename', to: 'images#show'
 end

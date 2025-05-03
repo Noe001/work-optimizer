@@ -5,15 +5,24 @@ import { ApiResponse, Task, PaginatedResponse, SubTask } from '../types/api';
 interface TaskData {
   title: string;
   description?: string;
-  status?: 'pending' | 'in_progress' | 'completed';
-  priority?: 'low' | 'medium' | 'high';
+  status?: 'pending' | 'in_progress' | 'review' | 'completed';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
   due_date?: string;
   assigned_to?: string | null;
   tags?: string;
   organization_id?: string;
   parent_task_id?: string;
-  subtasks?: SubTask[];
+  // サブタスクは更新・作成時に別途処理が必要なため、ここでは含めない
+  // subtasks?: Array<{
+  //   id?: string | number; 
+  //   title: string; 
+  //   status?: 'pending' | 'completed';
+  // }>;
 }
+
+// タスクキャッシュ
+const taskCache: Record<string, {data: Task, timestamp: number}> = {};
+const CACHE_TTL = 1000 * 60 * 5; // 5分間キャッシュを保持
 
 /**
  * タスク管理サービス
@@ -26,14 +35,16 @@ const taskService = {
    * @param filters フィルタ条件
    */
   async getTasks(page = 1, perPage = 10, filters?: Record<string, any>): Promise<ApiResponse<PaginatedResponse<Task>>> {
+    try {
     const response = await api.get<any>('/api/tasks', { 
       page, 
       per_page: perPage,
       ...filters
     });
 
-    // APIレスポンスの構造を調整
-    if (response.success && response.data) {
+      if (response.success && response.data) {
+        // データとメタ情報があるケース
+        if (response.data.data && response.data.meta) {
       return {
         success: true,
         data: {
@@ -45,66 +56,180 @@ const taskService = {
             total: response.data.meta.total_count
           }
         },
-        message: response.message
+            message: response.message || 'タスクを取得しました'
+      };
+        }
+        
+        // データが配列で直接返ってくるケース
+      if (Array.isArray(response.data)) {
+        return { 
+          success: true, 
+            data: { 
+              data: response.data as Task[], 
+              meta: { 
+                current_page: 1, 
+                last_page: 1, 
+                per_page: response.data.length, 
+                total: response.data.length 
+              } 
+            }, 
+            message: response.message || 'タスクを取得しました' 
+        };
+        }
+      }
+      
+      return { 
+        success: false, 
+        message: response.message || 'タスクデータの形式が不正です' 
+      };
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'タスク取得中にエラーが発生しました' 
       };
     }
-    
-    return response;
   },
 
   /**
-   * 特定のタスクを取得
+   * 特定のタスクを取得（キャッシュ対応）
+   * @param id タスクID
+   * @param forceRefresh キャッシュを無視して強制的に再取得するか
+   */
+  async getTask(id: string, forceRefresh = false): Promise<ApiResponse<Task>> {
+    try {
+      // キャッシュチェック
+      const cachedTask = taskCache[id];
+      const now = Date.now();
+      
+      // キャッシュが有効で、強制再取得でない場合はキャッシュから返す
+      if (!forceRefresh && cachedTask && (now - cachedTask.timestamp) < CACHE_TTL) {
+        console.log('Using cached task data for:', id);
+        return {
+          success: true,
+          data: cachedTask.data,
+          message: 'キャッシュからタスクを取得しました'
+        };
+      }
+      
+      const response = await api.get<any>(`/api/tasks/${id}`);
+      
+      if (response.success && response.data) {
+        let taskData: Task;
+        
+        // レスポンス構造に応じてデータを取得
+      if (response.data.data) {
+          console.log('Response has nested data structure');
+          taskData = response.data.data as Task;
+      } else {
+          console.log('Response has flat data structure');
+          taskData = response.data as Task;
+      }
+      
+        // キャッシュを更新
+        taskCache[id] = {
+          data: taskData,
+          timestamp: now
+        };
+        
+        return {
+          success: true,
+          data: taskData,
+          message: response.message || 'タスクを取得しました'
+        };
+      }
+      
+      return { 
+        success: false, 
+        message: response.message || 'タスクの取得に失敗しました' 
+      };
+    } catch (error) {
+      console.error('Error fetching task:', error);
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'タスク取得中にエラーが発生しました' 
+      };
+      }
+  },
+
+  /**
+   * キャッシュを無効化（更新や削除後に呼び出す）
    * @param id タスクID
    */
-  async getTask(id: string): Promise<ApiResponse<Task>> {
-    const response = await api.get<any>(`/api/tasks/${id}`);
-    
-    if (response.success && response.data) {
-      return {
-        success: true,
-        data: response.data.data,
-        message: response.message
-      };
+  invalidateCache(id?: string) {
+    if (id) {
+      // 特定のタスクのキャッシュを削除
+      delete taskCache[id];
+    } else {
+      // すべてのタスクキャッシュをクリア
+      Object.keys(taskCache).forEach(key => delete taskCache[key]);
     }
-    
-    return response;
   },
 
   /**
-   * タスクを作成
+   * 新しいタスクを作成
    * @param taskData タスクデータ
    */
   async createTask(taskData: TaskData): Promise<ApiResponse<Task>> {
-    const response = await api.post<any>('/api/tasks', { task: taskData });
-    
-    if (response.success && response.data) {
+    try {
+      // サブタスク関連の処理を削除
+      console.log('送信するタスクデータ (作成):', taskData);
+      const response = await api.post('/api/tasks', { task: taskData });
+      
+      if (response.success && response.data) {
+        return {
+          success: true,
+          message: 'タスクが作成されました',
+          data: response.data as Task
+        };
+      }
+
       return {
-        success: true,
-        data: response.data.data,
-        message: response.message
+        success: false,
+        message: response.message || 'タスクの作成に失敗しました'
+      };
+    } catch (error) {
+      console.error('Error creating task:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'タスク作成中にエラーが発生しました'
       };
     }
-    
-    return response;
   },
 
   /**
    * タスクを更新
    * @param id タスクID
-   * @param taskData 更新するタスクデータ
+   * @param taskData 更新データ
    */
-  async updateTask(id: string, taskData: Partial<TaskData>): Promise<ApiResponse<Task>> {
-    const response = await api.put<any>(`/api/tasks/${id}`, { task: taskData });
-    
-    if (response.success && response.data) {
+  async updateTask(id: string, taskData: TaskData): Promise<ApiResponse<Task>> {
+    try {
+      // サブタスク関連の処理を削除
+      console.log('送信するタスクデータ (更新):', taskData);
+      const response = await api.patch(`/api/tasks/${id}`, { task: taskData });
+      
+      if (response.success && response.data) {
+        // キャッシュを無効化
+        this.invalidateCache(id);
+        
+        return {
+          success: true,
+          message: 'タスクが更新されました',
+          data: response.data as Task
+        };
+      }
+
       return {
-        success: true,
-        data: response.data.data,
-        message: response.message
+        success: false,
+        message: response.message || 'タスクの更新に失敗しました'
+      };
+    } catch (error) {
+      console.error('Error updating task:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'タスク更新中にエラーが発生しました'
       };
     }
-    
-    return response;
   },
 
   /**
@@ -112,24 +237,58 @@ const taskService = {
    * @param id タスクID
    */
   async deleteTask(id: string): Promise<ApiResponse<null>> {
-    return api.delete<null>(`/api/tasks/${id}`);
+    try {
+      const response = await api.delete<null>(`/api/tasks/${id}`);
+      
+      // キャッシュを無効化
+      this.invalidateCache(id);
+      
+      return response as ApiResponse<null>;
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'タスク削除中にエラーが発生しました'
+      };
+    }
   },
   
   /**
    * 自分のタスク一覧を取得
    */
   async getMyTasks(): Promise<ApiResponse<Task[]>> {
+    try {
     const response = await api.get<any>('/api/tasks/my');
     
-    if (response.success && response.data) {
+      if (response.success && response.data) {
+        if (response.data.data) {
       return {
         success: true,
-        data: response.data.data,
-        message: response.message
+        data: response.data.data as Task[],
+            message: response.message || 'マイタスクを取得しました'
+      };
+        }
+        
+       if (Array.isArray(response.data)) {
+          return {
+            success: true,
+            data: response.data as Task[],
+            message: response.message || 'マイタスクを取得しました'
+          };
+        }
+      }
+      
+      return {
+        success: false,
+        message: response.message || 'マイタスクの取得に失敗しました'
+      };
+    } catch (error) {
+      console.error('Error fetching my tasks:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'マイタスク取得中にエラーが発生しました'
       };
     }
-    
-    return response;
   },
   
   /**
@@ -138,17 +297,32 @@ const taskService = {
    * @param status 新しいステータス
    */
   async updateTaskStatus(id: string, status: 'pending' | 'in_progress' | 'completed'): Promise<ApiResponse<Task>> {
+    try {
     const response = await api.put<any>(`/api/tasks/${id}/status`, { status });
     
-    if (response.success && response.data) {
+      // キャッシュを無効化
+      this.invalidateCache(id);
+      
+      if (response.success && response.data) {
+        const taskData = response.data.data || response.data;
+        return {
+          success: true,
+          data: taskData as Task,
+          message: response.message || 'ステータスが更新されました'
+        };
+      }
+      
       return {
-        success: true,
-        data: response.data.data,
-        message: response.message
+        success: false,
+        message: response.message || 'ステータスの更新に失敗しました'
+      };
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'ステータス更新中にエラーが発生しました'
       };
     }
-    
-    return response;
   },
   
   /**
@@ -157,68 +331,133 @@ const taskService = {
    * @param userId 新しい担当者のID
    */
   async assignTask(id: string, userId: string): Promise<ApiResponse<Task>> {
+    try {
     const response = await api.put<any>(`/api/tasks/${id}/assign`, { user_id: userId });
     
-    if (response.success && response.data) {
+      // キャッシュを無効化
+      this.invalidateCache(id);
+      
+      if (response.success && response.data) {
+        const taskData = response.data.data || response.data;
+        return {
+          success: true,
+          data: taskData as Task,
+          message: response.message || '担当者が変更されました'
+        };
+      }
+      
       return {
-        success: true,
-        data: response.data.data,
-        message: response.message
+        success: false,
+        message: response.message || '担当者の変更に失敗しました'
+      };
+    } catch (error) {
+      console.error('Error assigning task:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : '担当者変更中にエラーが発生しました'
       };
     }
-    
-    return response;
   },
   
   /**
    * ダッシュボード用のタスク統計情報を取得
    */
   async getTasksDashboard(): Promise<ApiResponse<any>> {
+    try {
     const response = await api.get<any>('/api/tasks/dashboard');
     
-    if (response.success && response.data) {
+      if (response.success && response.data) {
+        const dashboardData = response.data.data || response.data;
+        return {
+          success: true,
+          data: dashboardData,
+          message: response.message || 'ダッシュボードデータを取得しました'
+        };
+      }
+      
       return {
-        success: true,
-        data: response.data.data,
-        message: response.message
+        success: false,
+        message: response.message || 'ダッシュボードデータの取得に失敗しました'
+      };
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'ダッシュボードデータ取得中にエラーが発生しました'
       };
     }
-    
-    return response;
   },
   
   /**
    * カレンダービュー用のタスクデータを取得
    */
   async getTasksCalendar(startDate?: string, endDate?: string): Promise<ApiResponse<any>> {
+    try {
     const response = await api.get<any>('/api/tasks/calendar', {
       start_date: startDate,
       end_date: endDate
     });
     
-    if (response.success && response.data) {
+      if (response.success && response.data) {
+        const calendarData = response.data.data || response.data;
+        return {
+          success: true,
+          data: calendarData,
+          message: response.message || 'カレンダーデータを取得しました'
+        };
+      }
+      
       return {
-        success: true,
-        data: response.data.data,
-        message: response.message
+        success: false,
+        message: response.message || 'カレンダーデータの取得に失敗しました'
+      };
+    } catch (error) {
+      console.error('Error fetching calendar data:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'カレンダーデータ取得中にエラーが発生しました'
       };
     }
-    
-    return response;
   },
   
   /**
    * 複数タスクを一括更新
    */
   async batchUpdateTasks(tasks: Array<{id: string} & Partial<TaskData>>): Promise<ApiResponse<any>> {
-    return api.post<any>('/api/tasks/batch_update', { tasks });
+    try {
+      const response = await api.post<any>('/api/tasks/batch_update', { tasks });
+      
+      // 更新したタスクのキャッシュをすべて無効化
+      tasks.forEach(task => this.invalidateCache(task.id));
+      
+      return response;
+    } catch (error) {
+      console.error('Error batch updating tasks:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'タスク一括更新中にエラーが発生しました'
+      };
+    }
   },
   
   /**
    * タスクの並び替え
    */
   async reorderTasks(taskIds: string[]): Promise<ApiResponse<any>> {
-    return api.put<any>('/api/tasks/reorder', { task_ids: taskIds });
+    try {
+      const response = await api.put<any>('/api/tasks/reorder', { task_ids: taskIds });
+      
+      // すべてのタスクキャッシュを無効化
+      this.invalidateCache();
+      
+      return response;
+    } catch (error) {
+      console.error('Error reordering tasks:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'タスク並び替え中にエラーが発生しました'
+      };
+    }
   },
   
   /**
@@ -227,18 +466,64 @@ const taskService = {
    * @param subtaskId サブタスクID
    */
   async toggleSubtaskStatus(taskId: string, subtaskId: string): Promise<ApiResponse<{subtask: Task, parent_task: Task}>> {
-    const response = await api.put<any>(`/api/tasks/${taskId}/subtask/${subtaskId}/toggle`);
+    try {
+      // リクエストボディにサブタスクIDを含める -> ルートに含めるように変更
+      const response = await api.put<any>(`/api/tasks/${taskId}/subtask/${subtaskId}/toggle`, {
+        // ボディは空で良いか、必要に応じてパラメータを追加
+        // debug_info: {
+        //   task_id: taskId,
+        //   subtask_id: subtaskId
+        // }
+      });
     
-    if (response.success && response.data) {
+      // 親タスクと対象サブタスクのキャッシュを無効化
+      this.invalidateCache(taskId);
+      
+      if (response.success && response.data) {
+        const resultData = response.data.data || response.data;
+        return {
+          success: true,
+          data: resultData as {subtask: Task, parent_task: Task},
+          message: response.message || 'サブタスクのステータスを切り替えました'
+        };
+      }
+      
       return {
-        success: true,
-        data: response.data.data,
-        message: response.message
+        success: false,
+        message: response.message || 'サブタスクのステータス切り替えに失敗しました'
+      };
+    } catch (error) {
+      console.error('Error toggling subtask status:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'サブタスクのステータス切り替え中にエラーが発生しました'
       };
     }
-    
-    return response;
-  }
+  },
 };
 
-export default taskService; 
+export default taskService;
+
+/**
+ * タスクの進捗度を計算するヘルパー関数
+ * @param task 進捗度を計算するタスク
+ * @returns 0から100の間の進捗度
+ */
+export const getTaskProgress = (task: Task): number => {
+  // タスクが完了している場合は100%
+  if (task.status === 'completed') return 100;
+  
+  // サブタスクがある場合は、完了したサブタスクの割合を計算
+  if (task.subtasks && task.subtasks.length > 0) {
+    const completedSubtasks = task.subtasks.filter(subtask => 
+      subtask.status === 'completed' || (subtask as any).completed === true
+    ).length;
+    return Math.round((completedSubtasks / task.subtasks.length) * 100);
+  }
+  
+  // 進行中のタスクで、サブタスクがない場合は50%とする
+  if (task.status === 'in_progress') return 50;
+  
+  // それ以外の場合（未着手など）は0%
+  return 0;
+};
