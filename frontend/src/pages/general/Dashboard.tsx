@@ -536,6 +536,7 @@ const ManualsTab: React.FC = () => {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{selectedTemplate?.title}</DialogTitle>
+                <DialogDescription>マニュアルテンプレートの詳細情報を表示します</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">{selectedTemplate?.description}</p>
@@ -728,6 +729,7 @@ const KnowledgeTab: React.FC = () => {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{selectedKnowledge?.title}</DialogTitle>
+                <DialogDescription>ナレッジの詳細情報を表示します</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">

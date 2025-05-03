@@ -10,17 +10,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, Search, Plus, Filter, List, CalendarDays, ChevronUp, ChevronDown, Edit, Trash2, Loader2, File, FileX, Image, Download } from "lucide-react";
+import { Calendar, Search, Plus, Filter, List, CalendarDays, ChevronUp, ChevronDown, Edit, Trash2, Loader2, File, FileX, Image, Download, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link, useNavigate } from "react-router-dom";
 import { taskService } from "@/services";
-import { Task as ApiTask } from "@/types/api";
+import { Task as ApiTask, ApiResponse } from "@/types/api";
 import { usePaginatedApi } from "@/hooks";
 import { ApiError } from "@/components/ui/api-error";
 import { LoadingIndicator } from "@/components/ui/loading-indicator";
 import { useToast } from "@/hooks";
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { ja } from "date-fns/locale";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 
 interface User {
   id: number;
@@ -88,6 +93,56 @@ const TaskManagerView: React.FC = () => {
   const [updatingSubtasks, setUpdatingSubtasks] = useState<Record<string | number, boolean>>({});
   const { toast } = useToast();
 
+  // 削除確認用の状態を追加
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  // 拡張フィルター機能
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [filterStartDate, setFilterStartDate] = useState<Date | null>(null);
+  const [filterEndDate, setFilterEndDate] = useState<Date | null>(null);
+  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [newTagInput, setNewTagInput] = useState('');
+
+  // 保存済みフィルター機能
+  const [savedFilters, setSavedFilters] = useState<{
+    id: string;
+    name: string;
+    filters: {
+      status?: string;
+      priority?: string | null;
+      assignee?: string;
+      tags?: string[];
+      startDate?: Date | null;
+      endDate?: Date | null;
+      statuses?: string[];
+      search?: string;
+    };
+  }[]>([
+    {
+      id: '1',
+      name: '優先度高のタスク',
+      filters: {
+        priority: '高',
+      }
+    },
+    {
+      id: '2',
+      name: '今週期限のタスク',
+      filters: {
+        startDate: new Date(),
+        endDate: new Date(new Date().setDate(new Date().getDate() + 7)),
+      }
+    }
+  ]);
+  
+  // 現在のフィルター名
+  const [currentFilterName, setCurrentFilterName] = useState('');
+  
+  // クイックフィルターが開いているかどうか
+  const [quickFilterOpen, setQuickFilterOpen] = useState(false);
+  
   // サンプルユーザーデータ
   const users: User[] = [
     { id: 1, name: "佐藤太郎", initials: "ST" },
@@ -113,7 +168,11 @@ const TaskManagerView: React.FC = () => {
       status: activeTab !== 'all' ? activeTab : undefined,
       search: searchTerm,
       priority: filterPriority,
-      assignee: filterAssignee !== 'all' ? filterAssignee : undefined
+      assignee: filterAssignee !== 'all' ? filterAssignee : undefined,
+      tags: filterTags.length > 0 ? filterTags.join(',') : undefined,
+      start_date: filterStartDate ? format(filterStartDate, 'yyyy-MM-dd') : undefined,
+      end_date: filterEndDate ? format(filterEndDate, 'yyyy-MM-dd') : undefined,
+      statuses: filterStatuses.length > 0 ? filterStatuses.join(',') : undefined
     }
   );
 
@@ -122,6 +181,26 @@ const TaskManagerView: React.FC = () => {
     if (apiTasks && apiTasks.length > 0) {
       const uiTasks = apiTasks.map(apiTask => convertApiTaskToUITask(apiTask));
       setTasks(uiTasks);
+      
+      // 利用可能なタグを収集
+      const tagSet = new Set<string>();
+      apiTasks.forEach(task => {
+        if (task.tags) {
+          if (Array.isArray(task.tags)) {
+            task.tags.forEach(tag => tagSet.add(tag));
+          } else if (typeof task.tags === 'string') {
+            task.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(tag => tagSet.add(tag));
+          }
+        }
+        if (task.tag_list) {
+          if (Array.isArray(task.tag_list)) {
+            task.tag_list.forEach(tag => tagSet.add(tag));
+          } else if (typeof task.tag_list === 'string') {
+            task.tag_list.split(',').map(t => t.trim()).filter(Boolean).forEach(tag => tagSet.add(tag));
+          }
+        }
+      });
+      setAvailableTags(Array.from(tagSet));
     }
   }, [apiTasks]);
 
@@ -136,9 +215,13 @@ const TaskManagerView: React.FC = () => {
       status: activeTab !== 'all' ? activeTab : undefined,
       search: searchTerm,
       priority: filterPriority,
-      assignee: filterAssignee !== 'all' ? filterAssignee : undefined
+      assignee: filterAssignee !== 'all' ? filterAssignee : undefined,
+      tags: filterTags.length > 0 ? filterTags.join(',') : undefined,
+      start_date: filterStartDate ? format(filterStartDate, 'yyyy-MM-dd') : undefined,
+      end_date: filterEndDate ? format(filterEndDate, 'yyyy-MM-dd') : undefined,
+      statuses: filterStatuses.length > 0 ? filterStatuses.join(',') : undefined
     });
-  }, [activeTab, searchTerm, filterPriority, filterAssignee, updateParams]);
+  }, [activeTab, searchTerm, filterPriority, filterAssignee, filterTags, filterStartDate, filterEndDate, filterStatuses, updateParams]);
 
   // APIタスクをUIタスク形式に変換する
   const convertApiTaskToUITask = (apiTask: ApiTask): UITask => {
@@ -184,19 +267,16 @@ const TaskManagerView: React.FC = () => {
     // サブタスクの変換
     let subtasks: { id: string | number; title: string; completed: boolean }[] = [];
     
+    // getTaskで取得したタスクデータにサブタスクが含まれていることを期待する
     if (apiTask.subtasks && Array.isArray(apiTask.subtasks)) {
+      console.log('サブタスクデータ:', apiTask.subtasks);
       subtasks = apiTask.subtasks.map(subtask => ({
-        id: subtask.id,
+        id: subtask.id || Math.random().toString(36).substring(2, 10), // IDがない場合はランダムなIDを生成
         title: subtask.title,
-        completed: subtask.status === 'completed'
+        completed: subtask.status === 'completed' || (subtask as any).completed === true
       }));
     } else {
-      // APIにサブタスクが実装されていない場合のフォールバック
-      subtasks = [
-        { id: 1, title: "業務フローの整理", completed: true },
-        { id: 2, title: "マニュアル下書き作成", completed: true },
-        { id: 3, title: "レビュー依頼", completed: false },
-      ];
+      console.log('サブタスクデータがありません', apiTask);
     }
     
     // 日付フォーマット
@@ -300,6 +380,37 @@ const TaskManagerView: React.FC = () => {
     }
   };
 
+  // 削除処理関数を TaskManagerView に移動
+  const handleDeleteTask = async () => {
+    if (!selectedTaskId) return;
+
+    if (!deleteConfirm) {
+      setDeleteConfirm(true);
+      return;
+    }
+
+    try {
+      setTaskOperationLoading(true); // 削除操作のローディング開始
+      const taskIdString = selectedTaskId.toString();
+      const response = await taskService.deleteTask(taskIdString);
+      if (response.success) {
+        showSuccessToast("タスクが削除されました");
+        closeTaskDetails(); // ダイアログを閉じる
+        setDeleteConfirm(false); // 確認状態をリセット
+        fetchData(true); // タスク一覧を再取得
+      } else {
+        showErrorToast(response.message || "タスクの削除に失敗しました");
+        setDeleteConfirm(false); // 確認状態をリセット
+      }
+    } catch (error) {
+      console.error("タスク削除エラー:", error);
+      showErrorToast("タスクの削除中にエラーが発生しました");
+      setDeleteConfirm(false); // 確認状態をリセット
+    } finally {
+      setTaskOperationLoading(false); // 削除操作のローディング終了
+    }
+  };
+
   // さらにタスクを読み込む
   const loadMoreTasks = () => {
     fetchData();
@@ -325,69 +436,49 @@ const TaskManagerView: React.FC = () => {
 
   // サブタスクの完了状態を切り替える関数
   const handleToggleSubtask = async (taskId: string, subtaskId: string) => {
+    const originalTasks = [...tasks];
+    setUpdatingSubtasks(prev => ({ ...prev, [subtaskId]: true }));
+
+    // UIを先に更新（オプティミスティックアップデート）
+    setTasks(prevTasks => 
+      prevTasks.map(task => {
+        if (task.id === taskId) {
+          const updatedSubtasks = task.subtasks.map(subtask => 
+            subtask.id.toString() === subtaskId.toString() 
+              ? { ...subtask, completed: !subtask.completed } 
+              : subtask
+          );
+          return { ...task, subtasks: updatedSubtasks };
+        }
+        return task;
+      })
+    );
+
     try {
-      // 対象のタスクとサブタスクを特定
-      const taskIndex = tasks.findIndex(task => task.id.toString() === taskId);
-      if (taskIndex === -1) return;
-      
-      const task = tasks[taskIndex];
-      const subtaskIndex = task.subtasks.findIndex(subtask => subtask.id.toString() === subtaskId);
-      if (subtaskIndex === -1) return;
-      
-      // UIの更新状態を設定
-      const updatedTasks = [...tasks];
-      const updatedSubtasks = [...updatedTasks[taskIndex].subtasks];
-      updatedSubtasks[subtaskIndex] = {
-        ...updatedSubtasks[subtaskIndex],
-        completed: !updatedSubtasks[subtaskIndex].completed
-      };
-      updatedTasks[taskIndex] = {
-        ...updatedTasks[taskIndex],
-        subtasks: updatedSubtasks
-      };
-      setTasks(updatedTasks);
-      
-      // 対象のサブタスクのローディング状態を設定
-      const updatingSubtask: Record<string, boolean> = {};
-      updatingSubtask[subtaskId] = true;
-      setUpdatingSubtasks(prev => ({ ...prev, ...updatingSubtask }));
-      
-      // APIを呼び出してサブタスクの状態を更新
+      // API呼び出し
       const response = await taskService.toggleSubtaskStatus(taskId, subtaskId);
       
-      if (response.success) {
-        showSuccessToast("サブタスクのステータスを更新しました");
-        
-        // 更新が成功したら、タスク一覧を再取得せずに更新
-        if (response.data?.parent_task) {
-          const parentTask = convertApiTaskToUITask(response.data.parent_task);
-          const updatedTasks = tasks.map(task => 
-            task.id.toString() === taskId ? parentTask : task
-          );
-          setTasks(updatedTasks);
-        }
+      // API呼び出しのエラーハンドリング
+      if (!response.success) {
+        showErrorToast(response.message || "サブタスクの更新に失敗しました。");
+        // エラー時は元の状態に戻す
+        setTasks(originalTasks);
       } else {
-        // 失敗した場合は元の状態に戻す
-        updatedSubtasks[subtaskIndex] = {
-          ...updatedSubtasks[subtaskIndex],
-          completed: !updatedSubtasks[subtaskIndex].completed
-        };
-        updatedTasks[taskIndex] = {
-          ...updatedTasks[taskIndex],
-          subtasks: updatedSubtasks
-        };
-        setTasks(updatedTasks);
-        
-        showErrorToast("サブタスクの更新に失敗しました");
+        // API成功時の処理（UIは既に更新済みなのでここでは不要だが、念のためレスポンスデータで更新も可能）
+        showSuccessToast("サブタスクのステータスを更新しました。");
+        // 必要であればレスポンスデータで再更新
+        // if (response.data?.parent_task) {
+        //   const parentTask = convertApiTaskToUITask(response.data.parent_task);
+        //   setTasks(prevTasks => prevTasks.map(t => t.id === taskId ? parentTask : t));
+        // }
       }
     } catch (error) {
-      console.error("サブタスク更新エラー:", error);
-      showErrorToast("サブタスクの更新中にエラーが発生しました");
+      console.error("サブタスクの更新エラー:", error);
+      showErrorToast("サブタスクの更新中にエラーが発生しました。");
+      // エラー時は元の状態に戻す
+      setTasks(originalTasks);
     } finally {
-      // ローディング状態を解除
-      const updatingSubtask: Record<string, boolean> = {};
-      updatingSubtask[subtaskId] = false;
-      setUpdatingSubtasks(prev => ({ ...prev, ...updatingSubtask }));
+      setUpdatingSubtasks(prev => ({ ...prev, [subtaskId]: false }));
     }
   };
 
@@ -519,25 +610,25 @@ const TaskManagerView: React.FC = () => {
                 {task.description && (
                   <div className="mb-4">
                     <h4 className="text-sm font-medium mb-2">説明</h4>
-                    <div className="border-t border-b border-border py-3 my-1">
+                    <div className="border-t-2 border-b-2 border-border py-3 my-1">
                       <MarkdownRenderer content={task.description} preserveLineBreaks={true} />
                     </div>
                   </div>
                 )}
                 
-                {task.subtasks.length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="text-sm font-medium mb-2">サブタスク</h4>
-                    <div className="space-y-1">
+                <div>
+                  <h3 className="text-lg font-medium mb-2">サブタスク</h3>
+                  {task.subtasks.length > 0 ? (
+                    <div className="space-y-2">
                       {task.subtasks.map((subtask) => (
-                        <div key={subtask.id} className="flex items-center">
+                        <div key={subtask.id} className="flex items-center p-2 hover:bg-muted/40 rounded-md">
                           <Checkbox 
                             checked={subtask.completed} 
-                            className="mr-2" 
+                            className="mr-3 h-5 w-5" 
                             disabled={updatingSubtasks[subtask.id]}
                             onCheckedChange={() => handleToggleSubtask(task.id.toString(), subtask.id.toString())}
                           />
-                          <span className={subtask.completed ? "line-through text-muted-foreground" : ""}>
+                          <span className={`text-base ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
                             {subtask.title}
                             {updatingSubtasks[subtask.id] && (
                               <Loader2 className="h-3 w-3 inline ml-2 animate-spin" />
@@ -545,13 +636,24 @@ const TaskManagerView: React.FC = () => {
                           </span>
                         </div>
                       ))}
+                      <div className="mt-4">
+                        <div className="flex justify-between items-center text-sm mb-2">
+                          <span>{calculateTaskProgress(task)}% 完了</span>
+                          <span>
+                            {task.subtasks.filter((st) => st.completed).length}/{task.subtasks.length}
+                          </span>
+                        </div>
+                        <Progress value={calculateTaskProgress(task)} className="h-2.5" />
+                      </div>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="text-muted-foreground italic text-base">サブタスクはありません</div>
+                  )}
+                </div>
                 
                 {task.tags.length > 0 && (
                   <div className="mb-4">
-                    <h4 className="text-sm font-medium mb-2">タグ</h4>
+                    <h4 className="text-lg font-medium mb-2">タグ</h4>
                     <div className="flex flex-wrap gap-1">
                       {task.tags.map((tag, index) => (
                         <Badge key={index} variant="outline">
@@ -561,35 +663,6 @@ const TaskManagerView: React.FC = () => {
                     </div>
                   </div>
                 )}
-                
-                <div className="flex justify-end space-x-3 mt-8">
-                  <Button 
-                    variant="outline" 
-                    className="h-11 px-5 text-base"
-                    asChild
-                  >
-                    <Link to={`/tasks/edit/${task.id}`}>
-                      <Edit className="h-5 w-5 mr-2" /> 編集
-                    </Link>
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="h-11 px-5 text-base text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => deleteTask(task.id)}
-                    disabled={taskOperationLoading}
-                  >
-                    {taskOperationLoading ? (
-                      <>
-                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                        処理中...
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="h-5 w-5 mr-2" /> 削除
-                      </>
-                    )}
-                  </Button>
-                </div>
               </CardContent>
             )}
           </Card>
@@ -597,6 +670,266 @@ const TaskManagerView: React.FC = () => {
       </div>
     );
   };
+
+  // すべてのフィルターをリセットする
+  const resetAllFilters = () => {
+    setFilterPriority(null);
+    setFilterAssignee("all");
+    setFilterTags([]);
+    setFilterStartDate(null);
+    setFilterEndDate(null);
+    setFilterStatuses([]);
+  };
+
+  // タグフィルターを追加する
+  const addTagFilter = (tag: string) => {
+    if (!filterTags.includes(tag)) {
+      setFilterTags([...filterTags, tag]);
+    }
+    setNewTagInput('');
+  };
+
+  // タグフィルターを削除する
+  const removeTagFilter = (tag: string) => {
+    setFilterTags(filterTags.filter(t => t !== tag));
+  };
+
+  // ステータスフィルターの切り替え
+  const toggleStatusFilter = (status: string) => {
+    if (filterStatuses.includes(status)) {
+      setFilterStatuses(filterStatuses.filter(s => s !== status));
+    } else {
+      setFilterStatuses([...filterStatuses, status]);
+    }
+  };
+
+  // ステータスのラベルを取得
+  const getStatusLabel = (status: string): string => {
+    const statusMap: Record<string, string> = {
+      'pending': '未着手',
+      'in_progress': '進行中',
+      'review': 'レビュー中',
+      'completed': '完了'
+    };
+    return statusMap[status] || status;
+  };
+
+  // フィルターのチップを表示するコンポーネント
+  const FilterChips = () => {
+    // 適用されているフィルターがあるかチェック
+    const hasActiveFilters = 
+      filterPriority !== null || 
+      filterAssignee !== "all" || 
+      filterTags.length > 0 || 
+      filterStartDate !== null || 
+      filterEndDate !== null || 
+      filterStatuses.length > 0;
+    
+    if (!hasActiveFilters) return null;
+    
+    return (
+      <div className="flex flex-wrap gap-2 mt-4 mb-2">
+        {filterPriority && (
+          <Badge variant="secondary" className="pl-2 pr-1 py-1 flex items-center gap-1">
+            優先度: {filterPriority}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-4 w-4 p-0 hover:bg-transparent" 
+              onClick={() => setFilterPriority(null)}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </Badge>
+        )}
+        
+        {filterAssignee !== "all" && (
+          <Badge variant="secondary" className="pl-2 pr-1 py-1 flex items-center gap-1">
+            担当者: {users.find(u => u.id.toString() === filterAssignee)?.name || filterAssignee}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-4 w-4 p-0 hover:bg-transparent" 
+              onClick={() => setFilterAssignee("all")}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </Badge>
+        )}
+        
+        {filterTags.map(tag => (
+          <Badge key={tag} variant="secondary" className="pl-2 pr-1 py-1 flex items-center gap-1">
+            タグ: {tag}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-4 w-4 p-0 hover:bg-transparent" 
+              onClick={() => removeTagFilter(tag)}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </Badge>
+        ))}
+        
+        {filterStartDate && (
+          <Badge variant="secondary" className="pl-2 pr-1 py-1 flex items-center gap-1">
+            開始日: {format(filterStartDate, 'yyyy/MM/dd')}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-4 w-4 p-0 hover:bg-transparent" 
+              onClick={() => setFilterStartDate(null)}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </Badge>
+        )}
+        
+        {filterEndDate && (
+          <Badge variant="secondary" className="pl-2 pr-1 py-1 flex items-center gap-1">
+            終了日: {format(filterEndDate, 'yyyy/MM/dd')}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-4 w-4 p-0 hover:bg-transparent" 
+              onClick={() => setFilterEndDate(null)}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </Badge>
+        )}
+        
+        {filterStatuses.map(status => (
+          <Badge key={status} variant="secondary" className="pl-2 pr-1 py-1 flex items-center gap-1">
+            ステータス: {getStatusLabel(status)}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-4 w-4 p-0 hover:bg-transparent" 
+              onClick={() => toggleStatusFilter(status)}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </Badge>
+        ))}
+        
+        {hasActiveFilters && (
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={resetAllFilters}>
+            フィルターをクリア
+          </Button>
+        )}
+      </div>
+    );
+  };
+
+  // フィルターを保存する
+  const saveCurrentFilter = () => {
+    if (!currentFilterName.trim()) {
+      toast({
+        title: "エラー",
+        description: "フィルター名を入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const newFilter = {
+      id: Date.now().toString(),
+      name: currentFilterName,
+      filters: {
+        status: activeTab !== 'all' ? activeTab : undefined,
+        priority: filterPriority,
+        assignee: filterAssignee !== 'all' ? filterAssignee : undefined,
+        tags: filterTags,
+        startDate: filterStartDate,
+        endDate: filterEndDate,
+        statuses: filterStatuses,
+        search: searchTerm
+      }
+    };
+    
+    setSavedFilters([...savedFilters, newFilter]);
+    setCurrentFilterName('');
+    toast({
+      title: "成功",
+      description: "フィルター設定を保存しました",
+    });
+  };
+  
+  // 保存済みフィルターを適用する
+  const applySavedFilter = (filter: typeof savedFilters[0]) => {
+    const { filters } = filter;
+    
+    // 各フィルター設定を適用
+    setActiveTab(filters.status || 'all');
+    setFilterPriority(filters.priority || null);
+    setFilterAssignee(filters.assignee || 'all');
+    setFilterTags(filters.tags || []);
+    setFilterStartDate(filters.startDate || null);
+    setFilterEndDate(filters.endDate || null);
+    setFilterStatuses(filters.statuses || []);
+    setSearchTerm(filters.search || '');
+    
+    // フィルターダイアログを閉じる
+    setFilterDialogOpen(false);
+    setQuickFilterOpen(false);
+    
+    toast({
+      title: "フィルター適用",
+      description: `${filter.name}のフィルター設定を適用しました`,
+    });
+  };
+  
+  // 保存済みフィルターを削除
+  const deleteSavedFilter = (id: string) => {
+    setSavedFilters(savedFilters.filter(filter => filter.id !== id));
+    toast({
+      title: "削除完了",
+      description: "保存済みフィルターを削除しました",
+    });
+  };
+  
+  // クイックアクション用の関数
+  const quickFilterActions = [
+    {
+      label: "今日期限",
+      icon: <Calendar className="h-4 w-4 mr-2" />,
+      action: () => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        setFilterStartDate(today);
+        setFilterEndDate(tomorrow);
+        setQuickFilterOpen(false);
+      }
+    },
+    {
+      label: "自分のタスク",
+      icon: <Avatar className="h-4 w-4 mr-2"><AvatarFallback>私</AvatarFallback></Avatar>,
+      action: () => {
+        // ユーザーID 1を自分として仮定
+        setFilterAssignee("1");
+        setQuickFilterOpen(false);
+      }
+    },
+    {
+      label: "優先度:高",
+      icon: <Badge className="bg-orange-100 text-orange-700 mr-2">高</Badge>,
+      action: () => {
+        setFilterPriority("高");
+        setQuickFilterOpen(false);
+      }
+    },
+    {
+      label: "未完了タスク",
+      icon: <Checkbox className="mr-2" />,
+      action: () => {
+        setFilterStatuses(['pending', 'in_progress', 'review']);
+        setQuickFilterOpen(false);
+      }
+    }
+  ];
 
   return (
     <>
@@ -626,7 +959,7 @@ const TaskManagerView: React.FC = () => {
                     }}
                     className="w-full md:w-auto"
                   >
-                    <TabsList className="grid grid-cols-4 md:flex md:space-x-1">
+                    <TabsList className="grid grid-cols-5 md:flex md:space-x-1">
                       <TabsTrigger value="all">すべて</TabsTrigger>
                       <TabsTrigger value="today">今日</TabsTrigger>
                       <TabsTrigger value="upcoming">今後</TabsTrigger>
@@ -636,90 +969,133 @@ const TaskManagerView: React.FC = () => {
                   </Tabs>
 
                   <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:items-center md:space-x-2">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="タスクを検索..."
-                        className="pl-8 w-full md:w-[250px]"
-                        value={searchTerm}
-                        onChange={(e) => {
-                          setSearchTerm(e.target.value);
-                        }}
-                      />
+                    <div className="relative w-full md:w-auto">
+                      <div className="flex items-center border rounded-md overflow-hidden">
+                        <div className="pl-2">
+                          <Search className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <Input
+                          placeholder="タスクを検索..."
+                          className="border-0 w-full md:w-[250px]"
+                          value={searchTerm}
+                          onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              // Enterキーでフォーカスを外す
+                              e.currentTarget.blur();
+                            }
+                          }}
+                        />
+                        {searchTerm && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 p-0 mr-1"
+                            onClick={() => setSearchTerm('')}
+                          >
+                            <X className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full md:w-auto">
-                          <Filter className="h-4 w-4 mr-2" />
-                          フィルター
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-80">
-                        <div className="grid gap-4">
-                          <div className="space-y-2">
-                            <h4 className="font-medium">優先度</h4>
-                            <Select
-                              value={filterPriority || ""}
-                              onValueChange={(value) => {
-                                setFilterPriority(value === "" ? null : value);
-                              }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="すべて" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="">すべて</SelectItem>
-                                <SelectItem value="低">低</SelectItem>
-                                <SelectItem value="中">中</SelectItem>
-                                <SelectItem value="高">高</SelectItem>
-                                <SelectItem value="緊急">緊急</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <h4 className="font-medium">担当者</h4>
-                            <Select
-                              value={filterAssignee}
-                              onValueChange={(value) => {
-                                setFilterAssignee(value);
-                              }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="すべて" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">すべて</SelectItem>
-                                {users.map((user) => (
-                                  <SelectItem key={user.id} value={user.id.toString()}>
-                                    {user.name}
-                                  </SelectItem>
+                    <div className="flex items-center space-x-2">
+                      <Popover open={quickFilterOpen} onOpenChange={setQuickFilterOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="h-9 px-3"
+                          >
+                            <Filter className="h-4 w-4 mr-2" />
+                            クイックフィルター
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72" align="end">
+                          <div className="space-y-4">
+                            <h4 className="font-medium">クイックフィルター</h4>
+                            <div className="space-y-2">
+                              {quickFilterActions.map((action, index) => (
+                                <Button
+                                  key={index}
+                                  variant="ghost"
+                                  className="w-full justify-start text-left"
+                                  onClick={action.action}
+                                >
+                                  {action.icon} {action.label}
+                                </Button>
+                              ))}
+                            </div>
+                            
+                            <Separator />
+                            
+                            <h4 className="font-medium">保存済みフィルター</h4>
+                            {savedFilters.length > 0 ? (
+                              <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
+                                {savedFilters.map(filter => (
+                                  <div 
+                                    key={filter.id} 
+                                    className="flex items-center justify-between rounded-md p-2 hover:bg-accent"
+                                  >
+                                    <Button 
+                                      variant="ghost" 
+                                      className="h-8 text-left justify-start p-2 flex-grow"
+                                      onClick={() => applySavedFilter(filter)}
+                                    >
+                                      {filter.name}
+                                    </Button>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-7 w-7" 
+                                      onClick={() => deleteSavedFilter(filter.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
                                 ))}
-                              </SelectContent>
-                            </Select>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">保存済みのフィルターはありません</p>
+                            )}
                           </div>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                        </PopoverContent>
+                      </Popover>
+                      
+                      <Button
+                        variant="outline"
+                        className="h-9"
+                        onClick={() => setFilterDialogOpen(true)}
+                      >
+                          <Filter className="h-4 w-4 mr-2" />
+                          詳細フィルター
+                      </Button>
 
-                    <div className="flex space-x-1">
-                      <Button
-                        variant={taskViewMode === "board" ? "default" : "outline"}
-                        size="icon"
-                        onClick={() => setTaskViewMode("board")}
-                      >
-                        <List className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant={taskViewMode === "list" ? "default" : "outline"}
-                        size="icon"
-                        onClick={() => setTaskViewMode("list")}
-                      >
-                        <CalendarDays className="h-4 w-4" />
-                      </Button>
+                      <div className="flex space-x-1">
+                        <Button
+                          variant={taskViewMode === "board" ? "default" : "outline"}
+                          size="icon"
+                          className="h-9 w-9"
+                          onClick={() => setTaskViewMode("board")}
+                        >
+                          <List className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant={taskViewMode === "list" ? "default" : "outline"}
+                          size="icon"
+                          className="h-9 w-9"
+                          onClick={() => setTaskViewMode("list")}
+                        >
+                          <CalendarDays className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
+
+                {/* フィルターチップ表示 */}
+                <FilterChips />
               </CardContent>
             </Card>
 
@@ -776,17 +1152,336 @@ const TaskManagerView: React.FC = () => {
           </div>
         </div>
 
+        {/* 詳細フィルターダイアログを修正 */}
+        <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-hidden">
+            <DialogHeader>
+              <DialogTitle>詳細フィルター</DialogTitle>
+              <DialogDescription>
+                条件を指定してタスクをフィルタリングします
+              </DialogDescription>
+            </DialogHeader>
+            
+            <ScrollArea className="max-h-[60vh] pr-4">
+              <div className="grid gap-5 py-4">
+                {/* ステータスフィルター（複数選択） */}
+                <div className="space-y-2">
+                  <h4 className="font-medium">ステータス</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {['pending', 'in_progress', 'review', 'completed'].map(status => (
+                      <Badge 
+                        key={status}
+                        variant={filterStatuses.includes(status) ? "default" : "outline"} 
+                        className="cursor-pointer px-3 py-1.5"
+                        onClick={() => toggleStatusFilter(status)}
+                      >
+                        {getStatusLabel(status)}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* 優先度フィルター - ラジオボタンに変更 */}
+                <div className="space-y-2">
+                  <h4 className="font-medium">優先度</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {['低', '中', '高', '緊急'].map(priority => (
+                      <Badge 
+                        key={priority}
+                        variant={filterPriority === priority ? "default" : "outline"} 
+                        className={`cursor-pointer px-3 py-1.5 ${filterPriority === priority ? '' : 'opacity-70'}`}
+                        onClick={() => setFilterPriority(filterPriority === priority ? null : priority)}
+                      >
+                        {priority}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* 担当者フィルター - アバターを表示 */}
+                <div className="space-y-2">
+                  <h4 className="font-medium">担当者</h4>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge 
+                      variant={filterAssignee === "all" ? "default" : "outline"} 
+                      className="cursor-pointer px-3 py-1.5"
+                      onClick={() => setFilterAssignee("all")}
+                    >
+                      すべて
+                    </Badge>
+                    
+                    {users.map((user) => (
+                      <Badge 
+                        key={user.id}
+                        variant={filterAssignee === user.id.toString() ? "default" : "outline"} 
+                        className="cursor-pointer pl-1 pr-3 py-1 flex items-center gap-1"
+                        onClick={() => setFilterAssignee(filterAssignee === user.id.toString() ? "all" : user.id.toString())}
+                      >
+                        <Avatar className="h-5 w-5">
+                          {user.avatar ? <AvatarImage src={user.avatar} /> : null}
+                          <AvatarFallback className="text-[10px]">{user.initials}</AvatarFallback>
+                        </Avatar>
+                        <span>{user.name}</span>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* タグフィルター - 使いやすいUI */}
+                <div className="space-y-2">
+                  <h4 className="font-medium">タグ</h4>
+                  <div className="flex space-x-2">
+                    <div className="relative flex-1">
+                      <Input 
+                        value={newTagInput}
+                        onChange={(e) => setNewTagInput(e.target.value)}
+                        placeholder="タグを入力..."
+                        className="pr-20"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newTagInput.trim()) {
+                            e.preventDefault();
+                            addTagFilter(newTagInput.trim());
+                          }
+                        }}
+                      />
+                      <Button 
+                        variant="ghost"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => {
+                          if (newTagInput.trim()) {
+                            addTagFilter(newTagInput.trim());
+                          }
+                        }}
+                      >
+                        追加
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* 選択可能なタグリスト */}
+                  {availableTags.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-sm text-muted-foreground mb-2">利用可能なタグ：</p>
+                      <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto p-2 rounded-md border border-border">
+                        {availableTags
+                          .sort((a, b) => a.localeCompare(b, 'ja'))
+                          .map(tag => (
+                          <Badge 
+                            key={tag}
+                            variant={filterTags.includes(tag) ? "default" : "secondary"} 
+                            className="cursor-pointer text-xs"
+                            onClick={() => {
+                              if (filterTags.includes(tag)) {
+                                removeTagFilter(tag);
+                              } else {
+                                addTagFilter(tag);
+                              }
+                            }}
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* 選択済みタグの表示 */}
+                  {filterTags.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-sm text-muted-foreground mb-2">選択中のタグ：</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {filterTags.map(tag => (
+                          <Badge key={tag} className="pl-2 pr-1 py-1 flex items-center gap-1">
+                            {tag}
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-4 w-4 p-0 hover:bg-transparent" 
+                              onClick={() => removeTagFilter(tag)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* 日付範囲フィルター - カレンダー表示を改善 */}
+                <div className="space-y-2">
+                  <h4 className="font-medium">期間</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">開始日</p>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            {filterStartDate ? (
+                              format(filterStartDate, 'yyyy/MM/dd')
+                            ) : (
+                              <span className="text-muted-foreground">日付を選択</span>
+                            )}
+                            <Calendar className="ml-auto h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <CalendarComponent
+                            mode="single"
+                            selected={filterStartDate ?? undefined}
+                            onSelect={(date) => setFilterStartDate(date || null)}
+                            locale={ja}
+                            required={false}
+                          />
+                          {filterStartDate && (
+                            <div className="p-3 border-t border-border">
+                              <Button 
+                                variant="destructive" 
+                                size="sm" 
+                                className="w-full"
+                                onClick={() => setFilterStartDate(null)}
+                              >
+                                開始日をクリア
+                              </Button>
+                            </div>
+                          )}
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">終了日</p>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            {filterEndDate ? (
+                              format(filterEndDate, 'yyyy/MM/dd')
+                            ) : (
+                              <span className="text-muted-foreground">日付を選択</span>
+                            )}
+                            <Calendar className="ml-auto h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <CalendarComponent
+                            mode="single"
+                            selected={filterEndDate ?? undefined}
+                            onSelect={(date) => setFilterEndDate(date || null)}
+                            locale={ja}
+                            disabled={(date) => filterStartDate ? date < filterStartDate : false}
+                            required={false}
+                          />
+                          {filterEndDate && (
+                            <div className="p-3 border-t border-border">
+                              <Button 
+                                variant="destructive" 
+                                size="sm" 
+                                className="w-full"
+                                onClick={() => setFilterEndDate(null)}
+                              >
+                                終了日をクリア
+                              </Button>
+                            </div>
+                          )}
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* フィルター保存機能 */}
+                <div className="pt-4 border-t border-border">
+                  <h4 className="font-medium mb-3">フィルター設定を保存</h4>
+                  <div className="flex space-x-2">
+                    <Input
+                      value={currentFilterName}
+                      onChange={(e) => setCurrentFilterName(e.target.value)}
+                      placeholder="フィルター名を入力..."
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={saveCurrentFilter}
+                      disabled={!currentFilterName.trim()}
+                    >
+                      保存
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+            
+            <div className="flex justify-between mt-4 pt-4 border-t">
+              <Button variant="destructive" onClick={resetAllFilters}>
+                リセット
+              </Button>
+              <div className="space-x-2">
+                <Button variant="outline" onClick={() => setFilterDialogOpen(false)}>
+                  キャンセル
+                </Button>
+                <Button onClick={() => setFilterDialogOpen(false)}>
+                  適用
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* タスク詳細ダイアログ */}
         <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
+            <DialogHeader className="flex flex-row justify-between items-start pr-6 pb-4">
+              {/* 左側のタイトルと説明 */}
+              <div>
+                <DialogTitle className="text-[1.8rem]">{tasks.find((t) => t.id === selectedTaskId)?.title || 'タスク詳細'}</DialogTitle>
+                <DialogDescription>
+                  {tasks.find((t) => t.id === selectedTaskId)?.createdAt && (
+                     `作成日： ${new Date(tasks.find((t) => t.id === selectedTaskId)!.createdAt).toLocaleDateString('ja-JP', {year: 'numeric', month: '2-digit', day: '2-digit'})}`
+                  )}
+                </DialogDescription>
+              </div>
+              {/* 右側のボタン */}
+              {selectedTaskId && tasks.find((t) => t.id === selectedTaskId) && (
+                <div className="flex space-x-2 flex-shrink-0 mt-1">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    asChild
+                  >
+                    <Link to={`/tasks/edit/${selectedTaskId}`}>
+                      <Edit className="h-4 w-4 mr-1" /> 編集
+                    </Link>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="h-8 px-3 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={handleDeleteTask}
+                    disabled={taskOperationLoading}
+                  >
+                    {taskOperationLoading && deleteConfirm ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4 mr-1" />
+                    )}
+                    {deleteConfirm ? "確定" : "削除"}
+                  </Button>
+                </div>
+              )}
+            </DialogHeader>
             {selectedTaskId && (
               <>
                 {tasks.find((t) => t.id === selectedTaskId) ? (
                   <TaskDetails 
                     task={tasks.find((t) => t.id === selectedTaskId)!} 
                     onClose={closeTaskDetails}
-                    onDelete={deleteTask}
-                    isLoading={taskOperationLoading}
                     calculateTaskProgress={calculateTaskProgress}
                     updatingSubtasks={updatingSubtasks}
                     handleToggleSubtask={handleToggleSubtask}
@@ -810,8 +1505,6 @@ const TaskManagerView: React.FC = () => {
 interface TaskDetailsProps {
   task: UITask;
   onClose: () => void;
-  onDelete: (taskId: string | number) => Promise<void>;
-  isLoading: boolean;
   calculateTaskProgress: (task: UITask) => number;
   updatingSubtasks?: Record<string | number, boolean>;
   handleToggleSubtask?: (taskId: string, subtaskId: string) => Promise<void>;
@@ -819,24 +1512,11 @@ interface TaskDetailsProps {
 
 const TaskDetails: React.FC<TaskDetailsProps> = ({ 
   task, 
-  onDelete, 
-  isLoading, 
+  onClose,
   calculateTaskProgress,
   updatingSubtasks = {},
   handleToggleSubtask = async () => {} 
 }) => {
-  // 削除確認
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-
-  // 削除処理
-  const handleDelete = async () => {
-    if (!deleteConfirm) {
-      setDeleteConfirm(true);
-      return;
-    }
-    await onDelete(task.id);
-  };
-
   // サブタスクのチェック状態切り替え
   const toggleSubtask = (subtaskId: string | number) => {
     if (handleToggleSubtask) {
@@ -846,16 +1526,9 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
 
   return (
     <div className="p-4 max-h-[calc(90vh-2rem)] overflow-y-auto">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold">{task.title}</h2>
-        <div className="text-sm text-muted-foreground mt-1">
-          作成日: {new Date(task.createdAt).toLocaleDateString('ja-JP', {year: 'numeric', month: '2-digit', day: '2-digit'})}
-        </div>
-      </div>
-
       <div className="mb-6">
         <h3 className="text-lg font-medium mb-2">説明</h3>
-        <div className="border-t border-b border-border py-4 my-2">
+        <div className="border-t-2 border-b-2 border-border py-4 my-2">
           {task.description ? (
             <MarkdownRenderer content={task.description} preserveLineBreaks={true} />
           ) : (
@@ -962,35 +1635,6 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
             </div>
           )}
         </div>
-      </div>
-
-      <div className="flex justify-end space-x-3 mt-8">
-        <Button 
-          variant="outline" 
-          className="h-11 px-5 text-base"
-          asChild
-        >
-          <Link to={`/tasks/edit/${task.id}`}>
-            <Edit className="h-5 w-5 mr-2" /> 編集
-          </Link>
-        </Button>
-        <Button 
-          variant="outline" 
-          className="h-11 px-5 text-base text-destructive hover:text-destructive hover:bg-destructive/10"
-          onClick={handleDelete}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-              処理中...
-            </>
-          ) : (
-            <>
-              <Trash2 className="h-5 w-5 mr-2" /> {deleteConfirm ? "削除を確定" : "削除"}
-            </>
-          )}
-        </Button>
       </div>
     </div>
   );

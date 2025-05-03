@@ -37,7 +37,7 @@ module Api
           
           render json: { 
             success: true, 
-            data: @tasks.transform_values { |tasks| ActiveModel::Serializer::CollectionSerializer.new(tasks, serializer: TaskSerializer) }
+            data: @tasks.transform_values { |tasks| ActiveModel::Serializer::CollectionSerializer.new(tasks, serializer: TaskSerializer, include: [:user, :subtasks]) }
           }
         
           # カレンダー用のタスク一覧を返す
@@ -48,7 +48,7 @@ module Api
                     .includes(:user, :organization, :subtasks)
                     .where('due_date >= ? AND due_date <= ?', start_date, end_date)
           
-          render json: { success: true, data: ActiveModel::Serializer::CollectionSerializer.new(tasks, serializer: TaskSerializer) }
+          render json: { success: true, data: ActiveModel::Serializer::CollectionSerializer.new(tasks, serializer: TaskSerializer, include: [:user, :subtasks]) }
         elsif params[:my].present?
           # 自分のタスク一覧を返す
           tasks = Task.where(assigned_to: current_user.id)
@@ -66,7 +66,7 @@ module Api
           
           render json: { 
             success: true, 
-            data: ActiveModel::Serializer::CollectionSerializer.new(paginated_tasks, serializer: TaskSerializer),
+            data: ActiveModel::Serializer::CollectionSerializer.new(paginated_tasks, serializer: TaskSerializer, include: [:user, :subtasks]),
             meta: {
               current_page: page,
               total_pages: total_pages,
@@ -116,7 +116,7 @@ module Api
           
           render json: { 
             success: true, 
-            data: ActiveModel::Serializer::CollectionSerializer.new(paginated_tasks, serializer: TaskSerializer),
+            data: ActiveModel::Serializer::CollectionSerializer.new(paginated_tasks, serializer: TaskSerializer, include: [:user, :subtasks]),
             meta: {
               current_page: page,
               total_pages: total_pages,
@@ -155,7 +155,8 @@ module Api
       
       puts "[Controller Debug] Rendering task with ID: #{@task.id}"
       
-      render json: @task, serializer: TaskSerializer, success: true, message: "Task fetched successfully", include: '**' # シリアライザーを直接指定
+      # シリアライザーを直接指定し、サブタスクを明示的に含める
+      render json: @task, serializer: TaskSerializer, success: true, message: "Task fetched successfully", include: [:user, :subtasks]
     end
 
     # タスクの作成
@@ -466,62 +467,31 @@ module Api
           end
           # --- デバッグコード追加 終了 ---
 
-          # サブタスクの更新処理
-          if params[:task][:subtasks].present? && @task.errors.empty?
-            begin
-              # サブタスクのJSONを解析（すでに解析されている場合はそのまま使用）
-              subtasks_data = if params[:task][:subtasks].is_a?(String)
-                begin
-                  JSON.parse(params[:task][:subtasks])
-                rescue JSON::ParserError
-                  puts "[DEBUG] Failed to parse subtasks JSON, skipping subtask processing"
-                  nil
-                end
-              else
-                params[:task][:subtasks]
-              end
-              
-              if subtasks_data.present? && subtasks_data.is_a?(Array)
-                puts "[DEBUG] Processing #{subtasks_data.length} subtasks"
-                
-                # 既存のサブタスクを取得
-                existing_subtasks = @task.subtasks.index_by(&:id)
-                
-                # サブタスクを処理
-                subtasks_data.each do |subtask_data|
-                  subtask_id = subtask_data['id'].to_s
-                  subtask_title = subtask_data['title'].to_s
-                  subtask_completed = subtask_data['completed'] == true
-                  
-                  # 既存のサブタスクの場合は更新
-                  if existing_subtasks[subtask_id].present?
-                    subtask = existing_subtasks[subtask_id]
-                    subtask.update(
-                      title: subtask_title,
-                      status: subtask_completed ? 'completed' : 'pending'
-                    )
-                    puts "[DEBUG] Updated existing subtask #{subtask_id}"
-                  # 「temp_」で始まるIDは一時的なIDなので新規作成
-                  elsif subtask_id.start_with?('temp_') || !subtask_id.present?
-                    subtask = Task.create(
-                      title: subtask_title,
-                      status: subtask_completed ? 'completed' : 'pending',
-                      parent_task_id: @task.id,
-                      organization_id: @task.organization_id,
-                      assigned_to: @task.assigned_to
-                    )
-                    puts "[DEBUG] Created new subtask with ID #{subtask.id}"
-                  end
-                end
-                
-                puts "[DEBUG] Subtasks processing completed"
-              end
-            rescue => e
-              puts "[DEBUG] Error processing subtasks: #{e.message}"
-              puts e.backtrace.join("\n")
-              # サブタスク処理でエラーが発生してもトランザクション全体をロールバックさせない
-            end
-          end
+          # サブタスクの更新処理 - Active Recordのネストされた属性機能を利用
+          # task_paramsでsubtasks_attributesが許可されているので、@task.updateが自動的に処理する
+          # puts "[DEBUG] Subtasks params for update: #{current_task_params[:subtasks_attributes].inspect}" if current_task_params[:subtasks_attributes]
+          
+          # 既存のサブタスク処理ロジックは不要なのでコメントアウトまたは削除
+          # if params[:task][:subtasks].present? && @task.errors.empty?
+          #   begin
+          #     subtasks_data = if params[:task][:subtasks].is_a?(String)
+          #       # ... (JSON parsing logic)
+          #     else
+          #       params[:task][:subtasks]
+          #     end
+          #     
+          #     if subtasks_data.present? && subtasks_data.is_a?(Array)
+          #       puts "[DEBUG] Processing #{subtasks_data.length} subtasks"
+          #       existing_subtasks = @task.subtasks.index_by(&:id)
+          #       subtasks_data.each do |subtask_data|
+          #         # ... (Update/Create logic)
+          #       end
+          #       puts "[DEBUG] Subtasks processing completed"
+          #     end
+          #   rescue => e
+          #     puts "[DEBUG] Error processing subtasks: #{e.message}"
+          #   end
+          # end
 
           # 4. 最終結果をレンダリング
           if @task.errors.empty?
@@ -716,7 +686,14 @@ module Api
 
     # サブタスクの完了状態を切り替える
     def toggle_subtask
-      subtask = Task.find_by(id: params[:subtask_id], parent_task_id: @task.id)
+      # URLパスからではなく、リクエストボディからsubtask_idを取得
+      subtask_id = params[:subtask_id]
+      
+      unless subtask_id
+        return render json: { success: false, message: 'サブタスクIDが指定されていません' }, status: :bad_request
+      end
+      
+      subtask = Task.find_by(id: subtask_id, parent_task_id: @task.id)
       
       if subtask.nil?
         return render json: { success: false, message: 'サブタスクが見つかりません' }, status: :not_found
@@ -726,11 +703,14 @@ module Api
       new_status = subtask.status == 'completed' ? 'pending' : 'completed'
       
       if subtask.update(status: new_status)
+        # 親タスクをリロードして最新のサブタスク情報を取得
+        @task.reload
+        
         render json: { 
           success: true, 
           data: {
-            subtask: subtask,
-            parent_task: @task.as_json(include: :subtasks)
+            subtask: subtask.as_json, # サブタスク単体も返す
+            parent_task: TaskSerializer.new(@task).as_json # 親タスクをシリアライザー経由で返す
           }, 
           message: 'サブタスクのステータスが更新されました' 
         }
@@ -750,54 +730,27 @@ module Api
     def task_params
       # Permit attachments and retained_attachment_ids
       permitted_params = params.require(:task).permit(
-        :title, :description, :status, :priority, :due_date, :assigned_to, :tags, :organization_id, :parent_task_id,
-        attachments: [],
-        retained_attachment_ids: [], # 残したい既存ファイルのIDリストを許可
-        subtasks: [] # サブタスクパラメータを許可
+        :title, :description, :status, :priority, :due_date, :assigned_to, 
+        :tags, :organization_id, :parent_task_id,
+        retained_attachment_ids: [],
+        attachments: [], # Permit attachments as an array
+        # ネストされたサブタスク属性を許可
+        subtasks_attributes: [:id, :title, :status, :_destroy] 
       )
-
-      # 直接パラメータに添付ファイルがある場合に処理を追加
-      if params[:attachment].present?
-        puts "[DEBUG] Found direct attachment parameter: #{params[:attachment].original_filename}"
-        # task_paramsにはattachmentsという配列形式で格納
-        permitted_params[:attachments] ||= []
-        permitted_params[:attachments] << params[:attachment]
+      
+      # tagsをカンマ区切りの文字列に変換
+      if permitted_params[:tags].is_a?(Array)
+        permitted_params[:tags] = permitted_params[:tags].join(',')
+      end
+      
+      # assigned_to が空文字の場合にnilに変換
+      if permitted_params[:assigned_to] == ""
+        permitted_params[:assigned_to] = nil
       end
 
-      # --- 添付ファイルの処理 (既存のデバッグコードとロジックは維持) ---
-      if permitted_params[:attachments].present? && !permitted_params[:attachments].is_a?(Array)
-        puts "[DEBUG] Converting single attachment param to array"
-        permitted_params[:attachments] = [permitted_params[:attachments]]
-      end
-      if permitted_params[:attachments].is_a?(Array)
-        permitted_params[:attachments].compact!
-        permitted_params[:attachments].reject!(&:blank?)
-         puts "[DEBUG] Cleaned attachments array: #{permitted_params[:attachments].inspect}"
-      end
-      # --- 添付ファイルの処理 終了 ---
+      # デバッグ: パラメータの内容を出力
+      # puts "Permitted Task Params: #{permitted_params.inspect}"
 
-      # --- retained_attachment_ids の処理 ---
-      # フロントエンドから文字列でIDが送られてくることを想定し、nilを除去
-      if permitted_params[:retained_attachment_ids].is_a?(Array)
-        permitted_params[:retained_attachment_ids].compact!
-        permitted_params[:retained_attachment_ids].reject!(&:blank?)
-        puts "[DEBUG] Cleaned retained_attachment_ids array: #{permitted_params[:retained_attachment_ids].inspect}"
-      end
-      # --- retained_attachment_ids の処理 終了 ---
-
-      # --- サブタスク文字列をJSONとして解析する処理 ---
-      if permitted_params[:subtasks].is_a?(String)
-        begin
-          permitted_params[:subtasks] = JSON.parse(permitted_params[:subtasks])
-          puts "[DEBUG] Parsed subtasks JSON: #{permitted_params[:subtasks].inspect}"
-        rescue JSON::ParserError => e
-          puts "[DEBUG] Failed to parse subtasks JSON: #{e.message}"
-          permitted_params.delete(:subtasks)
-        end
-      end
-      # --- サブタスク処理 終了 ---
-
-      puts "[DEBUG] Final permitted task_params: #{permitted_params.inspect}"
       permitted_params
     end
   end

@@ -52,8 +52,8 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  status: 'pending' | 'in_progress' | 'completed';
-  priority: 'low' | 'medium' | 'high';
+  status: 'pending' | 'in_progress' | 'review' | 'completed';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
   due_date?: string;
   assigned_to?: string;
   organization_id?: string;

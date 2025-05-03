@@ -5,6 +5,7 @@ class TaskSerializer < ActiveModel::Serializer
              :created_at, :updated_at, :tag_list, :assignee_name,
              :organization_id, :organization_name, :is_overdue, :is_completed, :time_remaining
   has_one :user
+  has_many :subtasks
 
   # タグリストを配列として返す
   def tag_list

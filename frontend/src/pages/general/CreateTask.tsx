@@ -238,12 +238,23 @@ const CreateTaskView: React.FC = () => {
     }
   };
   
-  // サブタスクを削除
+  // サブタスクを削除（編集モード用）
+  const markSubtaskForRemoval = (id: number | string) => {
+    setFormData(prev => ({
+      ...prev,
+      subtasks: prev.subtasks.map(subtask => 
+        subtask.id === id ? { ...subtask, _destroy: true } : subtask
+      )
+    }));
+  };
+  
+  // サブタスクを削除（新規作成モード用 - UIから完全に消す）
   const removeSubtask = (id: number | string) => {
-    setFormData({
-      ...formData,
-      subtasks: formData.subtasks.filter(subtask => subtask.id !== id)
-    });
+    setFormData(prev => ({
+      ...prev,
+      // 削除対象外のサブタスクのみ残す（_destroyフラグが付いているものも除く）
+      subtasks: prev.subtasks.filter(subtask => subtask.id !== id && !subtask._destroy)
+    }));
   };
   
   // サブタスクの完了状態を切り替え
@@ -259,87 +270,91 @@ const CreateTaskView: React.FC = () => {
   // フォーム送信
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // バリデーション（例：タイトルが空でないか）
+    if (!formData.title.trim()) {
+      toast({
+        title: "入力エラー",
+        description: "タスクタイトルを入力してください。",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // API送信用のデータ形式に変換
+    const formDataToSubmit = {
+      title: formData.title,
+      description: formData.description,
+      status: statusToApiMapping[formData.status] as 'pending' | 'in_progress' | 'review' | 'completed',
+      priority: priorityToApiMapping[formData.priority] as 'low' | 'medium' | 'high' | 'urgent',
+      due_date: formData.dueDate ? format(formData.dueDate, 'yyyy-MM-dd') : undefined,
+      assigned_to: formData.assigneeId,
+      tags: formData.tags.join(','), // tagsを文字列に変換
+    };
+
+    const payload = {
+      task: {
+        ...formDataToSubmit,
+        // サブタスクの送信形式を調整
+        subtasks_attributes: formData.subtasks.map(subtask => {
+          const subtaskPayload: any = {
+            title: subtask.title,
+            // completed を status に変換
+            status: subtask.completed ? 'completed' : 'pending',
+            _destroy: subtask._destroy // 削除フラグ
+          };
+          // 既存のサブタスク（数値IDまたはUUID）の場合のみIDを含める
+          // 一時的なID（temp_...）は含めない
+          if (typeof subtask.id === 'number' || (typeof subtask.id === 'string' && !subtask.id.startsWith('temp_'))) {
+            subtaskPayload.id = subtask.id;
+          }
+          return subtaskPayload;
+        }).filter(subtask => !subtask._destroy || subtask.id) // _destroyがtrueでもIDがあれば送信（削除のため）, IDがなければ送信しない（新規追加をキャンセルした場合など）
+      }
+    };
+
+    // TaskData型に合わせる (taskServiceが期待する形式)
+    const taskDataPayload = payload.task;
+
+    // デバッグログ
+    console.log("送信ペイロード (TaskData):", JSON.stringify(taskDataPayload, null, 2));
+
     setLoading(true);
     setError(null);
-
+    
     try {
-      // 基本的な検証
-      if (!formData.title.trim()) {
-        throw new Error('タイトルは必須です');
-      }
-
-      if (taskId) {
-        // 更新の場合
-        // タスクデータを準備
-        const taskData = {
-          title: formData.title,
-          description: formData.description,
-          status: statusToApiMapping[formData.status] as 'pending' | 'in_progress' | 'completed',
-          priority: priorityToApiMapping[formData.priority] as 'low' | 'medium' | 'high',
-          due_date: formData.dueDate ? format(formData.dueDate, 'yyyy-MM-dd') : undefined,
-          assigned_to: formData.assigneeId || undefined,
-          tags: formData.tags.join(','),
-          subtasks_attributes: formData.subtasks.map(st => ({
-            id: st.id,
-            title: st.title,
-            completed: st.completed,
-            _destroy: st._destroy
-          })),
-        };
-
-        console.log('タスク更新データ:', taskData);
-
-        // タスクサービスを使用して更新
-        const response = await taskService.updateTask(taskId, taskData);
-        
-        if (response.success) {
-        toast({
-          title: "成功",
-          description: "タスクが更新されました！"
-        });
-          // 一覧画面に戻る
-          navigate('/tasks');
-        } else {
-          throw new Error(response.message || 'タスクの更新に失敗しました');
-        }
+      let response;
+      if (isEditMode && taskId) {
+        // 編集モード
+        response = await taskService.updateTask(taskId.toString(), taskDataPayload);
       } else {
-        // 新規作成の場合
-        const taskData = {
-          title: formData.title,
-          description: formData.description,
-          status: statusToApiMapping[formData.status] as 'pending' | 'in_progress' | 'completed',
-          priority: priorityToApiMapping[formData.priority] as 'low' | 'medium' | 'high',
-          due_date: formData.dueDate ? format(formData.dueDate, 'yyyy-MM-dd') : undefined,
-          assigned_to: formData.assigneeId || undefined,
-          tags: formData.tags.join(','),
-          subtasks_attributes: formData.subtasks.map(st => ({
-            title: st.title,
-            completed: st.completed
-          })),
-        };
-
-        console.log('新規タスクデータ:', taskData);
-
-        // タスクサービスを使用して作成
-        const response = await taskService.createTask(taskData);
-        
-        if (response.success) {
-        toast({
-          title: "成功",
-          description: "新しいタスクが作成されました！"
-        });
-          // 一覧画面に戻る
-          navigate('/tasks');
-        } else {
-          throw new Error(response.message || 'タスクの作成に失敗しました');
-        }
+        // 新規作成モード
+        response = await taskService.createTask(taskDataPayload);
       }
-    } catch (err: any) {
-      console.error('タスク送信エラー:', err);
-      setError(err.message || 'タスクの送信中にエラーが発生しました');
+      
+      if (response.success) {
+        toast({
+          title: isEditMode ? "成功" : "成功",
+          description: isEditMode ? "タスクが更新されました" : "タスクが作成されました",
+        });
+        navigate('/tasks');
+      } else {
+        const errorMessage = response.message || (response.errors ? response.errors.join(', ') : "不明なエラー");
+        setError(errorMessage);
+        toast({
+          title: "エラー",
+          description: `タスクの送信に失敗しました: ${errorMessage}`,
+          variant: "destructive"
+        });
+        console.error("タスク送信エラー:", response);
+      }
+    } catch (error: any) {
+      console.error("タスク送信エラー:", error);
+      const message = error.response?.data?.message || error.response?.data?.errors?.join(', ') || error.message || "予期せぬエラーが発生しました";
+      setError(message);
       toast({
         title: "エラー",
-        description: err.message || 'タスクの送信中にエラーが発生しました',
+        description: `タスクの送信に失敗しました: ${message}`,
         variant: "destructive"
       });
     } finally {
@@ -575,7 +590,7 @@ const CreateTaskView: React.FC = () => {
                             </div>
                             <button
                               type="button"
-                              onClick={() => removeSubtask(subtask.id)}
+                              onClick={() => isEditMode ? markSubtaskForRemoval(subtask.id) : removeSubtask(subtask.id)}
                               className="text-gray-500 hover:text-gray-700"
                             >
                               <X className="h-4 w-4" />

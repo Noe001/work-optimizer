@@ -5,54 +5,24 @@ import { ApiResponse, Task, PaginatedResponse, SubTask } from '../types/api';
 interface TaskData {
   title: string;
   description?: string;
-  status?: 'pending' | 'in_progress' | 'completed';
-  priority?: 'low' | 'medium' | 'high';
+  status?: 'pending' | 'in_progress' | 'review' | 'completed';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
   due_date?: string;
   assigned_to?: string | null;
   tags?: string;
   organization_id?: string;
   parent_task_id?: string;
-  subtasks?: {id?: string | number; title: string; completed: boolean}[];
+  // サブタスクは更新・作成時に別途処理が必要なため、ここでは含めない
+  // subtasks?: Array<{
+  //   id?: string | number; 
+  //   title: string; 
+  //   status?: 'pending' | 'completed';
+  // }>;
 }
 
 // タスクキャッシュ
 const taskCache: Record<string, {data: Task, timestamp: number}> = {};
 const CACHE_TTL = 1000 * 60 * 5; // 5分間キャッシュを保持
-
-// レスポンス構造の正規化ヘルパー関数
-const normalizeResponse = <T>(response: any): ApiResponse<T> => {
-  if (!response) {
-    return { success: false, message: 'レスポンスが空です' };
-  }
-
-  // レスポンスに直接dataがあるケース
-  if (response.success === true && response.data) {
-    return response as ApiResponse<T>;
-  }
-  
-  // APIからのデータ形式が不一致の場合に正規化
-  if (response.data && response.data.data) {
-    return {
-      success: true,
-      data: response.data.data as T,
-      message: response.message || response.data.message || 'Success'
-    };
-  }
-  
-  // データ形式が予期せぬ形式の場合のフォールバック
-  if (response.data) {
-    return {
-      success: true,
-      data: response.data as T,
-      message: response.message || 'Success'
-    };
-  }
-
-  return { 
-    success: false, 
-    message: response.message || 'データの形式が不正です' 
-  };
-};
 
 /**
  * タスク管理サービス
@@ -202,6 +172,8 @@ const taskService = {
    */
   async createTask(taskData: TaskData): Promise<ApiResponse<Task>> {
     try {
+      // サブタスク関連の処理を削除
+      console.log('送信するタスクデータ (作成):', taskData);
       const response = await api.post('/api/tasks', { task: taskData });
       
       if (response.success && response.data) {
@@ -232,6 +204,8 @@ const taskService = {
    */
   async updateTask(id: string, taskData: TaskData): Promise<ApiResponse<Task>> {
     try {
+      // サブタスク関連の処理を削除
+      console.log('送信するタスクデータ (更新):', taskData);
       const response = await api.patch(`/api/tasks/${id}`, { task: taskData });
       
       if (response.success && response.data) {
@@ -493,11 +467,17 @@ const taskService = {
    */
   async toggleSubtaskStatus(taskId: string, subtaskId: string): Promise<ApiResponse<{subtask: Task, parent_task: Task}>> {
     try {
-    const response = await api.put<any>(`/api/tasks/${taskId}/subtask/${subtaskId}/toggle`);
+      // リクエストボディにサブタスクIDを含める -> ルートに含めるように変更
+      const response = await api.put<any>(`/api/tasks/${taskId}/subtask/${subtaskId}/toggle`, {
+        // ボディは空で良いか、必要に応じてパラメータを追加
+        // debug_info: {
+        //   task_id: taskId,
+        //   subtask_id: subtaskId
+        // }
+      });
     
       // 親タスクと対象サブタスクのキャッシュを無効化
       this.invalidateCache(taskId);
-      this.invalidateCache(subtaskId);
       
       if (response.success && response.data) {
         const resultData = response.data.data || response.data;
@@ -519,7 +499,7 @@ const taskService = {
         message: error instanceof Error ? error.message : 'サブタスクのステータス切り替え中にエラーが発生しました'
       };
     }
-  }
+  },
 };
 
 export default taskService;
