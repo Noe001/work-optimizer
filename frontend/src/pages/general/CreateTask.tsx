@@ -17,7 +17,6 @@ import { format, parseISO } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { taskService } from "@/services";
 import { useToast } from "@/hooks";
-import { Task } from "@/types/api";
 
 // APIステータスとUIステータスのマッピング
 const statusToApiMapping: Record<string, string> = {

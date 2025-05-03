@@ -5,17 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, Search, Plus, Filter, List, CalendarDays, ChevronUp, ChevronDown, Edit, Trash2, Loader2, File, FileX, Image, Download, X } from "lucide-react";
+import { Calendar, Search, Plus, Filter, List, CalendarDays, ChevronUp, ChevronDown, Edit, Trash2, Loader2, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { taskService } from "@/services";
-import { Task as ApiTask, ApiResponse } from "@/types/api";
+import { Task as ApiTask } from "@/types/api";
 import { usePaginatedApi } from "@/hooks";
 import { ApiError } from "@/components/ui/api-error";
 import { LoadingIndicator } from "@/components/ui/loading-indicator";
@@ -356,28 +354,6 @@ const TaskManagerView: React.FC = () => {
   const closeTaskDetails = () => {
     setIsTaskDialogOpen(false);
     setSelectedTaskId(null);
-  };
-
-  // タスクを削除する
-  const deleteTask = async (taskId: string | number) => {
-    try {
-      setTaskOperationLoading(true);
-      const taskIdString = taskId.toString();
-      const response = await taskService.deleteTask(taskIdString);
-      if (response.success) {
-        showSuccessToast("タスクが削除されました");
-        setIsTaskDialogOpen(false);
-        // タスク一覧を更新
-        fetchData(true);
-      } else {
-        showErrorToast("タスクの削除に失敗しました");
-      }
-    } catch (error) {
-      console.error("タスク削除エラー:", error);
-      showErrorToast("タスクの削除中にエラーが発生しました");
-    } finally {
-      setTaskOperationLoading(false);
-    }
   };
 
   // 削除処理関数を TaskManagerView に移動
@@ -1512,7 +1488,6 @@ interface TaskDetailsProps {
 
 const TaskDetails: React.FC<TaskDetailsProps> = ({ 
   task, 
-  onClose,
   calculateTaskProgress,
   updatingSubtasks = {},
   handleToggleSubtask = async () => {} 
