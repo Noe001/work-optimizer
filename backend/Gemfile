@@ -54,6 +54,10 @@ group :development do
   # gem "spring"
   
   gem "rubocop", require: false
+  
+  # ホットリロード用のgem
+  gem "listen", "~> 3.0"
+  gem "web-console"
 end
 
 

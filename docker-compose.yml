@@ -18,11 +18,14 @@ services:
       - ./backend/.env.local
     environment:
       TZ: Asia/Tokyo
-    command: bash -c "rm -f tmp/pids/server.pid && bundle exec rails s -b '0.0.0.0'"
+      RAILS_ENV: development
+      BUNDLE_PATH: /bundle
+    command: bash -c "rm -f tmp/pids/server.pid && bundle exec rails s -b '0.0.0.0' --dev-caching"
     volumes:
       - ./backend:/app
       - backend_storage:/app/storage
       - backend_tmp:/tmp
+      - bundle_data:/bundle
     ports:
       - "3000:3000"
     depends_on:
@@ -46,3 +49,4 @@ volumes:
   frontend_node_modules:
   backend_storage:
   backend_tmp:
+  bundle_data:
