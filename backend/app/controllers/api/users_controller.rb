@@ -1,4 +1,4 @@
-class UsersController < ApplicationController
+class Api::UsersController < ApplicationController # Namespaced class
   before_action :authenticate_user! # Ensures user is authenticated for all actions in this controller
 
   def index

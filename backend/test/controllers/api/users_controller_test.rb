@@ -1,6 +1,6 @@
 require "test_helper"
 
-class UsersControllerTest < ActionDispatch::IntegrationTest
+class Api::UsersControllerTest < ActionDispatch::IntegrationTest
   setup do
     @activated_user = users(:activated_user) # From fixtures
     # For simplicity, directly use the user's generate_jwt method.
