@@ -67,6 +67,7 @@ Rails.application.routes.draw do
     
     # ユーザー管理
     resources :users, only: [:index, :show, :update, :destroy]
+    put '/profile', to: 'users#update_profile' # Add this line for profile update
     
     # 組織関連
     resources :organizations do

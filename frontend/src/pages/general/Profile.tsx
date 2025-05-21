@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import Header from '@/components/Header';
+import { useToast } from '@/components/ui/use-toast';
+import userService from '@/services/userService';
 
 interface UserProfile {
   name: string;
@@ -26,7 +28,9 @@ const Profile: React.FC = () => {
   });
 
   const [isEditing, setIsEditing] = useState(false);
+  const [originalProfile, setOriginalProfile] = useState<UserProfile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -57,9 +61,41 @@ const Profile: React.FC = () => {
     }
   };
 
-  const saveProfile = () => {
-    console.log("プロフィール情報が保存されました:", profile);
+  const saveProfile = async () => {
+    try {
+      const response = await userService.updateUserProfileData(profile);
+      if (response.success) {
+        toast({
+          title: "成功",
+          description: "プロフィールが正常に更新されました。",
+        });
+        setIsEditing(false);
+        setOriginalProfile(null); 
+      } else {
+        toast({
+          title: "エラー",
+          description: response.message || "プロフィールの更新に失敗しました。",
+          variant: "destructive",
+        });
+        // isEditing remains true for the user to retry or cancel
+      }
+    } catch (error: any) {
+      console.error("Failed to update profile:", error);
+      toast({
+        title: "エラー",
+        description: error.message || "プロフィールの更新中に予期せぬエラーが発生しました。",
+        variant: "destructive",
+      });
+      // isEditing remains true
+    }
+  };
+
+  const handleCancel = () => {
+    if (originalProfile) {
+      setProfile(originalProfile);
+    }
     setIsEditing(false);
+    setOriginalProfile(null); // Clear original profile after cancelling
   };
 
   return (
@@ -165,11 +201,22 @@ const Profile: React.FC = () => {
                 />
               </div>
             </div>
-            {isEditing && (
-              <div className="flex justify-end mt-4">
-                <Button onClick={saveProfile}>保存</Button>
-              </div>
-            )}
+            <div className="flex justify-end mt-4 space-x-2">
+              {isEditing ? (
+                <>
+                  <Button variant="outline" onClick={handleCancel}>キャンセル</Button>
+                  <Button onClick={saveProfile}>保存</Button>
+                </>
+              ) : (
+                <Button onClick={() => {
+                  setOriginalProfile(profile);
+                  setIsEditing(true);
+                }}>
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  編集
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
 
