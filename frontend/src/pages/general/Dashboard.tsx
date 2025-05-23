@@ -40,6 +40,7 @@ import { Task } from '@/types/api'
 import type { Meeting as ApiMeeting, Attendance } from '@/types/api'
 import { ApiError, LoadingIndicator } from '@/components/ui'
 import { getTaskProgress } from '@/services/taskService'
+import { useAuth } from '@/contexts/AuthContext'
 
 // Meeting型定義
 interface LocalMeeting {
@@ -60,6 +61,56 @@ const DashboardTab: React.FC = () => {
 
   // 勤怠管理用のAPIフック
   const attendanceApi = useApi<Attendance>();
+
+  // 認証コンテキストを使用
+  const { user } = useAuth();
+
+  // ユーザー名を取得
+  const userName = user?.name || 'ゲスト';
+  
+  // 時間帯に基づくメッセージを生成
+  const [greeting, setGreeting] = useState<string>('');
+  const [taskCompletionRate, setTaskCompletionRate] = useState<number>(0);
+  const [motivationalMessage, setMotivationalMessage] = useState<string>('');
+
+  // 時間帯に応じた挨拶を設定
+  useEffect(() => {
+    const hour = new Date().getHours();
+    
+    if (hour >= 5 && hour < 12) {
+      setGreeting('おはようございます');
+    } else if (hour >= 12 && hour < 17) {
+      setGreeting('こんにちは');
+    } else {
+      setGreeting('こんばんは');
+    }
+  }, []);
+
+  // タスクの完了率を計算
+  useEffect(() => {
+    if (tasksApi.data && tasksApi.data.length > 0) {
+      const completedTasks = tasksApi.data.filter(task => task.status === 'completed').length;
+      const totalTasks = tasksApi.data.length;
+      const completionRate = Math.round((completedTasks / totalTasks) * 100);
+      setTaskCompletionRate(completionRate);
+      
+      // タスク完了率に基づくメッセージを設定
+      if (completionRate >= 90) {
+        setMotivationalMessage('素晴らしい進捗です！目標達成まであと少しです。');
+      } else if (completionRate >= 70) {
+        setMotivationalMessage('順調に進んでいます。このペースを維持しましょう。');
+      } else if (completionRate >= 50) {
+        setMotivationalMessage('半分以上完了しました。次の目標に向けて頑張りましょう。');
+      } else if (completionRate >= 30) {
+        setMotivationalMessage('一歩ずつ着実に進んでいます。焦らず取り組みましょう。');
+      } else {
+        setMotivationalMessage('新しい週の始まりです。一つずつ着実に進めていきましょう。');
+      }
+    } else {
+      setTaskCompletionRate(0);
+      setMotivationalMessage('新しいタスクを作成して、生産性を高めましょう。');
+    }
+  }, [tasksApi.data]);
 
   // チームアクティビティ
   const teamActivities = [
@@ -108,8 +159,8 @@ const DashboardTab: React.FC = () => {
     <div className="space-y-6">
       {/* ようこそメッセージ */}
       <div className="bg-gradient-to-r from-gray-200 to-cyan-500/30 rounded-lg p-6 shadow-lg">
-        <h2 className="text-2xl font-bold mb-2">おはようございます、田中さん</h2>
-        <p className="opacity-90">今日も素晴らしい一日になりますように。今週のタスク完了率は85%です。</p>
+        <h2 className="text-2xl font-bold mb-2">{greeting}、{userName}さん</h2>
+        <p className="opacity-90">{motivationalMessage} 今週のタスク完了率は{taskCompletionRate}%です。</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button variant="secondary" className="bg-white/20 hover:bg-white/30" asChild>
             <Link to="/tasks">

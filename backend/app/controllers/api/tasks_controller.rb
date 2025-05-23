@@ -161,40 +161,8 @@ module Api
 
     # タスクの作成
     def create
-      # --- デバッグコード追加 開始 ---
-      puts "[DEBUG] TasksController#create called"
-      puts "[DEBUG] params[:task]: #{params[:task].inspect}"
-      puts "[DEBUG] params[:task][:attachments]: #{params.dig(:task, :attachments).inspect}" # Use dig for safety
-      # --- デバッグコード追加 終了 ---
-
       # Build task first, then handle attachments separately if needed
       task = current_user.tasks.build(task_params.except(:attachments))
-
-      # --- デバッグコード追加 開始 --- 
-      puts "[DEBUG] Task built with params (excluding attachments): #{task.attributes.inspect}"
-      # --- デバッグコード追加 終了 --- 
-
-      # === FileUtils Test Start ===
-      test_dir = Rails.root.join("storage", "test_debug_dir")
-      test_file = test_dir.join("test_write.txt")
-      begin
-        puts "[DEBUG FileUtils Test] Attempting mkdir_p: #{test_dir}"
-        FileUtils.mkdir_p(test_dir.to_s) # Make sure path is string
-        puts "[DEBUG FileUtils Test] mkdir_p successful."
-        puts "[DEBUG FileUtils Test] Attempting File.write: #{test_file}"
-        File.write(test_file.to_s, "Test write successful at #{Time.now}") # Make sure path is string
-        puts "[DEBUG FileUtils Test] File.write successful."
-        # Verify existence
-        if File.exist?(test_file.to_s)
-          puts "[DEBUG FileUtils Test] Verification: File.exist? is TRUE for #{test_file}"
-        else
-          puts "[ERROR FileUtils Test] Verification: File.exist? is FALSE for #{test_file}"
-        end
-      rescue => e
-        puts "[ERROR FileUtils Test] Exception during manual write test: #{e.message}"
-        puts e.backtrace.join("\n")
-      end
-      # === FileUtils Test End ===
 
       # トランザクション開始
       ActiveRecord::Base.transaction do
@@ -242,18 +210,6 @@ module Api
             # === Broad Exception Catching End ===
             end
           end
-
-          # --- デバッグコード追加 開始 --- (Re-check attachments) - この部分はVerificationとかぶるので一旦コメントアウト
-          # task.reload # Reload to get the latest state including attachments
-          # puts "[DEBUG] task.attachments.attached? after attach: #{task.attachments.attached?}"
-          # if task.attachments.attached?
-          #   task.attachments.each do |attachment|
-          #     puts "[DEBUG] Attached file confirmed: #{attachment.filename}, size: #{attachment.byte_size}, content_type: #{attachment.content_type}"
-          #   end
-          # else 
-          #   puts "[DEBUG] No attachments found after attach attempt."
-          # end
-          # --- デバッグコード追加 終了 ---
 
           # サブタスクの処理 (Attachmentエラーがなければ実行)
           if params[:task][:subtasks].present? && task.errors.empty?
@@ -305,21 +261,17 @@ module Api
 
     # タスクの更新
     def update
-      # --- デバッグコード強化 ---
-      puts "[DEBUG] TasksController#update called for task ID: #{@task.id}"
-      puts "[DEBUG] Content-Type: #{request.content_type}"
-      puts "[DEBUG] Request format: #{request.format}"
-      puts "[DEBUG] Request method: #{request.method}"
-      puts "[DEBUG] Raw params: #{params.inspect}"
-      puts "[DEBUG] Files in params: #{params.to_unsafe_h.to_s[0..500]}"
-      
-      # ファイルアップロードの特別処理
+      # タスクが見つからない場合のエラーハンドリング
+      unless @task
+        render json: { success: false, message: 'タスクが見つかりません' }, status: :not_found
+        return
+      end
+
+      # Process attachments if they exist
       file_data = []
       if request.content_type =~ /multipart\/form-data/
-        puts "[DEBUG] Processing multipart form data"
         params.each do |key, value|
           if value.is_a?(ActionDispatch::Http::UploadedFile) || value.is_a?(Rack::Test::UploadedFile)
-            puts "[DEBUG] Found file: #{key} => #{value.original_filename}"
             file_data << value
           end
         end
@@ -338,18 +290,14 @@ module Api
       
       # 1. 標準的なパスでファイルを探す
       if params[:task] && params[:task][:attachments].present?
-        puts "[DEBUG] Checking task[attachments] path"
         if params[:task][:attachments].is_a?(Array)
           params[:task][:attachments].each_with_index do |attachment, idx|
-            puts "[DEBUG] Examining array attachment #{idx}: #{attachment.class.name}"
             if attachment.respond_to?(:original_filename)
               new_attachments << attachment
-              puts "[DEBUG] Found valid file in array: #{attachment.original_filename}"
             end
           end
         elsif params[:task][:attachments].respond_to?(:original_filename)
           new_attachments << params[:task][:attachments]
-          puts "[DEBUG] Found single file: #{params[:task][:attachments].original_filename}"
         end
       end
       
@@ -357,15 +305,12 @@ module Api
       params.each do |key, value|
         next unless key.to_s.include?('attachment')
         
-        puts "[DEBUG] Found potential file param: #{key}"
         if value.is_a?(ActionDispatch::Http::UploadedFile) || value.respond_to?(:original_filename)
           new_attachments << value
-          puts "[DEBUG] Found direct file: #{value.original_filename}"
         elsif value.is_a?(Array)
           value.each_with_index do |item, idx|
             if item.is_a?(ActionDispatch::Http::UploadedFile) || item.respond_to?(:original_filename)
               new_attachments << item
-              puts "[DEBUG] Found file in array param: #{item.original_filename}"
             end
           end
         end
@@ -374,7 +319,6 @@ module Api
       # 3. ファイルパラメータをさらに探索
       file_params = params.to_unsafe_h.select { |k, v| v.is_a?(ActionDispatch::Http::UploadedFile) }
       file_params.each do |key, value|
-        puts "[DEBUG] Found raw file param: #{key} => #{value.original_filename}"
         new_attachments << value
       end
       
@@ -402,9 +346,6 @@ module Api
             if attachments_to_purge.any?
               puts "[DEBUG] Purging attachments with IDs: #{attachments_to_purge.map(&:id).inspect}"
               attachments_to_purge.each(&:purge) # 個別にpurgeする
-              # または attachments_to_purge.purge_later # バックグラウンドで削除する場合
-              puts "[DEBUG] Purge process initiated for removed attachments."
-              @task.reload # purge後はリロードして状態を反映
             else
               puts "[DEBUG] No attachments need to be purged."
             end
@@ -469,7 +410,6 @@ module Api
 
           # サブタスクの更新処理 - Active Recordのネストされた属性機能を利用
           # task_paramsでsubtasks_attributesが許可されているので、@task.updateが自動的に処理する
-          # puts "[DEBUG] Subtasks params for update: #{current_task_params[:subtasks_attributes].inspect}" if current_task_params[:subtasks_attributes]
           
           # 既存のサブタスク処理ロジックは不要なのでコメントアウトまたは削除
           # if params[:task][:subtasks].present? && @task.errors.empty?
