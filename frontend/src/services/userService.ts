@@ -127,9 +127,31 @@ const userService = {
    * ユーザープロファイルを更新
    * @param userData 更新するユーザー情報
    */
-  async updateProfile(userData: Partial<User>): Promise<ApiResponse<User>> {
+  async updateProfile(userData: Partial<User>): Promise<ApiResponse<User>> { // This is likely for general user settings
     try {
       return await api.put<User>('/api/users/profile', userData);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * ユーザープロファイル情報（詳細）を更新
+   * @param profileData 更新するプロファイルデータ
+   */
+  async updateUserProfileData(profileData: {
+    name: string;
+    email: string;
+    department: string;
+    position: string;
+    bio: string;
+    avatarUrl: string;
+  }): Promise<ApiResponse<User>> { // Assuming the response will be of type User
+    try {
+      // The subtask specifies /api/profile.
+      // The existing similar function updateProfile uses /api/users/profile.
+      // Using /api/profile as per subtask instructions.
+      return await api.put<User>('/api/profile', profileData);
     } catch (error) {
       throw error;
     }
