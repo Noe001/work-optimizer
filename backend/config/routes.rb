@@ -6,6 +6,9 @@ Rails.application.routes.draw do
   get '/storage/proxy/:signed_id/*filename', to: 'api/active_storage#proxy', as: :custom_blob_proxy
   get '/storage/download/:signed_id/*filename', to: 'api/active_storage#download', as: :custom_blob_download
   
+  # Action Cable
+  mount ActionCable.server => '/cable'
+  
   # API routes
   namespace :api do
     get "invitations/create"
@@ -20,6 +23,20 @@ Rails.application.routes.draw do
     post '/login', to: 'auth#login'
     post 'auth/logout', to: 'auth#logout'
     get 'auth/me', to: 'auth#me'
+    
+    # チャット関連のエンドポイント
+    resources :chat_rooms do
+      resources :messages do
+        collection do
+          post :read_all
+        end
+      end
+      
+      member do
+        post :add_member
+        delete 'remove_member/:user_id', to: 'chat_rooms#remove_member', as: :remove_member
+      end
+    end
     
     # セッションベースの認証エンドポイント
     get '/sessions/new', to: 'sessions#new'

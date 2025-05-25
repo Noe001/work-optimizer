@@ -15,6 +15,11 @@ class User < ApplicationRecord
   has_many :organized_meetings, class_name: 'Meeting', foreign_key: 'organizer_id', dependent: :nullify
   has_many :attendances, dependent: :destroy
   has_many :leave_requests, dependent: :destroy
+  
+  # チャット関連
+  has_many :chat_room_memberships, dependent: :destroy
+  has_many :chat_rooms, through: :chat_room_memberships
+  has_many :messages, dependent: :destroy
 
   # バリデーション
   validates :name, presence: true, length: { maximum: 50 }
