@@ -7,136 +7,285 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Send, Paperclip, Smile, Bell, Settings, Users, Hash } from "lucide-react";
+import chatService from "@/services/chatService";
+import { ChatRoom, ChatMessage, DirectMessage, ChatMessageEvent } from "@/types/chat";
+import { Subscription } from "@rails/actioncable";
+import { User } from "@/types/api";
+import { format } from "date-fns";
+import { ja } from "date-fns/locale";
 
-interface Message {
-  id: number;
+// メッセージの型定義
+interface MessageWithUser extends ChatMessage {
   user: {
-    id: number;
+    id: string;
     name: string;
     avatar?: string;
     initials: string;
   };
-  content: string;
-  timestamp: string;
-  attachments?: { name: string; url: string; type: string }[];
-  reactions?: { emoji: string; count: number }[];
-}
-
-interface Channel {
-  id: number;
-  name: string;
-  description?: string;
-  isPrivate: boolean;
-  unreadCount?: number;
-}
-
-interface DirectMessage {
-  userId: number;
-  name: string;
-  avatar?: string;
-  initials: string;
-  status: "online" | "offline" | "away" | "busy";
-  unreadCount?: number;
 }
 
 const TeamChatView: React.FC = () => {
   const [currentTab, setCurrentTab] = useState("channels");
-  const [currentChannelId, setCurrentChannelId] = useState<number>(1);
-  const [currentDmUserId, setCurrentDmUserId] = useState<number | null>(null);
+  const [currentChannelId, setCurrentChannelId] = useState<string | null>(null);
+  const [currentDmUserId, setCurrentDmUserId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [channels, setChannels] = useState<ChatRoom[]>([]);
+  const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
+  const [messages, setMessages] = useState<MessageWithUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [currentChatRoomId, setCurrentChatRoomId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
 
-  // サンプルデータ
-  const channels: Channel[] = [
-    { id: 1, name: "一般", description: "一般的な話題のチャンネル", isPrivate: false, unreadCount: 0 },
-    { id: 2, name: "プロジェクトA", description: "プロジェクトAに関する議論", isPrivate: false, unreadCount: 3 },
-    { id: 3, name: "マーケティング", description: "マーケティング戦略の議論", isPrivate: true, unreadCount: 0 },
-    { id: 4, name: "アイデア", description: "新しいアイデアの共有", isPrivate: false, unreadCount: 0 },
-  ];
+  // チャットルーム一覧の取得
+  useEffect(() => {
+    const fetchChatRooms = async () => {
+      try {
+        setLoading(true);
+        const response = await chatService.getChatRooms();
+        
+        if (response.success && response.data) {
+          setChannels(response.data.channels);
+          setDirectMessages(response.data.direct_messages);
+          
+          // 最初のチャンネルを選択
+          if (response.data.channels.length > 0 && !currentChannelId) {
+            setCurrentChannelId(response.data.channels[0].id);
+          }
+        } else {
+          console.error("チャットルーム一覧の取得に失敗しました", response.message);
+        }
+      } catch (error) {
+        console.error("チャットルーム一覧の取得中にエラーが発生しました", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchChatRooms();
+  }, []);
 
-  const directMessages: DirectMessage[] = [
-    { userId: 1, name: "佐藤太郎", initials: "ST", status: "online", unreadCount: 2 },
-    { userId: 2, name: "鈴木花子", avatar: "/avatars/hanako.jpg", initials: "SH", status: "busy" },
-    { userId: 3, name: "田中誠", initials: "TM", status: "offline" },
-    { userId: 4, name: "伊藤美咲", initials: "IM", status: "away" },
-  ];
-
-  const channelMessages: Message[] = [
-    {
-      id: 1,
-      user: { id: 1, name: "佐藤太郎", initials: "ST" },
-      content: "おはようございます！今日のミーティングの議題は何ですか？",
-      timestamp: "09:15",
-    },
-    {
-      id: 2,
-      user: { id: 2, name: "鈴木花子", avatar: "/avatars/hanako.jpg", initials: "SH" },
-      content: "新しいプロジェクトの進捗と、次週の予定確認です。資料を添付しておきます。",
-      timestamp: "09:17",
-      attachments: [{ name: "プロジェクト進捗.pdf", url: "#", type: "pdf" }],
-    },
-    {
-      id: 3,
-      user: { id: 3, name: "田中誠", initials: "TM" },
-      content: "承知しました。ミーティングの前に確認しておきます。",
-      timestamp: "09:20",
-      reactions: [{ emoji: "👍", count: 2 }],
-    },
-    {
-      id: 4,
-      user: { id: 4, name: "伊藤美咲", initials: "IM" },
-      content: "私も参加します。先週のフィードバックも議題に入れてもらえますか？",
-      timestamp: "09:22",
-    },
-    {
-      id: 5,
-      user: { id: 1, name: "佐藤太郎", initials: "ST" },
-      content: "了解です。議題に追加しておきます。",
-      timestamp: "09:25",
-    },
-  ];
-
-  const dmMessages: Message[] = [
-    {
-      id: 1,
-      user: { id: 1, name: "佐藤太郎", initials: "ST" },
-      content: "プロジェクトの進捗はどうですか？",
-      timestamp: "10:15",
-    },
-    {
-      id: 2,
-      user: { id: 2, name: "鈴木花子", avatar: "/avatars/hanako.jpg", initials: "SH" },
-      content: "順調に進んでいます。来週には完了予定です。",
-      timestamp: "10:17",
-    },
-  ];
-
-  // 選択されているチャネルまたはDMのメッセージを取得
-  const getActiveMessages = () => {
-    if (currentTab === "channels") {
-      return channelMessages;
+  // 現在のチャットルームIDを設定
+  useEffect(() => {
+    if (currentTab === "channels" && currentChannelId) {
+      setCurrentChatRoomId(currentChannelId);
+    } else if (currentTab === "direct" && currentDmUserId) {
+      // DMの場合は、選択されたユーザーIDに対応するチャットルームIDを探す
+      const selectedDm = directMessages.find(dm => 
+        dm.users?.some(user => user.id === currentDmUserId)
+      );
+      
+      if (selectedDm) {
+        setCurrentChatRoomId(selectedDm.id);
+      }
     } else {
-      return dmMessages;
+      setCurrentChatRoomId(null);
     }
-  };
+  }, [currentTab, currentChannelId, currentDmUserId, directMessages]);
 
-  // メッセージを送信
-  const sendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (message.trim() === "") return;
+  // メッセージ履歴の取得
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!currentChatRoomId) return;
+      
+      try {
+        setLoading(true);
+        const response = await chatService.getMessages(currentChatRoomId);
+        
+        if (response.success && response.data) {
+          // メッセージを日付の新しい順に並べ替え
+          const formattedMessages = response.data.messages.map(msg => {
+            // ユーザー情報を整形
+            return {
+              ...msg,
+              user: {
+                id: msg.user?.id || msg.user_id,
+                name: msg.user?.name || msg.user_name || "不明なユーザー",
+                initials: msg.user?.name ? getInitials(msg.user.name) : "??"
+              }
+            } as MessageWithUser;
+          });
+          
+          setMessages(formattedMessages);
+          
+          // すべてのメッセージを既読にする
+          await chatService.readAllMessages(currentChatRoomId);
+        } else {
+          console.error("メッセージ履歴の取得に失敗しました", response.message);
+        }
+      } catch (error) {
+        console.error("メッセージ履歴の取得中にエラーが発生しました", error);
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    // ここでメッセージ送信のAPIを呼び出す想定
-    // 実際の実装ではバックエンドAPIとの連携が必要
-    console.log("メッセージを送信:", message);
+    fetchMessages();
+  }, [currentChatRoomId]);
+
+  // Action Cable接続の設定
+  useEffect(() => {
+    if (!currentChatRoomId) return;
     
-    // メッセージを送信後、入力フィールドをクリア
-    setMessage("");
-  };
+    // 既存の接続を解除
+    if (subscription) {
+      subscription.unsubscribe();
+    }
+    
+    // 新しい接続を作成
+    const newSubscription = chatService.subscribeToChatRoom(
+      currentChatRoomId,
+      {
+        onReceived: (data: ChatMessageEvent) => {
+          // 新しいメッセージを受信
+          if (data.message) {
+            const newMessage = {
+              ...data.message,
+              user: {
+                id: data.message.user?.id || data.message.user_id,
+                name: data.message.user?.name || data.message.user_name || "不明なユーザー",
+                initials: data.message.user?.name ? getInitials(data.message.user.name) : "??"
+              }
+            } as MessageWithUser;
+            
+            setMessages(prev => [newMessage, ...prev]);
+          }
+          // メッセージ更新
+          else if (data.message_updated) {
+            const updatedMessage = {
+              ...data.message_updated,
+              user: {
+                id: data.message_updated.user?.id || data.message_updated.user_id,
+                name: data.message_updated.user?.name || data.message_updated.user_name || "不明なユーザー",
+                initials: data.message_updated.user?.name ? getInitials(data.message_updated.user.name) : "??"
+              }
+            } as MessageWithUser;
+            
+            setMessages(prev => 
+              prev.map(msg => msg.id === updatedMessage.id ? updatedMessage : msg)
+            );
+          }
+          // メッセージ削除
+          else if (data.message_deleted) {
+            setMessages(prev => 
+              prev.filter(msg => msg.id !== data.message_deleted?.id)
+            );
+          }
+          // 入力中ステータス
+          else if (data.typing) {
+            setTypingUsers(prev => {
+              // 既に含まれている場合は追加しない
+              if (prev.includes(data.typing?.user_name || "")) {
+                return prev;
+              }
+              return [...prev, data.typing?.user_name || ""];
+            });
+            
+            // 3秒後に入力中ステータスを削除
+            setTimeout(() => {
+              setTypingUsers(prev => 
+                prev.filter(name => name !== data.typing?.user_name)
+              );
+            }, 3000);
+          }
+        },
+        onConnected: () => {
+          console.log(`Connected to chat room: ${currentChatRoomId}`);
+        },
+        onDisconnected: () => {
+          console.log(`Disconnected from chat room: ${currentChatRoomId}`);
+        }
+      }
+    );
+    
+    setSubscription(newSubscription);
+    
+    // クリーンアップ関数
+    return () => {
+      if (newSubscription) {
+        newSubscription.unsubscribe();
+      }
+    };
+  }, [currentChatRoomId]);
 
   // 新しいメッセージが追加されたら自動スクロール
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [getActiveMessages()]);
+  }, [messages]);
+
+  // メッセージを送信
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!currentChatRoomId || message.trim() === "" && !attachment) return;
+    
+    try {
+      const response = await chatService.sendMessage(
+        currentChatRoomId,
+        message,
+        attachment || undefined
+      );
+      
+      if (response.success) {
+        // 入力フィールドとファイル選択をクリア
+        setMessage("");
+        setAttachment(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      } else {
+        console.error("メッセージの送信に失敗しました", response.message);
+      }
+    } catch (error) {
+      console.error("メッセージの送信中にエラーが発生しました", error);
+    }
+  };
+
+  // 入力中ステータスの送信
+  const handleTyping = () => {
+    if (subscription) {
+      (subscription as any).typing();
+    }
+  };
+
+  // ファイル選択ハンドラ
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setAttachment(e.target.files[0]);
+    }
+  };
+
+  // ファイル選択ダイアログを開く
+  const openFileDialog = () => {
+    fileInputRef.current?.click();
+  };
+
+  // イニシャルを取得
+  const getInitials = (name: string): string => {
+    return name
+      .split(' ')
+      .map(part => part.charAt(0))
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+
+  // タイムスタンプをフォーマット
+  const formatTimestamp = (timestamp: string): string => {
+    try {
+      return format(new Date(timestamp), 'HH:mm', { locale: ja });
+    } catch (error) {
+      return timestamp;
+    }
+  };
+
+  // 選択されているチャネルまたはDMのメッセージを取得
+  const getActiveMessages = () => {
+    return messages;
+  };
 
   return (
     <div className="flex flex-col h-screen">
@@ -165,13 +314,7 @@ const TeamChatView: React.FC = () => {
                     <div className="flex items-center">
                       <Hash className="h-4 w-4 mr-2" />
                       <span>{channel.name}</span>
-                      {channel.isPrivate && <span className="ml-1 text-xs">🔒</span>}
                     </div>
-                    {channel.unreadCount ? (
-                      <Badge variant="destructive" className="ml-auto">
-                        {channel.unreadCount}
-                      </Badge>
-                    ) : null}
                   </button>
                 ))}
                 <button className="w-full flex items-center p-2 text-muted-foreground text-sm hover:text-foreground">
@@ -184,37 +327,36 @@ const TeamChatView: React.FC = () => {
               <div className="space-y-1">
                 {directMessages.map((dm) => (
                   <button
-                    key={dm.userId}
+                    key={dm.id}
                     className={`w-full flex items-center justify-between p-2 rounded hover:bg-accent text-left ${
-                      currentDmUserId === dm.userId ? "bg-accent" : ""
+                      currentChatRoomId === dm.id ? "bg-accent" : ""
                     }`}
-                    onClick={() => setCurrentDmUserId(dm.userId)}
+                    onClick={() => {
+                      // 相手のユーザーIDを取得
+                      const otherUser = dm.users?.find(user => 
+                        // 自分以外のユーザーを探す（実際の実装では現在のユーザーIDと比較）
+                        user.id !== "current_user_id"
+                      );
+                      
+                      if (otherUser) {
+                        setCurrentDmUserId(otherUser.id);
+                      }
+                    }}
                   >
                     <div className="flex items-center">
                       <div className="relative mr-2">
                         <Avatar className="h-6 w-6">
-                          {dm.avatar ? <AvatarImage src={dm.avatar} alt={dm.name} /> : null}
-                          <AvatarFallback>{dm.initials}</AvatarFallback>
+                          {dm.users && dm.users.length > 0 && (
+                            <AvatarFallback>
+                              {getInitials(dm.users[0].name)}
+                            </AvatarFallback>
+                          )}
                         </Avatar>
-                        <span
-                          className={`absolute -bottom-0.5 -right-0.5 block rounded-full h-2.5 w-2.5 ${
-                            dm.status === "online"
-                              ? "bg-green-500"
-                              : dm.status === "busy"
-                              ? "bg-red-500"
-                              : dm.status === "away"
-                              ? "bg-yellow-500"
-                              : "bg-gray-500"
-                          }`}
-                        />
                       </div>
-                      <span>{dm.name}</span>
+                      <span>
+                        {dm.users && dm.users.length > 0 ? dm.users[0].name : "不明なユーザー"}
+                      </span>
                     </div>
-                    {dm.unreadCount ? (
-                      <Badge variant="destructive" className="ml-auto">
-                        {dm.unreadCount}
-                      </Badge>
-                    ) : null}
                   </button>
                 ))}
               </div>
@@ -231,19 +373,14 @@ const TeamChatView: React.FC = () => {
                 {currentTab === "channels" ? (
                   <>
                     <Hash className="h-5 w-5 mr-2" />
-                    {channels.find((c) => c.id === currentChannelId)?.name}
+                    {channels.find((c) => c.id === currentChannelId)?.name || "チャンネルを選択"}
                   </>
                 ) : (
                   <>
-                    {directMessages.find((d) => d.userId === currentDmUserId)?.name || "メッセージを選択"}
+                    {directMessages.find((d) => d.id === currentChatRoomId)?.users?.[0]?.name || "メッセージを選択"}
                   </>
                 )}
               </h2>
-              {currentTab === "channels" && (
-                <p className="text-sm text-muted-foreground">
-                  {channels.find((c) => c.id === currentChannelId)?.description}
-                </p>
-              )}
             </div>
             <div className="flex items-center space-x-3">
               <button className="text-muted-foreground hover:text-foreground">
@@ -260,54 +397,72 @@ const TeamChatView: React.FC = () => {
 
           {/* メッセージエリア */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {getActiveMessages().map((msg) => (
-              <div key={msg.id} className="flex items-start space-x-3">
-                <Avatar>
-                  {msg.user.avatar ? <AvatarImage src={msg.user.avatar} alt={msg.user.name} /> : null}
-                  <AvatarFallback>{msg.user.initials}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <div className="flex items-baseline">
-                    <span className="font-medium mr-2">{msg.user.name}</span>
-                    <span className="text-xs text-muted-foreground">{msg.timestamp}</span>
-                  </div>
-                  <p className="mt-1">{msg.content}</p>
-                  {msg.attachments && (
-                    <div className="mt-2 space-y-2">
-                      {msg.attachments.map((attachment, index) => (
-                        <Card key={index} className="p-2 bg-accent hover:bg-accent/80 cursor-pointer">
+            {loading ? (
+              <div className="flex justify-center items-center h-full">
+                <p>読み込み中...</p>
+              </div>
+            ) : getActiveMessages().length === 0 ? (
+              <div className="flex justify-center items-center h-full text-muted-foreground">
+                <p>メッセージはありません</p>
+              </div>
+            ) : (
+              getActiveMessages().map((msg) => (
+                <div key={msg.id} className="flex items-start space-x-3">
+                  <Avatar>
+                    <AvatarFallback>{msg.user.initials}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <div className="flex items-baseline">
+                      <span className="font-medium mr-2">{msg.user.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatTimestamp(msg.created_at)}
+                      </span>
+                    </div>
+                    <p className="mt-1">{msg.content}</p>
+                    {msg.attachment_url && (
+                      <div className="mt-2">
+                        <Card className="p-2 bg-accent hover:bg-accent/80 cursor-pointer">
                           <CardContent className="p-0 flex items-center">
                             <Paperclip className="h-4 w-4 mr-2" />
-                            <span className="text-sm">{attachment.name}</span>
+                            <a 
+                              href={msg.attachment_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-sm"
+                            >
+                              添付ファイル
+                            </a>
                           </CardContent>
                         </Card>
-                      ))}
-                    </div>
-                  )}
-                  {msg.reactions && (
-                    <div className="mt-2 flex space-x-2">
-                      {msg.reactions.map((reaction, index) => (
-                        <Badge key={index} variant="outline" className="py-0 px-2">
-                          <span className="mr-1">{reaction.emoji}</span>
-                          <span className="text-xs">{reaction.count}</span>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+                      </div>
+                    )}
+                  </div>
                 </div>
+              ))
+            )}
+            {typingUsers.length > 0 && (
+              <div className="text-sm text-muted-foreground italic">
+                {typingUsers.join(', ')}が入力中...
               </div>
-            ))}
+            )}
             <div ref={messagesEndRef} />
           </div>
 
           {/* メッセージ入力エリア */}
           <div className="border-t p-4">
             <form onSubmit={sendMessage} className="flex items-center space-x-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                className="hidden"
+              />
               <Button
                 type="button"
                 size="icon"
                 variant="ghost"
                 className="rounded-full"
+                onClick={openFileDialog}
               >
                 <Paperclip className="h-5 w-5" />
               </Button>
@@ -315,8 +470,16 @@ const TeamChatView: React.FC = () => {
                 placeholder="メッセージを入力..."
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={() => handleTyping()}
                 className="flex-1"
               />
+              {attachment && (
+                <div className="text-sm text-muted-foreground">
+                  {attachment.name.length > 15 
+                    ? `${attachment.name.substring(0, 15)}...` 
+                    : attachment.name}
+                </div>
+              )}
               <Button
                 type="button"
                 size="icon"
@@ -336,4 +499,4 @@ const TeamChatView: React.FC = () => {
   );
 };
 
-export default TeamChatView; 
+export default TeamChatView;
