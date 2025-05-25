@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2025_04_19_000000) do
+ActiveRecord::Schema[7.2].define(version: 2025_05_25_075600) do
   create_table "active_storage_attachments", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "name", null: false
     t.string "record_type", null: false
@@ -53,6 +53,23 @@ ActiveRecord::Schema[7.2].define(version: 2025_04_19_000000) do
     t.index ["user_id", "date"], name: "index_attendances_on_user_id_and_date", unique: true
   end
 
+  create_table "chat_room_memberships", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.string "chat_room_id", null: false
+    t.string "user_id", null: false
+    t.string "role", default: "member"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chat_room_id", "user_id"], name: "index_chat_room_memberships_on_chat_room_id_and_user_id", unique: true
+    t.index ["user_id"], name: "index_chat_room_memberships_on_user_id"
+  end
+
+  create_table "chat_rooms", id: :string, charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.string "name"
+    t.boolean "is_direct_message", default: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
   create_table "leave_requests", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "user_id", null: false
     t.string "leave_type", null: false
@@ -92,6 +109,18 @@ ActiveRecord::Schema[7.2].define(version: 2025_04_19_000000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["organizer_id"], name: "index_meetings_on_organizer_id"
+  end
+
+  create_table "messages", id: :string, charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.text "content"
+    t.string "chat_room_id", null: false
+    t.string "user_id", null: false
+    t.boolean "read", default: false
+    t.datetime "read_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chat_room_id"], name: "index_messages_on_chat_room_id"
+    t.index ["user_id"], name: "index_messages_on_user_id"
   end
 
   create_table "organization_memberships", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
@@ -140,16 +169,17 @@ ActiveRecord::Schema[7.2].define(version: 2025_04_19_000000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "activation_digest"
-    t.string "department"
-    t.string "position"
-    t.text "bio"
     t.index ["email"], name: "index_users_on_email", unique: true
   end
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "attendances", "users"
+  add_foreign_key "chat_room_memberships", "chat_rooms"
+  add_foreign_key "chat_room_memberships", "users"
   add_foreign_key "leave_requests", "users"
+  add_foreign_key "messages", "chat_rooms"
+  add_foreign_key "messages", "users"
   add_foreign_key "organization_memberships", "organizations"
   add_foreign_key "organization_memberships", "users"
 end

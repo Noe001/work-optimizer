@@ -9,13 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Send, Paperclip, Smile, Bell, Settings, Users, Hash } from "lucide-react";
 import chatService from "@/services/chatService";
 import { ChatRoom, ChatMessage, DirectMessage, ChatMessageEvent } from "@/types/chat";
-import { Subscription } from "@rails/actioncable";
+import type { Subscription } from "@rails/actioncable";
 import { User } from "@/types/api";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
 // メッセージの型定義
-interface MessageWithUser extends ChatMessage {
+interface MessageWithUser extends Omit<ChatMessage, 'user'> {
   user: {
     id: string;
     name: string;
@@ -74,7 +74,7 @@ const TeamChatView: React.FC = () => {
       setCurrentChatRoomId(currentChannelId);
     } else if (currentTab === "direct" && currentDmUserId) {
       // DMの場合は、選択されたユーザーIDに対応するチャットルームIDを探す
-      const selectedDm = directMessages.find(dm => 
+      const selectedDm = directMessages.find((dm: DirectMessage) => 
         dm.users?.some(user => user.id === currentDmUserId)
       );
       
@@ -97,7 +97,7 @@ const TeamChatView: React.FC = () => {
         
         if (response.success && response.data) {
           // メッセージを日付の新しい順に並べ替え
-          const formattedMessages = response.data.messages.map(msg => {
+          const formattedMessages = response.data.messages.map((msg: ChatMessage) => {
             // ユーザー情報を整形
             return {
               ...msg,
@@ -151,7 +151,7 @@ const TeamChatView: React.FC = () => {
               }
             } as MessageWithUser;
             
-            setMessages(prev => [newMessage, ...prev]);
+            setMessages((prev: MessageWithUser[]) => [newMessage, ...prev]);
           }
           // メッセージ更新
           else if (data.message_updated) {
@@ -164,19 +164,19 @@ const TeamChatView: React.FC = () => {
               }
             } as MessageWithUser;
             
-            setMessages(prev => 
-              prev.map(msg => msg.id === updatedMessage.id ? updatedMessage : msg)
+            setMessages((prev: MessageWithUser[]) => 
+              prev.map((msg: MessageWithUser) => msg.id === updatedMessage.id ? updatedMessage : msg)
             );
           }
           // メッセージ削除
           else if (data.message_deleted) {
-            setMessages(prev => 
-              prev.filter(msg => msg.id !== data.message_deleted?.id)
+            setMessages((prev: MessageWithUser[]) => 
+              prev.filter((msg: MessageWithUser) => msg.id !== data.message_deleted?.id)
             );
           }
           // 入力中ステータス
           else if (data.typing) {
-            setTypingUsers(prev => {
+            setTypingUsers((prev: string[]) => {
               // 既に含まれている場合は追加しない
               if (prev.includes(data.typing?.user_name || "")) {
                 return prev;
@@ -186,8 +186,8 @@ const TeamChatView: React.FC = () => {
             
             // 3秒後に入力中ステータスを削除
             setTimeout(() => {
-              setTypingUsers(prev => 
-                prev.filter(name => name !== data.typing?.user_name)
+              setTypingUsers((prev: string[]) => 
+                prev.filter((name: string) => name !== data.typing?.user_name)
               );
             }, 3000);
           }
@@ -220,7 +220,7 @@ const TeamChatView: React.FC = () => {
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!currentChatRoomId || message.trim() === "" && !attachment) return;
+    if (!currentChatRoomId || (message.trim() === "" && !attachment)) return;
     
     try {
       const response = await chatService.sendMessage(
@@ -499,4 +499,4 @@ const TeamChatView: React.FC = () => {
   );
 };
 
-export default TeamChatView;
+export default TeamChatView;     
