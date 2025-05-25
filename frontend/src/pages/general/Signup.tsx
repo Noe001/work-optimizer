@@ -73,7 +73,7 @@ const SignupView: React.FC = () => {
       case 'name':
         setValidation((prev) => ({
           ...prev,
-          name: { isValid: /^[a-zA-Z0-9_-]{3,20}$/.test(value) },
+          name: { isValid: /^[\w\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF_-]{3,20}$/.test(value) },
         }));
         break;
       case 'email':
@@ -174,7 +174,7 @@ const SignupView: React.FC = () => {
               />
               <ValidationItem
                 isValid={formData.name ? validation.name.isValid : null}
-                message="3〜20文字の半角英数字、ハイフン、アンダースコアが使用可能です"
+                message="3〜20文字の英数字、ハイフン、アンダースコアが使用可能です"
               />
             </div>
 
