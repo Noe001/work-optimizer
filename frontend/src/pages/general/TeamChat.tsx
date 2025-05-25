@@ -499,4 +499,4 @@ const TeamChatView: React.FC = () => {
   );
 };
 
-export default TeamChatView;     
+export default TeamChatView; 
