@@ -86,6 +86,34 @@ const DashboardTab: React.FC = () => {
     }
   }, []);
 
+  // マニュアルのダミーデータ
+  const manualItems: ManualTemplate[] = [
+    {
+      id: 1,
+      title: "入社オリエンテーション資料",
+      description: "新入社員向けの基本的な情報と手続きについて",
+      sections: ["会社概要", "組織構造", "基本的な業務プロセス", "行動規範", "福利厚生"],
+      createdAt: "2023-05-10",
+      tags: ["新入社員", "オリエンテーション", "入門"],
+    },
+    {
+      id: 2,
+      title: "営業プロセスガイド",
+      description: "見込み客の獲得から契約までの標準的な営業フロー",
+      sections: ["見込み客リサーチ", "初回アプローチ", "提案資料作成", "価格交渉", "クロージング"],
+      createdAt: "2023-06-15",
+      tags: ["営業", "プロセス", "顧客"],
+    },
+    {
+      id: 3,
+      title: "カスタマーサポート対応マニュアル",
+      description: "お客様からの問い合わせに対する標準的な対応手順",
+      sections: ["初期対応", "事実確認", "謝罪と解決策提示", "フォローアップ", "再発防止策"],
+      createdAt: "2023-07-20",
+      tags: ["サポート", "顧客対応", "手順", "トラブルシューティング"],
+    },
+  ];
+
   // タスクの完了率を計算
   useEffect(() => {
     if (tasksApi.data && tasksApi.data.length > 0) {
@@ -181,6 +209,39 @@ const DashboardTab: React.FC = () => {
             </Link>
           </Button>
         </div>
+      </div>
+
+      {/* Manuals Section */}
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>業務マニュアル</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {manualItems.map((manual) => (
+                <Card key={manual.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="flex justify-between items-center">
+                      <span>{manual.title}</span>
+                      {/* TODO: マニュアル詳細へのリンクや編集・削除ボタン */}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-2">{manual.description}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {manual.tags.map((tag, index) => (
+                        <span key={index} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* クイックアクセスとステータス */}
@@ -467,6 +528,7 @@ const ManualsTab: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedTemplate, setSelectedTemplate] = useState<ManualTemplate | null>(null)
   const [sortOrder, setSortOrder] = useState<string>("title")
+  const [selectedTag, setSelectedTag] = useState<string>("")
 
   const manualTemplates: ManualTemplate[] = [
     {
@@ -475,6 +537,7 @@ const ManualsTab: React.FC = () => {
       description: "新しい社員向けの基本的な業務ガイドライン",
       sections: ["会社概要", "組織構造", "基本的な業務プロセス", "行動規範", "福利厚生"],
       createdAt: "2023-05-10",
+      tags: ["新入社員", "オリエンテーション", "入門"],
     },
     {
       id: 2,
@@ -482,6 +545,7 @@ const ManualsTab: React.FC = () => {
       description: "営業チーム向けの標準的な営業プロセス",
       sections: ["見込み客リサーチ", "初回アプローチ", "提案資料作成", "価格交渉", "クロージング"],
       createdAt: "2023-06-15",
+      tags: ["営業", "プロセス", "顧客"],
     },
     {
       id: 3,
@@ -489,13 +553,19 @@ const ManualsTab: React.FC = () => {
       description: "顧客からのクレーム対応の標準手順",
       sections: ["初期対応", "事実確認", "謝罪と解決策提示", "フォローアップ", "再発防止策"],
       createdAt: "2023-07-20",
+      tags: ["サポート", "顧客対応", "手順", "トラブルシューティング"],
     },
   ]
 
+  // ダミーデータからユニークなタグのリストを生成
+  const manualTags = Array.from(new Set(manualTemplates.flatMap(manual => manual.tags)));
+
   const sortedManuals = [...manualTemplates].filter(
     (template) =>
-      template.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      template.description.toLowerCase().includes(searchTerm.toLowerCase()),
+      (selectedTag ? template.tags.includes(selectedTag) : true) &&
+      (template.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      template.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      template.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
   ).sort((a, b) => {
     switch (sortOrder) {
       case "title":
@@ -560,6 +630,21 @@ const ManualsTab: React.FC = () => {
             </Button>
           </div>
 
+          <div className="flex space-x-2 overflow-x-auto">
+            {manualTags.map((tag) => (
+              <Button
+                key={tag}
+                variant={selectedTag === tag ? "default" : "outline"}
+                onClick={() => setSelectedTag(tag)}
+              >
+                {tag}
+              </Button>
+            ))}
+            <Button variant={selectedTag === "" ? "default" : "outline"} onClick={() => setSelectedTag("")}>
+              すべて
+            </Button>
+          </div>
+
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {sortedManuals.map((template) => (
               <Card key={template.id} className="cursor-pointer hover:shadow-md transition-shadow">
@@ -578,6 +663,13 @@ const ManualsTab: React.FC = () => {
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground">{template.description}</p>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {template.tags.map((tag, index) => (
+                      <span key={index} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -1083,6 +1175,7 @@ interface ManualTemplate {
   description: string
   sections: string[]
   createdAt: string
+  tags: string[]
 }
 
 interface KnowledgeCategory {

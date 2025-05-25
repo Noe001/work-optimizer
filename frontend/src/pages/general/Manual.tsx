@@ -25,6 +25,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 
 // Type definitions
 type Department = 'sales' | 'dev' | 'hr';
@@ -68,16 +69,18 @@ interface ManualFormData {
   category: Category | '';
   accessLevel: AccessLevel | '';
   editPermission: EditPermission | '';
+  tags: string[];
 }
 
 const CreateManual: React.FC = () => {
   const [formData, setFormData] = React.useState<ManualFormData>({
-    title: '',
-    content: '',
-    department: '',
-    category: '',
-    accessLevel: '',
-    editPermission: '',
+    title: '社内Wiki作成手順',
+    content: '# 社内Wiki作成手順\n\nこのマニュアルでは、社内Wikiを効果的に作成するための手順を説明します。\n\n## 1. Wikiの目的を明確にする\n\nWikiを作成する目的（情報共有、ナレッジ蓄積など）を定義します。\n\n## 2. 構造を設計する\n\n情報のカテゴリ分けや、ページの階層構造を設計します。\n\n## 3. コンテンツを作成・編集する\n\n分かりやすい文章と図解でコンテンツを作成します。\n\n## 4. アクセス権限を設定する\n\n誰が閲覧・編集できるかを設定します。\n\n## 5. 公開・運用する\n\n公開後も定期的に内容を見直し、最新の状態を保ちます。',
+    department: 'dev',
+    category: 'procedure',
+    accessLevel: 'all',
+    editPermission: 'department',
+    tags: ['wiki', '手順', '情報共有', 'ナレッジ'],
   });
 
   const handleInputChange = (
@@ -237,6 +240,48 @@ const CreateManual: React.FC = () => {
                   <Plus className="h-4 w-4 mr-2" />
                   新規カテゴリーを作成
                 </Button>
+              </CardContent>
+            </Card>
+
+            {/* Tags Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  <Tags className="inline-block mr-2 h-5 w-5" />
+                  タグ設定
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="tags">タグ</Label>
+                  <Input
+                    id="tags"
+                    name="tags"
+                    placeholder="タグをカンマ区切りで入力"
+                    value={formData.tags.join(', ')}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      tags: e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+                    })}
+                  />
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {formData.tags.map((tag, index) => (
+                      <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => setFormData({
+                            ...formData,
+                            tags: formData.tags.filter((_, i) => i !== index)
+                          })}
+                          className="ml-1 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                        >
+                          &times;
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
