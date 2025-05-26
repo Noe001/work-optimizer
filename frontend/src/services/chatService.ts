@@ -202,7 +202,7 @@ const chatService = {
     try {
       const consumer = await this.createCableConnection();
       
-      return consumer.subscriptions.create(
+      const subscription = consumer.subscriptions.create(
         {
           channel: 'ChatChannel',
           chat_room_id: chatRoomId
@@ -224,13 +224,15 @@ const chatService = {
           
           received(data: any) {
             callbacks.onReceived(data);
-          },
-          
-          typing() {
-            this.perform('typing');
           }
         }
       );
+      
+      subscription.typing = function(data?: any) {
+        this.perform('typing', data);
+      };
+      
+      return subscription;
     } catch (error) {
       console.error('Failed to subscribe to chat room:', error);
       throw error;

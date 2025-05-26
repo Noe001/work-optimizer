@@ -2,6 +2,7 @@ declare module '@rails/actioncable' {
   export interface Subscription {
     unsubscribe(): void;
     perform(action: string, data?: any): void;
+    typing?(data?: any): void;
   }
 
   export interface Consumer {
