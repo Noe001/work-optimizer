@@ -9,6 +9,14 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: ['@rails/actioncable']
+  },
+  build: {
+    commonjsOptions: {
+      include: [/node_modules/]
+    }
+  },
   server: {
     proxy: {
       '/api': {
@@ -17,6 +25,12 @@ export default defineConfig({
         secure: false,
         rewrite: (path) => path
       },
+      '/cable': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+        ws: true
+      }
     },
   },
 })

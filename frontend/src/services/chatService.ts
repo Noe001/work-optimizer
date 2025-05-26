@@ -8,7 +8,7 @@ import {
   SendMessageRequest,
   MessagesResponse
 } from '../types/chat';
-import { createConsumer, Subscription } from '@rails/actioncable';
+import type { Subscription, Consumer } from '@rails/actioncable';
 
 /**
  * チャットサービス
@@ -169,15 +169,21 @@ const chatService = {
 
   /**
    * Action Cable接続の作成
-   * @returns Action Cableコンシューマー
+   * @returns Promise<Consumer> Action Cableコンシューマーを返すPromise
    */
-  createCableConnection() {
+  async createCableConnection() {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const token = localStorage.getItem('auth_token');
     
     const cableUrl = `${baseUrl}/cable?token=${token}`;
     
-    return createConsumer(cableUrl);
+    try {
+      const ActionCable = await import('@rails/actioncable');
+      return ActionCable.createConsumer(cableUrl);
+    } catch (error) {
+      console.error('Failed to load ActionCable:', error);
+      throw error;
+    }
   },
 
   /**
@@ -185,46 +191,51 @@ const chatService = {
    * @param chatRoomId チャットルームID
    * @param callbacks コールバック関数
    */
-  subscribeToChatRoom(
+  async subscribeToChatRoom(
     chatRoomId: string, 
     callbacks: {
       onReceived: (data: any) => void;
       onConnected?: () => void;
       onDisconnected?: () => void;
     }
-  ): Subscription {
-    const consumer = this.createCableConnection();
-    
-    return consumer.subscriptions.create(
-      {
-        channel: 'ChatChannel',
-        chat_room_id: chatRoomId
-      },
-      {
-        connected() {
-          console.log(`Connected to chat room: ${chatRoomId}`);
-          if (callbacks.onConnected) {
-            callbacks.onConnected();
+  ): Promise<any> {
+    try {
+      const consumer = await this.createCableConnection();
+      
+      return consumer.subscriptions.create(
+        {
+          channel: 'ChatChannel',
+          chat_room_id: chatRoomId
+        },
+        {
+          connected() {
+            console.log(`Connected to chat room: ${chatRoomId}`);
+            if (callbacks.onConnected) {
+              callbacks.onConnected();
+            }
+          },
+          
+          disconnected() {
+            console.log(`Disconnected from chat room: ${chatRoomId}`);
+            if (callbacks.onDisconnected) {
+              callbacks.onDisconnected();
+            }
+          },
+          
+          received(data: any) {
+            callbacks.onReceived(data);
+          },
+          
+          typing() {
+            this.perform('typing');
           }
-        },
-        
-        disconnected() {
-          console.log(`Disconnected from chat room: ${chatRoomId}`);
-          if (callbacks.onDisconnected) {
-            callbacks.onDisconnected();
-          }
-        },
-        
-        received(data) {
-          callbacks.onReceived(data);
-        },
-        
-        typing() {
-          this.perform('typing');
         }
-      }
-    );
+      );
+    } catch (error) {
+      console.error('Failed to subscribe to chat room:', error);
+      throw error;
+    }
   }
 };
 
-export default chatService;
+export { chatService };

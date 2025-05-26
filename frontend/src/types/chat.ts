@@ -54,8 +54,12 @@ export interface SendMessageRequest {
 }
 
 export interface ChatRoomsResponse {
-  direct_messages: DirectMessage[];
-  channels: ChatRoom[];
+  success: boolean;
+  message: string;
+  data: {
+    direct_messages: DirectMessage[];
+    channels: ChatRoom[];
+  };
 }
 
 export interface MessagesResponse {

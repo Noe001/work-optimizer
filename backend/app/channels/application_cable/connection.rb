@@ -24,8 +24,12 @@ module ApplicationCable
     end
     
     def find_user_from_session
-      if session[:user_id]
-        User.find_by(id: session[:user_id])
+      # WebSocketではセッションにアクセスできないため、cookies経由でセッションIDを取得
+      cookies_signed = request.cookie_jar.signed
+      if cookies_signed['_work_optimizer_session'] && cookies_signed['user_id']
+        User.find_by(id: cookies_signed['user_id'])
+      else
+        nil
       end
     end
     

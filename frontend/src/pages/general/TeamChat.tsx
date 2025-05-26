@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Send, Paperclip, Smile, Bell, Settings, Users, Hash } from "lucide-react";
-import chatService from "@/services/chatService";
+import { chatService } from "@/services/chatService";
 import { ChatRoom, ChatMessage, DirectMessage, ChatMessageEvent } from "@/types/chat";
 import type { Subscription } from "@rails/actioncable";
 import { useAuth } from "@/contexts/AuthContext";
@@ -50,18 +50,30 @@ const TeamChatView: React.FC = () => {
   
   // チャットルーム一覧の取得
   const fetchChatRooms = async () => {
+    console.log("fetchChatRooms called");
     try {
+      console.log("Calling chatService.getChatRooms()");
       const response = await chatService.getChatRooms();
+      console.log("getChatRooms response:", response);
       
       if (response.success && response.data) {
-        const channelsData = response.data.channels || [];
-        const directMessagesData = response.data.direct_messages || [];
+        const responseData = response.data;
+        const responseObj = responseData as unknown as {
+          channels: ChatRoom[];
+          direct_messages: DirectMessage[];
+        };
+        const channelsData = responseObj.channels || [];
+        const directMessagesData = responseObj.direct_messages || [];
+        
+        console.log("Setting channels:", channelsData);
+        console.log("Setting direct messages:", directMessagesData);
         
         setChannels(channelsData);
         setDirectMessages(directMessagesData);
         
         // 最初のチャンネルを選択
         if (channelsData.length > 0 && !currentChannelId) {
+          console.log("Setting initial channel ID:", channelsData[0].id);
           setCurrentChannelId(channelsData[0].id);
         }
       }
@@ -143,71 +155,84 @@ const TeamChatView: React.FC = () => {
       chatSubscriptionRef.current = null;
     }
     
-    // 新しい接続を作成
-    const newSubscription = chatService.subscribeToChatRoom(
-      currentChatRoomId,
-      {
-        onReceived: (data: ChatMessageEvent) => {
-          // 新しいメッセージ
-          if (data.message) {
-            const newMessage = {
-              ...data.message,
-              user: {
-                id: data.message.user_id,
-                name: data.message.user_name || "Unknown User"
-              }
-            } as MessageWithUser;
-            
-            setMessages((prev: MessageWithUser[]) => [newMessage, ...prev]);
-          }
-          // メッセージ更新
-          else if (data.message_updated) {
-            const updatedMessage = {
-              ...data.message_updated,
-              user: {
-                id: data.message_updated.user_id,
-                name: data.message_updated.user_name || "Unknown User"
-              }
-            } as MessageWithUser;
-            
-            setMessages((prev: MessageWithUser[]) => 
-              prev.map((msg: MessageWithUser) => msg.id === updatedMessage.id ? updatedMessage : msg)
-            );
-          }
-          // メッセージ削除
-          else if (data.message_deleted) {
-            setMessages((prev: MessageWithUser[]) => 
-              prev.filter((msg: MessageWithUser) => msg.id !== data.message_deleted?.id)
-            );
-          }
-          // 入力中ステータス
-          else if (data.typing) {
-            setTypingUsers((prev: string[]) => {
-              // 既に含まれている場合は追加しない
-              if (prev.includes(data.typing?.user_name || "")) {
-                return prev;
-              }
-              return [...prev, data.typing?.user_name || ""];
-            });
-            
-            // 3秒後に入力中ステータスを削除
-            setTimeout(() => {
-              setTypingUsers((prev: string[]) => 
-                prev.filter((name: string) => name !== data.typing?.user_name)
-              );
-            }, 3000);
-          }
-        },
-        onConnected: () => {
-          console.log("チャットルームに接続しました");
-        },
-        onDisconnected: () => {
-          console.log("チャットルームから切断されました");
-        }
-      }
-    );
+    console.log("Attempting to connect to chat room:", currentChatRoomId);
     
-    chatSubscriptionRef.current = newSubscription;
+    // 新しい接続を作成（非同期処理）
+    const setupSubscription = async () => {
+      try {
+        const newSubscription = await chatService.subscribeToChatRoom(
+          currentChatRoomId,
+          {
+            onReceived: (data: ChatMessageEvent) => {
+              console.log("Received message event:", data);
+              
+              // 新しいメッセージ
+              if (data.message) {
+                const newMessage = {
+                  ...data.message,
+                  user: {
+                    id: data.message.user_id,
+                    name: data.message.user_name || "Unknown User"
+                  }
+                } as MessageWithUser;
+                
+                setMessages((prev: MessageWithUser[]) => [newMessage, ...prev]);
+              }
+              // メッセージ更新
+              else if (data.message_updated) {
+                const updatedMessage = {
+                  ...data.message_updated,
+                  user: {
+                    id: data.message_updated.user_id,
+                    name: data.message_updated.user_name || "Unknown User"
+                  }
+                } as MessageWithUser;
+                
+                setMessages((prev: MessageWithUser[]) => 
+                  prev.map((msg: MessageWithUser) => msg.id === updatedMessage.id ? updatedMessage : msg)
+                );
+              }
+              // メッセージ削除
+              else if (data.message_deleted) {
+                setMessages((prev: MessageWithUser[]) => 
+                  prev.filter((msg: MessageWithUser) => msg.id !== data.message_deleted?.id)
+                );
+              }
+              // 入力中ステータス
+              else if (data.typing) {
+                setTypingUsers((prev: string[]) => {
+                  // 既に含まれている場合は追加しない
+                  if (prev.includes(data.typing?.user_name || "")) {
+                    return prev;
+                  }
+                  return [...prev, data.typing?.user_name || ""];
+                });
+                
+                // 3秒後に入力中ステータスを削除
+                setTimeout(() => {
+                  setTypingUsers((prev: string[]) => 
+                    prev.filter((name: string) => name !== data.typing?.user_name)
+                  );
+                }, 3000);
+              }
+            },
+            onConnected: () => {
+              console.log("チャットルームに接続しました:", currentChatRoomId);
+            },
+            onDisconnected: () => {
+              console.log("チャットルームから切断されました:", currentChatRoomId);
+            }
+          }
+        );
+        
+        chatSubscriptionRef.current = newSubscription;
+        console.log("Subscription created successfully");
+      } catch (error) {
+        console.error("Failed to create chat subscription:", error);
+      }
+    };
+    
+    setupSubscription();
     
     // クリーンアップ
     return () => {
@@ -507,4 +532,4 @@ const TeamChatView: React.FC = () => {
   );
 };
 
-export default TeamChatView;                          
+export default TeamChatView;                                          
