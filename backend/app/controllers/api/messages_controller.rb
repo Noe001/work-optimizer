@@ -4,23 +4,28 @@ module Api
     before_action :set_chat_room
     before_action :check_membership
     before_action :set_message, only: [:show, :update, :destroy]
+    before_action :check_rate_limit, only: [:create]
+    
+    # 統一されたエラーハンドリング
+    rescue_from ActiveRecord::RecordNotFound, with: :record_not_found
+    rescue_from ActiveRecord::RecordInvalid, with: :record_invalid
+    rescue_from StandardError, with: :internal_server_error
     
     # GET /api/chat_rooms/:chat_room_id/messages
     # メッセージ履歴の取得
     def index
       # ページネーション用のパラメータ
       page = params[:page] || 1
-      per_page = params[:per_page] || 20
+      per_page = [params[:per_page].to_i, 50].min.positive? ? [params[:per_page].to_i, 50].min : 20
       
-      # メッセージを取得（新しい順）
-      @messages = @chat_room.messages.includes(:user)
+      # メッセージを取得（新しい順）- N+1クエリ解決
+      @messages = @chat_room.messages
+                            .includes(:user, attachment_attachment: :blob)
                             .order(created_at: :desc)
                             .page(page).per(per_page)
       
-      # 未読メッセージを既読にする
-      @messages.each do |message|
-        message.mark_as_read(current_user) if message.user_id != current_user.id
-      end
+      # 未読メッセージを既読にする（バックグラウンドで処理）
+      mark_messages_as_read_async
       
       render json: {
         success: true,
@@ -74,7 +79,8 @@ module Api
       else
         render json: {
           success: false,
-          message: @message.errors.full_messages.join(', ')
+          message: @message.errors.full_messages.join(', '),
+          errors: @message.errors.full_messages
         }, status: :unprocessable_entity
       end
     end
@@ -87,6 +93,14 @@ module Api
         return render json: {
           success: false,
           message: '他のユーザーのメッセージは編集できません'
+        }, status: :forbidden
+      end
+      
+      # メッセージが作成から5分以内かチェック
+      if @message.created_at < 5.minutes.ago
+        return render json: {
+          success: false,
+          message: 'メッセージの編集期限を過ぎています'
         }, status: :forbidden
       end
       
@@ -107,7 +121,8 @@ module Api
       else
         render json: {
           success: false,
-          message: @message.errors.full_messages.join(', ')
+          message: @message.errors.full_messages.join(', '),
+          errors: @message.errors.full_messages
         }, status: :unprocessable_entity
       end
     end
@@ -143,7 +158,7 @@ module Api
     # POST /api/chat_rooms/:chat_room_id/messages/read_all
     # すべてのメッセージを既読にする
     def read_all
-      @chat_room.messages.where.not(user_id: current_user.id).each do |message|
+      @chat_room.messages.where.not(user_id: current_user.id).where(read: false).each do |message|
         message.mark_as_read(current_user)
       end
       
@@ -184,6 +199,60 @@ module Api
     
     def message_params
       params.require(:message).permit(:content)
+    end
+    
+    # レート制限チェック
+    def check_rate_limit
+      key = "message_rate_limit:#{current_user.id}"
+      count = Rails.cache.read(key) || 0
+      
+      if count >= 30 # 1分間に30メッセージまで
+        render json: { 
+          success: false, 
+          message: 'メッセージ送信が制限されています。しばらくお待ちください。',
+          error_code: 'RATE_LIMIT_EXCEEDED'
+        }, status: :too_many_requests
+        return
+      end
+      
+      Rails.cache.write(key, count + 1, expires_in: 1.minute)
+    end
+    
+    # 未読メッセージを非同期で既読にする
+    def mark_messages_as_read_async
+      MarkMessagesAsReadJob.perform_later(@chat_room.id, current_user.id)
+    end
+    
+    # エラーハンドリング
+    def record_not_found(exception)
+      render json: {
+        success: false,
+        error_code: 'RECORD_NOT_FOUND',
+        message: exception.message,
+        timestamp: Time.current.iso8601
+      }, status: :not_found
+    end
+    
+    def record_invalid(exception)
+      render json: {
+        success: false,
+        error_code: 'VALIDATION_ERROR',
+        message: exception.message,
+        errors: exception.record.errors.full_messages,
+        timestamp: Time.current.iso8601
+      }, status: :unprocessable_entity
+    end
+    
+    def internal_server_error(exception)
+      Rails.logger.error "Internal server error in MessagesController: #{exception.message}"
+      Rails.logger.error exception.backtrace.join("\n")
+      
+      render json: {
+        success: false,
+        error_code: 'INTERNAL_SERVER_ERROR',
+        message: 'サーバー内部エラーが発生しました',
+        timestamp: Time.current.iso8601
+      }, status: :internal_server_error
     end
   end
 end

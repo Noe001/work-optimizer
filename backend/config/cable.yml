@@ -1,10 +1,24 @@
 development:
   adapter: async
+  # 開発環境では非同期アダプターを使用
 
 test:
   adapter: test
+  # テスト環境ではテストアダプターを使用
 
 production:
   adapter: redis
-  url: <%= ENV.fetch("REDIS_URL") { "redis://localhost:6379/1" } %>
-  channel_prefix: app_production
+  url: <%= ENV.fetch("REDIS_URL", "redis://localhost:6379/1") %>
+  channel_prefix: work_optimizer_production
+  # 本番環境ではRedisを使用してスケーラビリティを確保
+  
+  # Redis接続プール設定
+  pool: 5
+  timeout: 5
+  
+  # SSL設定（必要に応じて）
+  ssl_params:
+    verify_mode: <%= OpenSSL::SSL::VERIFY_PEER %>
+  
+  # ログレベル設定
+  log_level: :info

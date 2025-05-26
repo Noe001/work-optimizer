@@ -124,4 +124,11 @@ Rails.application.routes.draw do
   
   # 画像ファイルアクセス用のルート
   get 'images/:filename', to: 'images#show'
+
+  # ヘルスチェックエンドポイント
+  get '/health', to: 'health#basic'
+  get '/health/detailed', to: 'health#detailed'
+  get '/health/ready', to: 'health#readiness'
+  get '/health/live', to: 'health#liveness'
+  get '/metrics', to: 'health#metrics'
 end

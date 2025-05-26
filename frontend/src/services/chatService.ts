@@ -1,41 +1,69 @@
 import { api } from './api';
-import { ApiResponse } from '../types/api';
 import { 
   ChatRoom, 
-  ChatMessage, 
-  ChatRoomsResponse, 
-  CreateChatRoomRequest,
-  SendMessageRequest,
-  MessagesResponse
+  Message, 
+  ApiResponse,
+  MessagesResponse,
+  SendMessageData,
+  WebSocketMessage
 } from '../types/chat';
+import { errorHandler } from '../utils/errorHandler';
 import type { Subscription, Consumer } from '@rails/actioncable';
 
 /**
  * チャットサービス
  */
-const chatService = {
+class ChatService {
+  private consumer: Consumer | null = null;
+  private subscriptions: Map<string, Subscription> = new Map();
+
   /**
    * チャットルーム一覧の取得
    */
-  async getChatRooms(): Promise<ApiResponse<ChatRoomsResponse>> {
-    return api.get<ChatRoomsResponse>('/api/chat_rooms');
-  },
+  async getChatRooms(): Promise<ApiResponse<ChatRoom[]>> {
+    try {
+      return await api.get<ChatRoom[]>('/api/chat_rooms');
+    } catch (error) {
+      throw errorHandler.handleError(error, 'getChatRooms');
+    }
+  }
 
   /**
    * 特定のチャットルーム詳細を取得
    * @param chatRoomId チャットルームID
    */
   async getChatRoom(chatRoomId: string): Promise<ApiResponse<ChatRoom>> {
-    return api.get<ChatRoom>(`/api/chat_rooms/${chatRoomId}`);
-  },
+    try {
+      return await api.get<ChatRoom>(`/api/chat_rooms/${chatRoomId}`);
+    } catch (error) {
+      throw errorHandler.handleError(error, 'getChatRoom');
+    }
+  }
 
   /**
    * チャットルームの作成
-   * @param data チャットルーム作成データ
+   * @param name チャットルーム名
+   * @param isDirectMessage ダイレクトメッセージかどうか
+   * @param userIds 参加ユーザーID（オプション）
    */
-  async createChatRoom(data: CreateChatRoomRequest): Promise<ApiResponse<ChatRoom>> {
-    return api.post<ChatRoom>('/api/chat_rooms', data);
-  },
+  async createChatRoom(
+    name: string, 
+    isDirectMessage: boolean = false, 
+    userIds?: string[]
+  ): Promise<ApiResponse<ChatRoom>> {
+    try {
+      const data = {
+        chat_room: {
+          name,
+          is_direct_message: isDirectMessage
+        },
+        user_ids: userIds
+      };
+      return await api.post<ChatRoom>('/api/chat_rooms', data);
+    } catch (error) {
+      throw errorHandler.handleError(error, 'createChatRoom');
+    }
+  }
 
   /**
    * チャットルームの更新
@@ -43,18 +71,26 @@ const chatService = {
    * @param name 新しいチャットルーム名
    */
   async updateChatRoom(chatRoomId: string, name: string): Promise<ApiResponse<ChatRoom>> {
-    return api.put<ChatRoom>(`/api/chat_rooms/${chatRoomId}`, {
-      chat_room: { name }
-    });
-  },
+    try {
+      return await api.put<ChatRoom>(`/api/chat_rooms/${chatRoomId}`, {
+        chat_room: { name }
+      });
+    } catch (error) {
+      throw errorHandler.handleError(error, 'updateChatRoom');
+    }
+  }
 
   /**
    * チャットルームの削除
    * @param chatRoomId チャットルームID
    */
   async deleteChatRoom(chatRoomId: string): Promise<ApiResponse<any>> {
-    return api.delete<any>(`/api/chat_rooms/${chatRoomId}`);
-  },
+    try {
+      return await api.delete<any>(`/api/chat_rooms/${chatRoomId}`);
+    } catch (error) {
+      throw errorHandler.handleError(error, 'deleteChatRoom');
+    }
+  }
 
   /**
    * メッセージ履歴の取得
@@ -66,41 +102,63 @@ const chatService = {
     chatRoomId: string, 
     page: number = 1, 
     perPage: number = 20
-  ): Promise<ApiResponse<MessagesResponse>> {
-    return api.get<MessagesResponse>(
-      `/api/chat_rooms/${chatRoomId}/messages`,
-      { page, per_page: perPage }
-    );
-  },
+  ): Promise<MessagesResponse> {
+    try {
+      const response = await api.get<Message[]>(
+        `/api/chat_rooms/${chatRoomId}/messages`,
+        { page, per_page: perPage }
+      );
+      
+      // レスポンス形式を統一
+      return {
+        success: response.success,
+        data: response.data || [],
+        pagination: {
+          current_page: page,
+          total_pages: Math.ceil((response.data?.length || 0) / perPage),
+          total_count: response.data?.length || 0,
+          per_page: perPage
+        }
+      };
+    } catch (error) {
+      throw errorHandler.handleError(error, 'getMessages');
+    }
+  }
 
   /**
    * メッセージの送信
    * @param chatRoomId チャットルームID
-   * @param content メッセージ内容
-   * @param attachment 添付ファイル（オプション）
+   * @param data メッセージデータ
    */
   async sendMessage(
     chatRoomId: string, 
-    content: string, 
-    attachment?: File
-  ): Promise<ApiResponse<ChatMessage>> {
-    const formData = new FormData();
-    formData.append('message[content]', content);
-    
-    if (attachment) {
-      formData.append('attachment', attachment);
-    }
-    
-    return api.post<ChatMessage>(
-      `/api/chat_rooms/${chatRoomId}/messages`, 
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
+    data: SendMessageData
+  ): Promise<ApiResponse<Message>> {
+    try {
+      const formData = new FormData();
+      formData.append('message[content]', data.content);
+      
+      if (data.attachment) {
+        formData.append('attachment', data.attachment);
       }
-    );
-  },
+      
+      if (data.reply_to_id) {
+        formData.append('message[reply_to_id]', data.reply_to_id);
+      }
+      
+      return await api.post<Message>(
+        `/api/chat_rooms/${chatRoomId}/messages`, 
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+    } catch (error) {
+      throw errorHandler.handleError(error, 'sendMessage');
+    }
+  }
 
   /**
    * メッセージの更新
@@ -112,14 +170,18 @@ const chatService = {
     chatRoomId: string, 
     messageId: string, 
     content: string
-  ): Promise<ApiResponse<ChatMessage>> {
-    return api.put<ChatMessage>(
-      `/api/chat_rooms/${chatRoomId}/messages/${messageId}`, 
-      {
-        message: { content }
-      }
-    );
-  },
+  ): Promise<ApiResponse<Message>> {
+    try {
+      return await api.put<Message>(
+        `/api/chat_rooms/${chatRoomId}/messages/${messageId}`, 
+        {
+          message: { content }
+        }
+      );
+    } catch (error) {
+      throw errorHandler.handleError(error, 'updateMessage');
+    }
+  }
 
   /**
    * メッセージの削除
@@ -130,16 +192,53 @@ const chatService = {
     chatRoomId: string, 
     messageId: string
   ): Promise<ApiResponse<any>> {
-    return api.delete<any>(`/api/chat_rooms/${chatRoomId}/messages/${messageId}`);
-  },
+    try {
+      return await api.delete<any>(`/api/chat_rooms/${chatRoomId}/messages/${messageId}`);
+    } catch (error) {
+      throw errorHandler.handleError(error, 'deleteMessage');
+    }
+  }
+
+  /**
+   * メッセージを既読にする
+   * @param chatRoomId チャットルームID
+   * @param messageId メッセージID
+   */
+  async markAsRead(chatRoomId: string, messageId: string): Promise<ApiResponse<any>> {
+    try {
+      return await api.post<any>(`/api/chat_rooms/${chatRoomId}/messages/${messageId}/read`);
+    } catch (error) {
+      throw errorHandler.handleError(error, 'markAsRead');
+    }
+  }
 
   /**
    * すべてのメッセージを既読にする
    * @param chatRoomId チャットルームID
    */
   async readAllMessages(chatRoomId: string): Promise<ApiResponse<any>> {
-    return api.post<any>(`/api/chat_rooms/${chatRoomId}/messages/read_all`);
-  },
+    try {
+      return await api.post<any>(`/api/chat_rooms/${chatRoomId}/messages/read_all`);
+    } catch (error) {
+      throw errorHandler.handleError(error, 'readAllMessages');
+    }
+  }
+
+  /**
+   * タイピング状態の送信
+   * @param chatRoomId チャットルームID
+   * @param isTyping タイピング中かどうか
+   */
+  async sendTyping(chatRoomId: string, isTyping: boolean): Promise<void> {
+    try {
+      const subscription = this.subscriptions.get(chatRoomId);
+      if (subscription) {
+        subscription.perform('typing', { is_typing: isTyping });
+      }
+    } catch (error) {
+      errorHandler.handleError(error, 'sendTyping');
+    }
+  }
 
   /**
    * チャットルームにメンバーを追加
@@ -150,13 +249,17 @@ const chatService = {
   async addMember(
     chatRoomId: string, 
     userId: string, 
-    role: 'admin' | 'member' = 'member'
+    role: 'admin' | 'moderator' | 'member' = 'member'
   ): Promise<ApiResponse<any>> {
-    return api.post<any>(`/api/chat_rooms/${chatRoomId}/add_member`, {
-      user_id: userId,
-      role
-    });
-  },
+    try {
+      return await api.post<any>(`/api/chat_rooms/${chatRoomId}/add_member`, {
+        user_id: userId,
+        role
+      });
+    } catch (error) {
+      throw errorHandler.handleError(error, 'addMember');
+    }
+  }
 
   /**
    * チャットルームからメンバーを削除
@@ -164,80 +267,136 @@ const chatService = {
    * @param userId ユーザーID
    */
   async removeMember(chatRoomId: string, userId: string): Promise<ApiResponse<any>> {
-    return api.delete<any>(`/api/chat_rooms/${chatRoomId}/remove_member/${userId}`);
-  },
+    try {
+      return await api.delete<any>(`/api/chat_rooms/${chatRoomId}/remove_member/${userId}`);
+    } catch (error) {
+      throw errorHandler.handleError(error, 'removeMember');
+    }
+  }
 
   /**
    * Action Cable接続の作成
-   * @returns Promise<Consumer> Action Cableコンシューマーを返すPromise
    */
-  async createCableConnection() {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const token = localStorage.getItem('auth_token');
-    
-    const cableUrl = `${baseUrl}/cable?token=${token}`;
-    
+  async createCableConnection(): Promise<Consumer> {
     try {
+      if (this.consumer) {
+        return this.consumer;
+      }
+
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const token = localStorage.getItem('auth_token');
+      
+      if (!token) {
+        throw new Error('認証トークンが見つかりません');
+      }
+      
+      const cableUrl = `${baseUrl}/cable?token=${token}`;
+      
       const ActionCable = await import('@rails/actioncable');
-      return ActionCable.createConsumer(cableUrl);
+      this.consumer = ActionCable.createConsumer(cableUrl);
+      
+      return this.consumer;
     } catch (error) {
-      console.error('Failed to load ActionCable:', error);
-      throw error;
+      throw errorHandler.handleError(error, 'createCableConnection');
     }
-  },
+  }
 
   /**
-   * チャットルームのサブスクライブ
+   * チャットルームに接続
    * @param chatRoomId チャットルームID
-   * @param callbacks コールバック関数
+   * @param onMessage メッセージ受信時のコールバック
    */
-  async subscribeToChatRoom(
+  async connectToRoom(
     chatRoomId: string, 
-    callbacks: {
-      onReceived: (data: any) => void;
-      onConnected?: () => void;
-      onDisconnected?: () => void;
-    }
-  ): Promise<any> {
+    onMessage: (message: WebSocketMessage) => void
+  ): Promise<Subscription> {
     try {
       const consumer = await this.createCableConnection();
       
+      // 既存の接続があれば切断
+      const existingSubscription = this.subscriptions.get(chatRoomId);
+      if (existingSubscription) {
+        existingSubscription.unsubscribe();
+      }
+
       const subscription = consumer.subscriptions.create(
+        { channel: 'ChatChannel', chat_room_id: chatRoomId },
         {
-          channel: 'ChatChannel',
-          chat_room_id: chatRoomId
-        },
-        {
-          connected() {
+          connected: () => {
             console.log(`Connected to chat room: ${chatRoomId}`);
-            if (callbacks.onConnected) {
-              callbacks.onConnected();
-            }
           },
           
-          disconnected() {
+          disconnected: () => {
             console.log(`Disconnected from chat room: ${chatRoomId}`);
-            if (callbacks.onDisconnected) {
-              callbacks.onDisconnected();
-            }
+            this.subscriptions.delete(chatRoomId);
           },
           
-          received(data: any) {
-            callbacks.onReceived(data);
+          received: (data: WebSocketMessage) => {
+            try {
+              onMessage(data);
+            } catch (error) {
+              errorHandler.handleError(error, 'WebSocket message handling');
+            }
           }
         }
       );
-      
-      subscription.typing = function() { // data引数を削除
-        this.perform('typing'); // dataを渡さない
-      };
-      
+
+      this.subscriptions.set(chatRoomId, subscription);
       return subscription;
     } catch (error) {
-      console.error('Failed to subscribe to chat room:', error);
-      throw error;
+      throw errorHandler.handleError(error, 'connectToRoom');
     }
   }
-};
 
-export { chatService };
+  /**
+   * チャットルームから切断
+   * @param chatRoomId チャットルームID
+   */
+  disconnectFromRoom(chatRoomId: string): void {
+    try {
+      const subscription = this.subscriptions.get(chatRoomId);
+      if (subscription) {
+        subscription.unsubscribe();
+        this.subscriptions.delete(chatRoomId);
+      }
+    } catch (error) {
+      errorHandler.handleError(error, 'disconnectFromRoom');
+    }
+  }
+
+  /**
+   * すべての接続を切断
+   */
+  disconnect(): void {
+    try {
+      this.subscriptions.forEach((subscription) => {
+        subscription.unsubscribe();
+      });
+      this.subscriptions.clear();
+      
+      if (this.consumer) {
+        this.consumer.disconnect();
+        this.consumer = null;
+      }
+    } catch (error) {
+      errorHandler.handleError(error, 'disconnect');
+    }
+  }
+
+  /**
+   * 接続状態の確認
+   */
+  isConnected(): boolean {
+    return this.consumer !== null;
+  }
+
+  /**
+   * 特定のルームに接続されているかの確認
+   */
+  isConnectedToRoom(chatRoomId: string): boolean {
+    return this.subscriptions.has(chatRoomId);
+  }
+}
+
+// シングルトンインスタンスをエクスポート
+export const chatService = new ChatService();
