@@ -173,9 +173,9 @@ const chatService = {
    */
   createCableConnection() {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const cableUrl = `${baseUrl}/cable`;
-    
     const token = localStorage.getItem('auth_token');
+    
+    const cableUrl = `${baseUrl}/cable?token=${token}`;
     
     return createConsumer(cableUrl);
   },

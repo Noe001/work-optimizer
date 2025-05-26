@@ -30,6 +30,7 @@ module ApplicationCable
     end
     
     def find_user_from_token
+      # Try to get token from headers first
       header = request.headers['Authorization']
       
       # Bearerプレフィックスの対応
@@ -40,6 +41,11 @@ module ApplicationCable
                   header
                 end
               end
+      
+      # If no token in headers, try to get from URL params
+      if token.nil? || token.empty?
+        token = request.params['token']
+      end
       
       return nil if token.nil? || token.empty?
       
