@@ -228,8 +228,8 @@ const chatService = {
         }
       );
       
-      subscription.typing = function(data?: any) {
-        this.perform('typing', data);
+      subscription.typing = function() { // data引数を削除
+        this.perform('typing'); // dataを渡さない
       };
       
       return subscription;
