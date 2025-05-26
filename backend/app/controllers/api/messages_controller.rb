@@ -50,7 +50,11 @@ module Api
       
       # 添付ファイルの処理
       if params[:attachment].present?
-        @message.attachment.attach(params[:attachment])
+        @message.attachment.attach(
+          io: params[:attachment],
+          filename: params[:attachment].original_filename,
+          content_type: params[:attachment].content_type
+        )
       end
       
       if @message.save
