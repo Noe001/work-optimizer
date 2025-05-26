@@ -48,3 +48,9 @@ export default tseslint.config({
   },
 })
 ```
+
+# frontend/.env.local
+```md
+VITE_API_BASE_URL=http://localhost:3000
+VITE_APP_ENV=development
+```
