@@ -61,8 +61,10 @@ module Api
         # Action Cableでメッセージをブロードキャスト
         ActionCable.server.broadcast(
           "chat_room_#{@chat_room.id}",
-          message: @message.as_json(include: { user: { only: [:id, :name] } }),
-          user: current_user.as_json(only: [:id, :name])
+          {
+            message: @message.as_json(include: { user: { only: [:id, :name] } }),
+            user: current_user.as_json(only: [:id, :name])
+          }
         )
         
         render json: {
@@ -92,8 +94,10 @@ module Api
         # 更新をブロードキャスト
         ActionCable.server.broadcast(
           "chat_room_#{@chat_room.id}",
-          message_updated: @message.as_json(include: { user: { only: [:id, :name] } }),
-          user: current_user.as_json(only: [:id, :name])
+          {
+            message_updated: @message.as_json(include: { user: { only: [:id, :name] } }),
+            user: current_user.as_json(only: [:id, :name])
+          }
         )
         
         render json: {
@@ -124,8 +128,10 @@ module Api
       # 削除をブロードキャスト
       ActionCable.server.broadcast(
         "chat_room_#{@chat_room.id}",
-        message_deleted: { id: @message.id },
-        user: current_user.as_json(only: [:id, :name])
+        {
+          message_deleted: { id: @message.id },
+          user: current_user.as_json(only: [:id, :name])
+        }
       )
       
       render json: {
