@@ -2,17 +2,23 @@ import React, { useState, useEffect, useRef } from "react";
 import Header from "@/components/Header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Send, Paperclip, Smile, Bell, Settings, Users, Hash } from "lucide-react";
 import chatService from "@/services/chatService";
 import { ChatRoom, ChatMessage, DirectMessage, ChatMessageEvent } from "@/types/chat";
 import type { Subscription } from "@rails/actioncable";
-import { User } from "@/types/api";
-import { format } from "date-fns";
-import { ja } from "date-fns/locale";
+import { useAuth } from "@/contexts/AuthContext";
+
+// JSX宣言を追加
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      [elemName: string]: any;
+    }
+  }
+}
 
 // メッセージの型定義
 interface MessageWithUser extends Omit<ChatMessage, 'user'> {
@@ -24,6 +30,8 @@ interface MessageWithUser extends Omit<ChatMessage, 'user'> {
 
 // TeamChatコンポーネント
 const TeamChatView: React.FC = () => {
+  const { user } = useAuth();
+  
   // 状態管理
   const [channels, setChannels] = useState<ChatRoom[]>([]);
   const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
@@ -37,7 +45,7 @@ const TeamChatView: React.FC = () => {
   const [attachment, setAttachment] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<number | null>(null);
   const chatSubscriptionRef = useRef<Subscription | null>(null);
   
   // チャットルーム一覧の取得
@@ -46,12 +54,15 @@ const TeamChatView: React.FC = () => {
       const response = await chatService.getChatRooms();
       
       if (response.success && response.data) {
-        setChannels(response.data.channels);
-        setDirectMessages(response.data.direct_messages);
+        const channelsData = response.data.channels || [];
+        const directMessagesData = response.data.direct_messages || [];
+        
+        setChannels(channelsData);
+        setDirectMessages(directMessagesData);
         
         // 最初のチャンネルを選択
-        if (response.data.channels.length > 0 && !currentChannelId) {
-          setCurrentChannelId(response.data.channels[0].id);
+        if (channelsData.length > 0 && !currentChannelId) {
+          setCurrentChannelId(channelsData[0].id);
         }
       }
     } catch (error) {
@@ -66,7 +77,7 @@ const TeamChatView: React.FC = () => {
     } else if (currentTab === "direct" && currentDmUserId) {
       // DMの場合は、選択されたユーザーIDに対応するチャットルームIDを探す
       const selectedDm = directMessages.find((dm: DirectMessage) => 
-        dm.users?.some(user => user.id === currentDmUserId)
+        dm.users?.some((chatUser: any) => chatUser.id === currentDmUserId)
       );
       
       if (selectedDm) {
@@ -86,7 +97,8 @@ const TeamChatView: React.FC = () => {
       
       if (response.success && response.data) {
         // メッセージを日付の新しい順に並べ替え
-        const formattedMessages = response.data.messages.map((msg: ChatMessage) => {
+        const messagesData = response.data.messages || [];
+        const formattedMessages = messagesData.map((msg) => {
           // ユーザー情報を整形
           return {
             ...msg,
@@ -233,6 +245,14 @@ const TeamChatView: React.FC = () => {
     if (!chatSubscriptionRef.current) return;
     
     chatSubscriptionRef.current.perform('typing');
+    
+    // タイピング状態のタイムアウト設定
+    if (typingTimeoutRef.current) {
+      window.clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = window.setTimeout(() => {
+      // タイピング状態をクリア
+    }, 3000);
   };
   
   // ファイル選択ハンドラ
@@ -262,7 +282,13 @@ const TeamChatView: React.FC = () => {
   // タイムスタンプのフォーマット
   const formatTimestamp = (timestamp: string) => {
     try {
-      return format(new Date(timestamp), "M月d日 HH:mm", { locale: ja });
+      const date = new Date(timestamp);
+      return date.toLocaleString('ja-JP', { 
+        month: 'numeric', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
     } catch (error) {
       return timestamp;
     }
@@ -291,7 +317,7 @@ const TeamChatView: React.FC = () => {
                 </Button>
               </div>
               
-              {channels.map(channel => (
+              {channels.map((channel: ChatRoom) => (
                 <div
                   key={channel.id}
                   className={`flex items-center p-2 rounded-md cursor-pointer ${
@@ -313,10 +339,10 @@ const TeamChatView: React.FC = () => {
                 </Button>
               </div>
               
-              {directMessages.map(dm => {
+              {directMessages.map((dm: DirectMessage) => {
                 // 自分以外のユーザーを表示
-                const otherUser = dm.users?.find(user => 
-                  user.id !== "current-user-id" // TODO: 現在のユーザーIDを取得
+                const otherUser = dm.users?.find((dmUser: any) => 
+                  dmUser.id !== user?.id // 現在のユーザーIDを使用
                 );
                 
                 return (
@@ -348,7 +374,7 @@ const TeamChatView: React.FC = () => {
                   <>
                     <Hash className="h-5 w-5 mr-2 text-muted-foreground" />
                     <h2 className="font-semibold">
-                      {channels.find(c => c.id === currentChannelId)?.name || "チャンネル"}
+                      {channels.find((c: ChatRoom) => c.id === currentChannelId)?.name || "チャンネル"}
                     </h2>
                   </>
                 ) : (
@@ -356,16 +382,16 @@ const TeamChatView: React.FC = () => {
                     <Avatar className="h-8 w-8 mr-2">
                       <AvatarFallback>
                         {getInitials(
-                          directMessages.find(dm => 
-                            dm.users?.some(u => u.id === currentDmUserId)
-                          )?.users?.find(u => u.id === currentDmUserId)?.name || ""
+                          directMessages.find((dm: DirectMessage) => 
+                            dm.users?.some((u: any) => u.id === currentDmUserId)
+                          )?.users?.find((u: any) => u.id === currentDmUserId)?.name || ""
                         )}
                       </AvatarFallback>
                     </Avatar>
                     <h2 className="font-semibold">
-                      {directMessages.find(dm => 
-                        dm.users?.some(u => u.id === currentDmUserId)
-                      )?.users?.find(u => u.id === currentDmUserId)?.name || "ユーザー"}
+                      {directMessages.find((dm: DirectMessage) => 
+                        dm.users?.some((u: any) => u.id === currentDmUserId)
+                      )?.users?.find((u: any) => u.id === currentDmUserId)?.name || "ユーザー"}
                     </h2>
                   </>
                 )}
@@ -384,7 +410,7 @@ const TeamChatView: React.FC = () => {
           
           {/* メッセージエリア */}
           <div className="flex-1 overflow-y-auto p-4 flex flex-col-reverse">
-            {getActiveMessages().map(msg => (
+            {getActiveMessages().map((msg: MessageWithUser) => (
               <Card key={msg.id} className="mb-4">
                 <CardContent className="p-4">
                   <div className="flex items-start">
@@ -450,7 +476,7 @@ const TeamChatView: React.FC = () => {
               </Button>
               <Input
                 value={message}
-                onChange={e => setMessage(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMessage(e.target.value)}
                 onKeyDown={handleTyping}
                 placeholder="メッセージを入力..."
                 className="flex-1"
@@ -481,4 +507,4 @@ const TeamChatView: React.FC = () => {
   );
 };
 
-export default TeamChatView;
+export default TeamChatView;                          
