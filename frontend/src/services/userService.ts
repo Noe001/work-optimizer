@@ -142,10 +142,10 @@ const userService = {
   async updateUserProfileData(profileData: {
     name: string;
     email: string;
-    department: string;
-    position: string;
-    bio: string;
-    avatarUrl: string;
+    department: string | null;
+    position: string | null;
+    bio: string | null;
+    avatarUrl: string | null;
   }): Promise<ApiResponse<User>> { // Assuming the response will be of type User
     try {
       // The subtask specifies /api/profile.
