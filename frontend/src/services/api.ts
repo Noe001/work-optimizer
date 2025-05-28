@@ -1,5 +1,5 @@
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { ApiError, ApiResponse } from '../types/api';
+import { ApiError, ApiResponse, AuthResponse, LoginRequest, SignupRequest, ChangePasswordRequest } from '../types/api';
 
 // カスタムイベントの定義（認証エラー通知用）
 export const AUTH_ERROR_EVENT = 'auth:error';
@@ -79,7 +79,14 @@ apiClient.interceptors.response.use(
 function axiosToApiResponse<T>(response: AxiosResponse<T>): ApiResponse<T> {
   // バックエンドから既にApiResponse形式で返されている場合はそのまま返す
   if (response.data && typeof response.data === 'object' && 'success' in response.data) {
-    return response.data as ApiResponse<T>;
+    const data = response.data as any;
+    return {
+      success: data.success,
+      message: data.message || 'Success',
+      data: data.data,
+      code: data.code,
+      errors: data.errors
+    };
   }
   
   // そうでない場合は従来通りラップする
@@ -107,11 +114,7 @@ export const api = {
       
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
-      return {
-        success: false,
-        message: error.response?.data?.message || error.message,
-        data: null as any
-      };
+      ApiErrorHandler.handle(error, `GET ${url}`);
     }
   },
 
@@ -126,12 +129,7 @@ export const api = {
       const response = await apiClient.post<T>(url, data, config);
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
-      console.error('POST request failed:', error.message);
-      return {
-        success: false,
-        message: error.message || 'リクエストに失敗しました',
-        data: null as any
-      };
+      ApiErrorHandler.handle(error, `POST ${url}`);
     }
   },
 
@@ -162,12 +160,7 @@ export const api = {
       const response = await apiClient.put<T>(url, data, config);
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
-      console.error('PUT request failed:', error.message);
-      return {
-        success: false,
-        message: error.response?.data?.message || error.message,
-        data: null as any
-      };
+      ApiErrorHandler.handle(error, `PUT ${url}`);
     }
   },
 
@@ -181,11 +174,7 @@ export const api = {
       const response = await apiClient.delete<T>(url, config);
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
-      return {
-        success: false,
-        message: error.response?.data?.message || error.message,
-        data: null as any
-      };
+      ApiErrorHandler.handle(error, `DELETE ${url}`);
     }
   },
 
@@ -204,81 +193,72 @@ export const api = {
       const response = await apiClient.patch<T>(url, data, { ...config, headers });
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
-      console.error('PATCH request failed:', error.message);
-       // エラーレスポンスの詳細を取得しようと試みる
-      const message = error.response?.data?.message || error.response?.data?.error || error.message || 'Unknown error';
-      const errors = error.response?.data?.errors;
-      console.error('Server Error Details:', errors);
-      return {
-        success: false,
-        message: `Request failed with status code ${error.response?.status || 'unknown'}: ${message}`,
-        data: null as any
-      };
+      ApiErrorHandler.handle(error, `PATCH ${url}`);
     }
   },
 };
 
-/**
- * APIエラーハンドリング
- * @export 外部からも利用可能
- */
-export const handleApiError = (error: AxiosError<ApiError>): never => {
-  // エラーオブジェクトの構築
-  const errorMessage = error.response?.data?.message || error.message || 'エラーが発生しました';
-  const errorCode = error.response?.data?.code;
-  const errorDetails = error.response?.data?.errors;
-  
-  // エラー詳細情報のログ出力（開発環境のみ）
-  if (import.meta.env.DEV) {
-    console.error('API Error Handle:', {
-      message: errorMessage,
-      code: errorCode,
-      errors: errorDetails,
-      status: error.response?.status,
-      statusText: error.response?.statusText
-    });
+// エラーハンドリングクラス
+class ApiErrorHandler {
+  static handle(error: AxiosError, context: string): never {
+    const errorMessage = this.extractErrorMessage(error);
+    const errorCode = error.response?.status;
     
-    // リクエスト情報
-    if (error.config) {
-      console.error('API Error Request:', {
-        url: error.config.url,
-        method: error.config.method,
-        baseURL: error.config.baseURL
+    // ログ出力
+    if (import.meta.env.DEV) {
+      console.error(`[${context}] API Error:`, {
+        message: errorMessage,
+        status: errorCode,
+        url: error.config?.url,
+        data: error.response?.data
       });
     }
+    
+    // ユーザーフレンドリーなエラーメッセージ
+    const userMessage = this.getUserFriendlyMessage(errorCode, errorMessage);
+    
+    const apiError: ApiError = {
+      message: userMessage,
+      code: (error.response?.data as any)?.code,
+      errors: (error.response?.data as any)?.errors || []
+    };
+    
+    throw apiError;
   }
   
-  // カスタムエラーオブジェクト
-  const apiError: ApiError = {
-    message: errorMessage,
-    code: errorCode,
-    errors: errorDetails,
-  };
-  
-  // 401エラーの場合はトークン認証エラーを処理
-  if (error.response?.status === 401) {
-    console.error('Token authentication error', errorMessage);
+  private static extractErrorMessage(error: AxiosError): string {
+    if (error.response?.data) {
+      const data = error.response.data as any;
+      return data.message || data.error || error.message;
+    }
+    return error.message || 'Unknown error';
   }
   
-  // エラーをコンソールに出力（開発時のみ）
-  if (import.meta.env.DEV) {
-    console.error('API Error:', apiError);
+  private static getUserFriendlyMessage(status?: number, message?: string): string {
+    switch (status) {
+      case 400: return 'リクエストの形式が正しくありません。';
+      case 401: return '認証に失敗しました。再度ログインしてください。';
+      case 403: return 'この操作を実行する権限がありません。';
+      case 404: return 'リソースが見つかりません。';
+      case 422: return 'データの形式が正しくありません。';
+      case 429: return 'リクエストが多すぎます。しばらく待ってから再試行してください。';
+      case 500: return 'サーバーエラーが発生しました。しばらく待ってから再試行してください。';
+      case 503: return 'サービスが一時的に利用できません。';
+      default: return message || '予期しないエラーが発生しました。';
+    }
   }
-  
-  throw apiError;
-};
+}
 
 // 認証関連API
 export const authAPI = {
   // JWTベースの認証
-  login: async (email: string, password: string) => {
+  login: async (data: LoginRequest): Promise<ApiResponse<AuthResponse>> => {
     try {
-      const response = await apiClient.post('/api/login', { email, password });
+      const response = await api.post<AuthResponse>('/api/login', data);
       
       // ログイン成功時にトークンをヘッダーに設定
-      if (response.data && response.data.success && response.data.data.token) {
-        const token = response.data.data.token;
-        // 次回以降のリクエストのためにトークンを設定
+      if (response.success && response.data?.token) {
+        const token = response.data.token;
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       }
       
@@ -289,19 +269,13 @@ export const authAPI = {
     }
   },
   
-  signup: async (name: string, email: string, password: string) => {
+  signup: async (data: SignupRequest): Promise<ApiResponse<AuthResponse>> => {
     try {
-      const response = await apiClient.post('/api/signup', { 
-        name, 
-        email, 
-        password,
-        password_confirmation: password 
-      });
+      const response = await api.post<AuthResponse>('/api/signup', data);
       
       // サインアップ成功時にトークンをヘッダーに設定
-      if (response.data && response.data.success && response.data.data.token) {
-        const token = response.data.data.token;
-        // 次回以降のリクエストのためにトークンを設定
+      if (response.success && response.data?.token) {
+        const token = response.data.token;
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       }
       
@@ -312,9 +286,9 @@ export const authAPI = {
     }
   },
   
-  logout: async () => {
+  logout: async (): Promise<ApiResponse<void>> => {
     try {
-      const response = await apiClient.post('/api/auth/logout');
+      const response = await api.post<void>('/api/auth/logout');
       // ログアウト成功時にヘッダーからトークンを削除
       delete apiClient.defaults.headers.common['Authorization'];
       return response;
@@ -326,19 +300,25 @@ export const authAPI = {
     }
   },
   
-  me: async () => {
-    return apiClient.get('/api/auth/me');
+  me: async (): Promise<ApiResponse<any>> => {
+    return api.get('/api/auth/me');
+  },
+
+  changePassword: async (data: ChangePasswordRequest): Promise<ApiResponse<void>> => {
+    return api.post<void>('/api/auth/change-password', data);
   },
 
   // セッションベースの認証
-  sessionLogin: async (email: string, password: string) => {
-    return apiClient.post('/api/sessions', { email, password });
+  sessionLogin: async (data: LoginRequest): Promise<ApiResponse<any>> => {
+    return api.post('/api/sessions', data);
   },
-  sessionLogout: async () => {
-    return apiClient.delete('/api/sessions');
+  
+  sessionLogout: async (): Promise<ApiResponse<any>> => {
+    return api.delete('/api/sessions');
   },
-  checkSession: async () => {
-    return apiClient.get('/api/sessions/new');
+  
+  checkSession: async (): Promise<ApiResponse<any>> => {
+    return api.get('/api/sessions/new');
   }
 };
 

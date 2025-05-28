@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import Header from '@/components/Header';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import userService from '@/services/userService';
 
 interface UserProfile {
@@ -260,7 +261,7 @@ const PasswordChangeCard: React.FC = () => {
             <Button 
               type="submit" 
               disabled={isChangingPassword}
-              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+              className="w-full sm:w-auto"
               aria-label={isChangingPassword ? "パスワードを変更中" : "パスワードを変更"}
             >
               {isChangingPassword ? (
@@ -280,29 +281,24 @@ const PasswordChangeCard: React.FC = () => {
 };
 
 const Profile: React.FC = () => {
+  const { toast } = useToast();
+  const { updateUser, refreshUser } = useAuth();
   const [profile, setProfile] = useState<UserProfile>({
     name: '',
     email: '',
     department: null,
     position: null,
     bio: null,
-    avatarUrl: null
+    avatarUrl: null,
   });
-
-  const [isEditing, setIsEditing] = useState(false);
   const [originalProfile, setOriginalProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-
-  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [isDragOver, setIsDragOver] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
-  
-  // コンポーネントのマウント状態を追跡
   const isMountedRef = useRef(true);
   
   // AbortControllerを使用してリクエストをキャンセル可能にする
@@ -355,41 +351,17 @@ const Profile: React.FC = () => {
   // プロフィールデータを取得
   useEffect(() => {
     const fetchProfile = async () => {
-      // 既に取得中の場合は重複実行を防ぐ
-      if (fetchingRef.current) {
-        return;
-      }
-      
-      fetchingRef.current = true;
-      
-      // 既存のリクエストをキャンセル
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      
-      // 新しいAbortControllerを作成
-      abortControllerRef.current = new AbortController();
+      if (!isMountedRef.current) return;
       
       try {
-        if (!isMountedRef.current) {
-          return;
-        }
-        
         setIsLoading(true);
-        setError(null);
         
         const response = await userService.getCurrentUser();
         
-        // コンポーネントがアンマウントされている場合は処理を中断
-        if (!isMountedRef.current) {
-          return;
-        }
+        if (!isMountedRef.current) return;
         
         if (response.success && response.data) {
-          // 二重ネストの場合に対応
           let userData: any = response.data;
-          
-          // もしdataプロパティがさらにネストされている場合
           if (userData.data && typeof userData.data === 'object') {
             userData = userData.data;
           }
@@ -405,24 +377,24 @@ const Profile: React.FC = () => {
           };
           
           setProfile(profileData);
-          setIsLoading(false);
         } else {
-          if (isMountedRef.current) {
-          setError(response.message || 'プロフィール情報の取得に失敗しました。');
-          }
+          console.error('Failed to fetch profile:', response.message);
+          toast({
+            title: "エラー",
+            description: "プロフィール情報の取得に失敗しました。",
+            variant: "destructive",
+          });
         }
-      } catch (error: any) {
-        // AbortErrorの場合は無視
-        if (error.name === 'AbortError') {
-          return;
-        }
-        
-        console.error('Failed to fetch profile:', error);
+      } catch (err: any) {
+        console.error('Failed to fetch profile:', err);
         if (isMountedRef.current) {
-        setError('プロフィール情報の取得中にエラーが発生しました。');
+          toast({
+            title: "エラー",
+            description: "プロフィール情報の取得中にエラーが発生しました。",
+            variant: "destructive",
+          });
         }
       } finally {
-        fetchingRef.current = false;
         if (isMountedRef.current) {
           setIsLoading(false);
         }
@@ -457,27 +429,6 @@ const Profile: React.FC = () => {
   // ローディング中はスケルトンを表示
   if (isLoading) {
     return <ProfileSkeleton />;
-  }
-
-  // エラー時の表示
-  if (error) {
-    return (
-      <>
-        <Header />
-        <div className="p-6 bg-background min-h-screen bg-gray-50">
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center">
-                <p className="text-red-600 mb-4">{error}</p>
-                <Button onClick={() => window.location.reload()}>
-                  再読み込み
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </>
-    );
   }
 
   const handleInputChange = (
@@ -611,6 +562,11 @@ const Profile: React.FC = () => {
               description: "プロフィール画像が正常に更新されました。" 
             });
             
+            // AuthContextのユーザー情報を更新
+            updateUser({
+              avatarUrl: compressedDataUrl
+            });
+            
             // プロフィールデータを再取得して最新の状態に更新
             try {
               const updatedResponse = await userService.getCurrentUser();
@@ -632,6 +588,9 @@ const Profile: React.FC = () => {
                 };
                 
                 setProfile(updatedProfileData);
+                
+                // AuthContextも最新の情報で更新
+                updateUser(updatedProfileData);
               }
             } catch (error) {
               console.error('Failed to refresh profile data:', error);
@@ -776,6 +735,9 @@ const Profile: React.FC = () => {
             };
             
             setProfile(updatedProfileData);
+            
+            // AuthContextも最新の情報で更新
+            updateUser(updatedProfileData);
           }
         } catch (error) {
           console.error('Failed to refresh profile data:', error);
@@ -996,7 +958,7 @@ const Profile: React.FC = () => {
                   <Button 
                     onClick={saveProfile}
                     disabled={isUpdating || !hasChanges()}
-                    className="w-full sm:w-auto order-1 sm:order-2 bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    className="w-full sm:w-auto order-1 sm:order-2"
                     aria-label={isUpdating ? "プロフィールを保存中" : "プロフィールの変更を保存"}
                   >
                     {isUpdating ? (
@@ -1016,7 +978,7 @@ const Profile: React.FC = () => {
                     setIsEditing(true);
                   }}
                   disabled={isLoading}
-                  className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  className="w-full sm:w-auto"
                   aria-label="プロフィール情報を編集"
                 >
                   <Edit2 className="h-4 w-4 mr-2" />

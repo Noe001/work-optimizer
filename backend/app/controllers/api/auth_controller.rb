@@ -1,7 +1,7 @@
 module Api
   class AuthController < ApplicationController
     # tokenによる認証が必要なアクションを指定
-    before_action :authenticate_user, only: [:me, :logout, :change_password]
+    before_action :authenticate_user!, only: [:me, :logout, :change_password]
 
     # サインアップ
     def signup
@@ -10,145 +10,136 @@ module Api
       if @user.save
         token = @user.generate_jwt
         
-        render json: {
-          success: true,
-          data: {
+        render_success(
+          {
             user: UserSerializer.new(@user),
             token: token
           },
-          message: 'ユーザー登録が完了しました'
-        }, status: :created
+          'ユーザー登録が完了しました',
+          :created
+        )
       else
-        render json: {
-          success: false,
-          message: 'ユーザー登録に失敗しました',
-          errors: @user.errors.messages
-        }, status: :unprocessable_entity
+        render_error(
+          'ユーザー登録に失敗しました',
+          @user.errors.full_messages,
+          :unprocessable_entity
+        )
       end
+    rescue => e
+      handle_error(e, 'ユーザー登録中にエラーが発生しました')
     end
 
     # ログイン
     def login
-      @user = User.find_by(email: params[:email].downcase)
+      @user = User.find_by(email: params[:email]&.downcase)
       
-      if @user.nil?
-        render json: {
-          success: false,
-          message: 'メールアドレスまたはパスワードが正しくありません'
-        }, status: :unauthorized
-        return
+      unless @user
+        return render_error(
+          'メールアドレスまたはパスワードが正しくありません',
+          [],
+          :unauthorized
+        )
       end
       
-      if @user.authenticate(params[:password])
-        token = @user.generate_jwt
-        
-        render json: {
-          success: true,
-          data: {
-            user: UserSerializer.new(@user),
-            token: token
-          },
-          message: 'ログインしました'
-        }
-      else
-        render json: {
-          success: false,
-          message: 'メールアドレスまたはパスワードが正しくありません'
-        }, status: :unauthorized
+      unless @user.authenticate(params[:password])
+        return render_error(
+          'メールアドレスまたはパスワードが正しくありません',
+          [],
+          :unauthorized
+        )
       end
+
+      # ログイン成功時の処理
+      token = @user.generate_jwt
+      @user.update(last_login_at: Time.current)
+      
+      render_success(
+        {
+          user: UserSerializer.new(@user),
+          token: token
+        },
+        'ログインしました'
+      )
     rescue => e
-      render json: {
-        success: false,
-        message: 'ログイン処理中にエラーが発生しました'
-      }, status: :internal_server_error
+      handle_error(e, 'ログイン処理中にエラーが発生しました')
     end
 
     # 現在のユーザー情報取得
     def me
-      if current_user
-        render json: {
-          success: true,
-          data: UserSerializer.new(current_user)
-        }
-      else
-        render json: {
-          success: false,
-          message: 'ユーザー情報が見つかりません'
-        }, status: :unauthorized
-      end
+      render_success(UserSerializer.new(current_user))
     end
 
     # ログアウト
     def logout
-      render json: {
-        success: true,
-        message: 'ログアウトしました'
-      }
+      # セッションがある場合はクリア
+      session[:user_id] = nil if session[:user_id]
+      
+      render_success(nil, 'ログアウトしました')
     end
 
     # パスワード変更
     def change_password
       # パラメータの検証
-      unless params[:current_password].present? && params[:new_password].present? && params[:password_confirmation].present?
-        render json: {
-          success: false,
-          message: '必要なパラメータが不足しています'
-        }, status: :bad_request
-        return
+      unless valid_password_change_params?
+        return render_error('必要なパラメータが不足しています', [], :bad_request)
       end
 
       # 現在のパスワードの確認
       unless current_user.authenticate(params[:current_password])
-        render json: {
-          success: false,
-          message: '現在のパスワードが正しくありません'
-        }, status: :unauthorized
-        return
+        return render_error('現在のパスワードが正しくありません', [], :unauthorized)
       end
 
       # 新しいパスワードの確認
-      if params[:new_password] != params[:password_confirmation]
-        render json: {
-          success: false,
-          message: '新しいパスワードと確認用パスワードが一致しません'
-        }, status: :unprocessable_entity
-        return
+      unless passwords_match?
+        return render_error('新しいパスワードと確認用パスワードが一致しません', [], :unprocessable_entity)
       end
 
       # パスワードの長さチェック
-      if params[:new_password].length < 6
-        render json: {
-          success: false,
-          message: 'パスワードは6文字以上で入力してください'
-        }, status: :unprocessable_entity
-        return
+      unless valid_password_length?
+        return render_error('パスワードは8文字以上で入力してください', [], :unprocessable_entity)
       end
 
       # パスワード更新
       if current_user.update(password: params[:new_password], password_confirmation: params[:password_confirmation])
-        render json: {
-          success: true,
-          message: 'パスワードが正常に変更されました'
-        }
+        render_success(nil, 'パスワードが正常に変更されました')
       else
-        render json: {
-          success: false,
-          message: 'パスワードの変更に失敗しました',
-          errors: current_user.errors.full_messages
-        }, status: :unprocessable_entity
+        render_error(
+          'パスワードの変更に失敗しました',
+          current_user.errors.full_messages,
+          :unprocessable_entity
+        )
       end
     rescue => e
-      Rails.logger.error "Password change error: #{e.message}"
-      render json: {
-        success: false,
-        message: 'パスワード変更中にエラーが発生しました'
-      }, status: :internal_server_error
+      handle_error(e, 'パスワード変更中にエラーが発生しました')
     end
 
     private
 
     def user_params
-      params.permit(:name, :email, :password, :password_confirmation)
+      permitted_params = [:name, :email, :password, :password_confirmation, :department, :position, :bio]
+      
+      if params[:auth].present?
+        params.require(:auth).permit(permitted_params)
+      else
+        params.permit(permitted_params)
+      end
+    end
+
+    # パスワード変更パラメータの検証
+    def valid_password_change_params?
+      params[:current_password].present? && 
+      params[:new_password].present? && 
+      params[:password_confirmation].present?
+    end
+
+    # パスワードの一致確認
+    def passwords_match?
+      params[:new_password] == params[:password_confirmation]
+    end
+
+    # パスワード長の確認
+    def valid_password_length?
+      params[:new_password].length >= 8
     end
   end
 end 
