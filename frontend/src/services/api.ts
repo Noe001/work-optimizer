@@ -60,11 +60,16 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     // 認証エラー（401）の場合にカスタムイベントを発火
     if (error.response && error.response.status === 401) {
-      triggerAuthError({
-        message: error.message,
-        status: error.response.status,
-        statusText: error.response.statusText
-      });
+      // パスワード変更エンドポイントの場合は認証エラーイベントを発火しない
+      const isPasswordChangeRequest = error.config?.url?.includes('/auth/change-password');
+      
+      if (!isPasswordChangeRequest) {
+        triggerAuthError({
+          message: error.message,
+          status: error.response.status,
+          statusText: error.response.statusText
+        });
+      }
     }
     return Promise.reject(error);
   }
@@ -72,6 +77,12 @@ apiClient.interceptors.response.use(
 
 // AxiosResponseをApiResponse形式に変換する関数
 function axiosToApiResponse<T>(response: AxiosResponse<T>): ApiResponse<T> {
+  // バックエンドから既にApiResponse形式で返されている場合はそのまま返す
+  if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+    return response.data as ApiResponse<T>;
+  }
+  
+  // そうでない場合は従来通りラップする
   return {
     success: true,
     message: 'Success',
@@ -93,6 +104,7 @@ export const api = {
         params, 
         ...config 
       });
+      
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
       return {

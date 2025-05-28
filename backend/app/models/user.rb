@@ -25,6 +25,11 @@ class User < ApplicationRecord
                     uniqueness: { case_sensitive: false }
   validates :password, presence: true, length: { minimum: 6 }, allow_nil: true
 
+  # プロフィールフィールドのバリデーション
+  validates :department, length: { maximum: 100 }, allow_blank: true
+  validates :position, length: { maximum: 100 }, allow_blank: true
+  validates :bio, length: { maximum: 1000 }, allow_blank: true
+
   # ユーザー登録前にメールアドレスを小文字に変換
   before_save :downcase_email
   before_create :create_activation_digest

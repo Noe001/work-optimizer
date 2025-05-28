@@ -19,7 +19,10 @@ class ApplicationController < ActionController::API
   # リクエストからJWTトークンを取得し、ユーザーを認証する
   def authenticate_user
     # まずセッションから認証を試みる
-    return true if current_user_from_session
+    if current_user_from_session
+      @current_user = current_user_from_session
+      return true
+    end
 
     header = request.headers['Authorization']
     
@@ -33,6 +36,7 @@ class ApplicationController < ActionController::API
             end
     
     if token.nil? || token.empty?
+      @current_user = nil
       return false
     end
     
@@ -54,12 +58,16 @@ class ApplicationController < ActionController::API
       
       return true
     rescue ActiveRecord::RecordNotFound => e
+      @current_user = nil
       return false
     rescue JWT::DecodeError => e
+      @current_user = nil
       return false
     rescue JWT::ExpiredSignature => e
+      @current_user = nil
       return false
     rescue => e
+      @current_user = nil
       return false
     end
   end

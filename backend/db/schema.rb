@@ -143,6 +143,7 @@ ActiveRecord::Schema[7.2].define(version: 2025_04_19_000000) do
     t.string "department"
     t.string "position"
     t.text "bio"
+    t.text "avatarUrl"
     t.index ["email"], name: "index_users_on_email", unique: true
   end
 
