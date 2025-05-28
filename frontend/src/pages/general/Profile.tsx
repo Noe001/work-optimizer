@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, User, Edit2, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,6 @@ import { Textarea } from '@/components/ui/textarea';
 import Header from '@/components/Header';
 import { useToast } from '@/hooks/use-toast';
 import userService from '@/services/userService';
-import { User as ApiUser } from '@/types/api';
 
 interface UserProfile {
   id?: string;
@@ -21,13 +20,6 @@ interface UserProfile {
   updatedAt?: string;
 }
 
-// 拡張されたUser型（プロフィール用）
-interface ExtendedUser extends ApiUser {
-  department?: string;
-  position?: string;
-  bio?: string;
-  avatarUrl?: string;
-}
 
 // バリデーションエラーの型定義
 interface ValidationErrors {
