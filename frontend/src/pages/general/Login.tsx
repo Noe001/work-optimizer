@@ -13,7 +13,7 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const { login, isAuthenticated, isLoading, error: authError, clearError } = useAuth();
   const navigate = useNavigate();
 
   // 認証済みの場合はダッシュボードにリダイレクト
@@ -23,24 +23,74 @@ const Login: React.FC = () => {
     }
   }, [isAuthenticated, isLoading, navigate]);
 
+  // AuthContextのエラーを監視してローカルエラーに反映
+  useEffect(() => {
+    if (authError) {
+      setError(authError);
+    }
+  }, [authError]);
+
+  // コンポーネントがマウントされた時にエラーをクリア
+  useEffect(() => {
+    clearError();
+    setError('');
+  }, [clearError]);
+
+  const handleInputChange = (field: 'email' | 'password', value: string) => {
+    if (field === 'email') {
+      setEmail(value);
+    } else {
+      setPassword(value);
+    }
+    
+    // 入力時にエラーをクリア
+    if (error) {
+      setError('');
+      clearError();
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    clearError();
     setIsSubmitting(true);
 
     try {
-      const success = await login(email, password);
-      if (success) {
-        navigate('/');
+      const result = await login(email, password);
+      if (result.success) {
+        // 成功時の処理 - AuthContextが認証状態を管理するため、
+        // isAuthenticatedの変更でuseEffectによりダッシュボードに自動遷移される
+        // navigate('/'); // このコードは不要（useEffectで自動実行される）
       } else {
-        setError('ログインに失敗しました。メールアドレスとパスワードを確認してください。');
+        // エラーはAuthContextで設定されるため、
+        // authErrorの変更でuseEffectによりローカルエラーに反映される
+        if (result.error) {
+          setError(result.error);
+        }
       }
-    } catch (err) {
-      setError('ログイン中にエラーが発生しました。');
+    } catch (err: any) {
+      console.error('Login error details:', err);
+      
+      // 予期しないエラーの場合のフォールバック
+      let errorMessage = 'ログイン中にエラーが発生しました。';
+      if (err.errors && Array.isArray(err.errors) && err.errors.length > 0) {
+        errorMessage = err.errors[0];
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // ローディング状態の統合（AuthContextとローカル状態）
+  const isLoggingIn = isSubmitting || isLoading;
+  
+  // エラーメッセージの統合（ローカルエラーとAuthContextエラー）
+  const displayError = error || authError;
 
   // ログイン中の場合はローディング表示
   if (isLoading) {
@@ -69,7 +119,7 @@ const Login: React.FC = () => {
                 type="email"
                 placeholder="name@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => handleInputChange('email', e.target.value)}
                 required
                 disabled={isSubmitting}
               />
@@ -80,24 +130,24 @@ const Login: React.FC = () => {
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => handleInputChange('password', e.target.value)}
                 required
                 disabled={isSubmitting}
               />
             </div>
 
-            {error && (
+            {displayError && (
               <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{displayError}</AlertDescription>
               </Alert>
             )}
 
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={isSubmitting}
+              disabled={isLoggingIn}
             >
-              {isSubmitting ? (
+              {isLoggingIn ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   ログイン中...

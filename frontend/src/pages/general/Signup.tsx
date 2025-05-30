@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, CheckCircle2, XCircle, Circle } from 'lucide-react';
 import { SignupRequest } from '@/types/api';
-import { authAPI } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface FormData {
   name: string;
@@ -30,6 +30,7 @@ interface Validation {
 
 const SignupView: React.FC = () => {
   const navigate = useNavigate();
+  const { signup, isAuthenticated, isLoading: authLoading, error: authError, clearError } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,16 +57,34 @@ const SignupView: React.FC = () => {
 
   useEffect(() => {
     // 認証済みの場合はダッシュボードにリダイレクト
-    const token = localStorage.getItem('token');
-    if (token) {
+    if (isAuthenticated) {
       navigate('/dashboard');
     }
-  }, [navigate]);
+  }, [isAuthenticated, navigate]);
+
+  // AuthContextのエラーを監視してローカルエラーに反映
+  useEffect(() => {
+    if (authError) {
+      setError(authError);
+    }
+  }, [authError]);
+
+  // コンポーネントがマウントされた時にエラーをクリア
+  useEffect(() => {
+    clearError();
+    setError(null);
+  }, [clearError]);
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     validateField(name, value);
+    
+    // 入力時にエラーをクリア
+    if (error) {
+      setError(null);
+      clearError();
+    }
   };
 
   const validateField = (name: string, value: string) => {
@@ -115,6 +134,7 @@ const SignupView: React.FC = () => {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+    clearError();
 
     if (!isFormValid()) {
       setError('すべての項目を正しく入力してください');
@@ -133,33 +153,32 @@ const SignupView: React.FC = () => {
         bio: ''
       };
       
-      // authAPIを直接呼び出してエラーの詳細情報を保持
-      const response = await authAPI.signup(signupData);
+      // AuthContextのsignup関数を使用して認証状態の一貫性を保つ
+      const result = await signup(signupData);
       
-      if (response.success && response.data) {
-        // 成功時の処理 - ローカルストレージに保存
-        const token = response.data.token;
-        const userData = response.data.user;
-        
-        localStorage.setItem('auth_token', token);
-        localStorage.setItem('user_data', JSON.stringify(userData));
-        
-        navigate('/dashboard');
+      if (result.success) {
+        // 成功時の処理 - AuthContextが認証状態を管理するため、
+        // isAuthenticatedの変更でuseEffectによりダッシュボードに自動遷移される
+        // navigate('/dashboard'); // このコードは不要（useEffectで自動実行される）
       } else {
-        setError('アカウントの作成に失敗しました。');
+        // エラーはAuthContextで設定されるため、
+        // authErrorの変更でuseEffectによりローカルエラーに反映される
+        if (result.error) {
+          setError(result.error);
+        }
       }
     } catch (err: any) {
       console.error('Signup error details:', err);
       
-      // APIエラーの詳細処理
+      // 予期しないエラーの場合のフォールバック
+      let errorMessage = 'アカウントの作成に失敗しました。入力内容を確認してください。';
       if (err.errors && Array.isArray(err.errors) && err.errors.length > 0) {
-        // バリデーションエラーがある場合、最初のエラーを表示
-        setError(err.errors[0]);
+        errorMessage = err.errors[0];
       } else if (err.message) {
-        setError(err.message);
-      } else {
-        setError('アカウントの作成に失敗しました。入力内容を確認してください。');
+        errorMessage = err.message;
       }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -182,6 +201,12 @@ const SignupView: React.FC = () => {
       </span>
     </div>
   );
+
+  // ローディング状態の統合（AuthContextとローカル状態）
+  const isSubmitting = isLoading || authLoading;
+  
+  // エラーメッセージの統合（ローカルエラーとAuthContextエラー）
+  const displayError = error || authError;
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
@@ -307,14 +332,14 @@ const SignupView: React.FC = () => {
               />
             </div>
 
-            {error && (
+            {displayError && (
               <div className="text-sm text-red-600 bg-red-50 p-4 rounded-lg border-l-4 border-red-500 shadow-sm animate-pulse">
                 <div className="flex items-start space-x-3">
                   <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
                   <div>
                     <div className="font-medium">エラーが発生しました</div>
-                    <div className="mt-1">{error}</div>
-                    {error.includes('メールアドレス') && error.includes('登録されています') && (
+                    <div className="mt-1">{displayError}</div>
+                    {displayError.includes('メールアドレス') && displayError.includes('登録されています') && (
                       <div className="mt-2 text-xs text-red-500 bg-red-100 p-2 rounded">
                         💡 <strong>ヒント:</strong> 別のメールアドレスを使用してください。例: user{Date.now().toString().slice(-4)}@example.com
                       </div>
@@ -324,8 +349,8 @@ const SignupView: React.FC = () => {
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={!isFormValid() || isLoading}>
-              {isLoading ? 'アカウント作成中...' : 'アカウント作成'}
+            <Button type="submit" className="w-full" disabled={!isFormValid() || isSubmitting}>
+              {isSubmitting ? 'アカウント作成中...' : 'アカウント作成'}
             </Button>
 
             <div className="text-center text-sm text-gray-600">

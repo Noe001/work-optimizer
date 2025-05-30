@@ -13,10 +13,10 @@ interface UserProfile {
   id?: string;
   name: string;
   email: string;
-  department: string | null;
-  position: string | null;
-  bio: string | null;
-  avatarUrl: string | null;
+  department: string | undefined;
+  position: string | undefined;
+  bio: string | undefined;
+  avatarUrl: string | undefined;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -286,10 +286,10 @@ const Profile: React.FC = () => {
   const [profile, setProfile] = useState<UserProfile>({
     name: '',
     email: '',
-    department: null,
-    position: null,
-    bio: null,
-    avatarUrl: null,
+    department: undefined,
+    position: undefined,
+    bio: undefined,
+    avatarUrl: undefined,
   });
   const [originalProfile, setOriginalProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -361,19 +361,16 @@ const Profile: React.FC = () => {
         if (!isMountedRef.current) return;
         
         if (response.success && response.data) {
-          let userData: any = response.data;
-          if (userData.data && typeof userData.data === 'object') {
-            userData = userData.data;
-          }
+          const userData = response.data as any; // UserSerializer から返されるデータ
           
-          const profileData = {
+          const profileData: UserProfile = {
             id: userData.id,
             name: userData.name || '',
             email: userData.email || '',
-            department: userData.department || null,
-            position: userData.position || null,
-            bio: userData.bio || null,
-            avatarUrl: userData.avatarUrl || null,
+            department: userData.department || undefined,
+            position: userData.position || undefined,
+            bio: userData.bio || undefined,
+            avatarUrl: userData.avatarUrl || undefined,
           };
           
           setProfile(profileData);
@@ -547,13 +544,24 @@ const Profile: React.FC = () => {
           }));
 
           // 即座にサーバーに保存
-          const response = await userService.updateUserProfileData({
+          const profileData: UserProfile = {
+            id: profile.id,
             name: profile.name,
             email: profile.email,
             department: profile.department,
             position: profile.position,
             bio: profile.bio,
             avatarUrl: compressedDataUrl
+          };
+
+          // APIのupdateUserProfileDataは null を期待するため、undefinedをnullに変換
+          const response = await userService.updateUserProfileData({
+            name: profileData.name,
+            email: profileData.email,
+            department: profileData.department || null,
+            position: profileData.position || null,
+            bio: profileData.bio || null,
+            avatarUrl: compressedDataUrl || null
           });
 
           if (response.success) {
@@ -562,29 +570,21 @@ const Profile: React.FC = () => {
               description: "プロフィール画像が正常に更新されました。" 
             });
             
-            // AuthContextのユーザー情報を更新
-            updateUser({
-              avatarUrl: compressedDataUrl
-            });
-            
             // プロフィールデータを再取得して最新の状態に更新
             try {
               const updatedResponse = await userService.getCurrentUser();
               
               if (updatedResponse.success && updatedResponse.data) {
-                let userData: any = updatedResponse.data;
-                if (userData.data && typeof userData.data === 'object') {
-                  userData = userData.data;
-                }
+                const userData = updatedResponse.data as any; // UserSerializer から返されるデータ
                 
-                const updatedProfileData = {
+                const updatedProfileData: UserProfile = {
                   id: userData.id,
                   name: userData.name || '',
                   email: userData.email || '',
-                  department: userData.department || null,
-                  position: userData.position || null,
-                  bio: userData.bio || null,
-                  avatarUrl: userData.avatarUrl || null,
+                  department: userData.department || undefined,
+                  position: userData.position || undefined,
+                  bio: userData.bio || undefined,
+                  avatarUrl: userData.avatarUrl || undefined,
                 };
                 
                 setProfile(updatedProfileData);
@@ -612,8 +612,8 @@ const Profile: React.FC = () => {
         console.error('Failed to process image:', error);
         if (isMountedRef.current) {
           // エラーが発生した場合は元の画像に戻す
-          setProfile(prev => ({
-            ...prev,
+        setProfile(prev => ({
+          ...prev,
             avatarUrl: profile.avatarUrl
           }));
           toast({ 
@@ -698,10 +698,10 @@ const Profile: React.FC = () => {
       const response = await userService.updateUserProfileData({
         name: profile.name,
         email: profile.email,
-        department: profile.department,
-        position: profile.position,
-        bio: profile.bio,
-        avatarUrl: profile.avatarUrl
+        department: profile.department || null,
+        position: profile.position || null,
+        bio: profile.bio || null,
+        avatarUrl: profile.avatarUrl || null
       });
       
       if (!isMountedRef.current) return;
@@ -718,20 +718,18 @@ const Profile: React.FC = () => {
         // プロフィールデータを再取得して最新の状態に更新
         try {
           const updatedResponse = await userService.getCurrentUser();
+          
           if (updatedResponse.success && updatedResponse.data) {
-            let userData: any = updatedResponse.data;
-            if (userData.data && typeof userData.data === 'object') {
-              userData = userData.data;
-            }
+            const userData = updatedResponse.data as any; // UserSerializer から返されるデータ
             
-            const updatedProfileData = {
+            const updatedProfileData: UserProfile = {
               id: userData.id,
               name: userData.name || '',
               email: userData.email || '',
-              department: userData.department || null,
-              position: userData.position || null,
-              bio: userData.bio || null,
-              avatarUrl: userData.avatarUrl || null,
+              department: userData.department || undefined,
+              position: userData.position || undefined,
+              bio: userData.bio || undefined,
+              avatarUrl: userData.avatarUrl || undefined,
             };
             
             setProfile(updatedProfileData);
@@ -856,18 +854,18 @@ const Profile: React.FC = () => {
                 )}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-              <div>
+                <div>
                   <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
                     名前 <span className="text-red-500" aria-label="必須項目">*</span>
                   </label>
-                <Input
+                  <Input
                     id="name"
-                  name="name"
-                  value={profile.name}
-                  onChange={handleInputChange}
-                  disabled={!isEditing || isUpdating}
+                    name="name"
+                    value={profile.name}
+                    onChange={handleInputChange}
+                    disabled={!isEditing || isUpdating}
                     className={`w-full transition-colors ${validationErrors.name ? 'border-red-500 focus:border-red-500' : 'focus:border-blue-500'}`}
-                  required
+                    required
                     aria-invalid={!!validationErrors.name}
                     aria-describedby={validationErrors.name ? "name-error" : undefined}
                   />
@@ -877,20 +875,20 @@ const Profile: React.FC = () => {
                       {validationErrors.name}
                     </p>
                   )}
-              </div>
-              <div>
+                </div>
+                <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                     メールアドレス <span className="text-red-500" aria-label="必須項目">*</span>
                   </label>
-                <Input
+                  <Input
                     id="email"
-                  name="email"
-                  type="email"
-                  value={profile.email}
-                  onChange={handleInputChange}
-                  disabled={!isEditing || isUpdating}
+                    name="email"
+                    type="email"
+                    value={profile.email}
+                    onChange={handleInputChange}
+                    disabled={!isEditing || isUpdating}
                     className={`w-full transition-colors ${validationErrors.email ? 'border-red-500 focus:border-red-500' : 'focus:border-blue-500'}`}
-                  required
+                    required
                     aria-invalid={!!validationErrors.email}
                     aria-describedby={validationErrors.email ? "email-error" : undefined}
                   />
@@ -903,14 +901,14 @@ const Profile: React.FC = () => {
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-              <div>
+                <div>
                   <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-2">部門</label>
-                <Input
+                  <Input
                     id="department"
-                  name="department"
-                  value={profile.department || ''}
-                  onChange={handleInputChange}
-                  disabled={!isEditing || isUpdating}
+                    name="department"
+                    value={profile.department || ''}
+                    onChange={handleInputChange}
+                    disabled={!isEditing || isUpdating}
                     className={`w-full transition-colors ${validationErrors.department ? 'border-red-500 focus:border-red-500' : 'focus:border-blue-500'}`}
                     aria-invalid={!!validationErrors.department}
                     aria-describedby={validationErrors.department ? "department-error" : undefined}
@@ -921,15 +919,15 @@ const Profile: React.FC = () => {
                       {validationErrors.department}
                     </p>
                   )}
-              </div>
-              <div>
+                </div>
+                <div>
                   <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-2">ポジション</label>
-                <Input
+                  <Input
                     id="position"
-                  name="position"
-                  value={profile.position || ''}
-                  onChange={handleInputChange}
-                  disabled={!isEditing || isUpdating}
+                    name="position"
+                    value={profile.position || ''}
+                    onChange={handleInputChange}
+                    disabled={!isEditing || isUpdating}
                     className={`w-full transition-colors ${validationErrors.position ? 'border-red-500 focus:border-red-500' : 'focus:border-blue-500'}`}
                     aria-invalid={!!validationErrors.position}
                     aria-describedby={validationErrors.position ? "position-error" : undefined}
@@ -985,7 +983,7 @@ const Profile: React.FC = () => {
                   編集
                 </Button>
               )}
-            </div>
+              </div>
           </CardContent>
         </Card>
 

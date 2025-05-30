@@ -9,11 +9,13 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
-  signup: (data: SignupRequest) => Promise<boolean>;
+  error: string | null;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (data: SignupRequest) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
   refreshUser: () => Promise<void>;
+  clearError: () => void;
 }
 
 // デフォルト値を設定
@@ -21,11 +23,13 @@ const defaultAuthContext: AuthContextType = {
   isAuthenticated: false,
   isLoading: true,
   user: null,
-  login: async () => false,
-  signup: async () => false,
+  error: null,
+  login: async () => ({ success: false }),
+  signup: async () => ({ success: false }),
   logout: () => {},
   updateUser: () => {},
-  refreshUser: async () => {}
+  refreshUser: async () => {},
+  clearError: () => {}
 };
 
 // コンテキストの作成
@@ -43,6 +47,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [user, setUser] = useState<User | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // 初期化時に保存されている認証情報を確認
   useEffect(() => {
@@ -92,13 +97,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.removeItem('user_data');
     setIsAuthenticated(false);
     setUser(null);
+    setError(null);
     // APIクライアントの認証ヘッダーもクリア
     delete axios.defaults.headers.common['Authorization'];
   };
 
+  // エラーをクリアする関数
+  const clearError = () => {
+    setError(null);
+  };
+
   // ログイン関数
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
+      setError(null);
       const loginData: LoginRequest = { email, password };
       const response = await authAPI.login(loginData);
       
@@ -115,19 +127,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsAuthenticated(true);
         setUser(userData);
         
-        return true;
+        return { success: true };
       }
       
-      return false;
-    } catch (error) {
+      const errorMessage = response.message || 'ログインに失敗しました';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } catch (error: any) {
       console.error('Login failed:', error);
-      return false;
+      
+      let errorMessage = 'ログインに失敗しました';
+      if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+        errorMessage = error.errors[0];
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
     }
   };
 
   // サインアップ関数
-  const signup = async (data: SignupRequest): Promise<boolean> => {
+  const signup = async (data: SignupRequest): Promise<{ success: boolean; error?: string }> => {
     try {
+      setError(null);
       const response = await authAPI.signup(data);
       
       if (response.success && response.data) {
@@ -142,13 +166,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsAuthenticated(true);
         setUser(userData);
         
-        return true;
+        return { success: true };
       }
       
-      return false;
-    } catch (error) {
+      const errorMessage = response.message || 'アカウントの作成に失敗しました';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } catch (error: any) {
       console.error('Signup failed:', error);
-      return false;
+      
+      let errorMessage = 'アカウントの作成に失敗しました';
+      if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+        errorMessage = error.errors[0];
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
     }
   };
 
@@ -191,11 +226,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isAuthenticated,
         isLoading,
         user,
+        error,
         login,
         signup,
         logout,
         updateUser,
-        refreshUser
+        refreshUser,
+        clearError
       }}
     >
       {children}

@@ -8,39 +8,39 @@ class Api::UsersController < ApplicationController
   end
 
   def show
-    render json: @user, serializer: UserSerializer
+    # N+1問題を防ぐためにeager loadingを実行
+    user_with_organizations = find_user_with_organizations(@user.id)
+    render json: user_with_organizations, serializer: UserSerializer
   end
 
   # ユーザー情報更新（管理者用）
   def update
     if @user.update(user_params)
-      render json: {
-        success: true,
-        data: UserSerializer.new(@user).as_json,
-        message: 'ユーザー情報が正常に更新されました。'
-      }
+      # 更新後に関連データを再ロード
+      user_with_organizations = find_user_with_organizations(@user.id)
+      render_success(
+        UserSerializer.new(user_with_organizations),
+        'ユーザー情報が正常に更新されました。'
+      )
     else
-      render json: {
-        success: false,
-        message: 'ユーザー情報の更新に失敗しました。',
-        errors: @user.errors.full_messages
-      }, status: :unprocessable_entity
+      render_error(
+        'ユーザー情報の更新に失敗しました。',
+        @user.errors.full_messages,
+        :unprocessable_entity
+      )
     end
   end
 
   # ユーザー削除（管理者用）
   def destroy
     if @user.destroy
-      render json: {
-        success: true,
-        message: 'ユーザーが正常に削除されました。'
-      }
+      render_success(nil, 'ユーザーが正常に削除されました。')
     else
-      render json: {
-        success: false,
-        message: 'ユーザーの削除に失敗しました。',
-        errors: @user.errors.full_messages
-      }, status: :unprocessable_entity
+      render_error(
+        'ユーザーの削除に失敗しました。',
+        @user.errors.full_messages,
+        :unprocessable_entity
+      )
     end
   end
 
@@ -50,27 +50,30 @@ class Api::UsersController < ApplicationController
     sanitized_params = sanitize_profile_params(profile_params)
     
     if @user.update(sanitized_params)
-      render json: {
-        success: true,
-        data: UserSerializer.new(@user).as_json,
-        message: 'プロフィールが正常に更新されました。'
-      }
+      # 更新後に関連データを再ロード
+      user_with_organizations = find_user_with_organizations(@user.id)
+      render_success(
+        UserSerializer.new(user_with_organizations),
+        'プロフィールが正常に更新されました。'
+      )
     else
-      render json: {
-        success: false,
-        message: 'プロフィールの更新に失敗しました。',
-        errors: @user.errors.full_messages
-      }, status: :unprocessable_entity
+      render_error(
+        'プロフィールの更新に失敗しました。',
+        @user.errors.full_messages,
+        :unprocessable_entity
+      )
     end
   end
 
   private
 
   def set_user
+    # N+1問題を防ぐためにeager loadingを実行
     if action_name == 'update_profile'
-      @user = current_user
+      @user = find_user_with_organizations(current_user.id)
     else
-      @user = params[:id] ? User.find(params[:id]) : current_user
+      user_id = params[:id] || current_user.id
+      @user = find_user_with_organizations(user_id)
     end
   end
 

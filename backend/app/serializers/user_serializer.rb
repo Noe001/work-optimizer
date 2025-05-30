@@ -3,7 +3,7 @@ class UserSerializer < ActiveModel::Serializer
              :role, :status, :display_name, :profile_complete, 
              :paid_leave_balance, :sick_leave_balance,
              :monthly_work_hours, :monthly_overtime_hours,
-             :created_at, :updated_at
+             :created_at, :updated_at, :organizations
 
   # 表示名
   def display_name
@@ -35,14 +35,39 @@ class UserSerializer < ActiveModel::Serializer
     object.monthly_overtime_hours
   end
 
-  # 所属組織の情報（必要に応じて）
+  # 所属組織の情報（N+1問題対応済み）
   def organizations
-    object.organizations.map do |org|
-      {
-        id: org.id,
-        name: org.name,
-        role: object.organization_memberships.find_by(organization: org)&.role
-      }
+    # eager loadingされたassociationを活用
+    # organization_membershipsとorganizationが既にロードされていることを前提とする
+    if object.association(:organization_memberships).loaded? && 
+       object.organization_memberships.all? { |membership| membership.association(:organization).loaded? }
+      
+      # 既にロードされたデータを使用してN+1問題を回避
+      object.organization_memberships.map do |membership|
+        {
+          id: membership.organization.id,
+          name: membership.organization.name,
+          role: membership.role,
+          joined_at: membership.created_at,
+          updated_at: membership.updated_at
+        }
+      end
+    else
+      # フォールバック：eager loadingされていない場合の処理
+      # ログで警告を出し、最小限のクエリで対応
+      Rails.logger.warn "UserSerializer#organizations: Association not preloaded, potential N+1 query"
+      
+      # 一度のクエリで全ての関連データを取得
+      memberships = object.organization_memberships.includes(:organization)
+      memberships.map do |membership|
+        {
+          id: membership.organization.id,
+          name: membership.organization.name,
+          role: membership.role,
+          joined_at: membership.created_at,
+          updated_at: membership.updated_at
+        }
+      end
     end
   end
 end 
