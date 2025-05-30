@@ -28,6 +28,7 @@ import {
   Clock,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { createAvatarProps } from "@/utils/avatarUtils";
 
 // ナビゲーションリンクの定義
 const navigationLinks = [
@@ -56,14 +57,6 @@ const Header: React.FC = () => {
     navigate('/login', { replace: true });
   };
 
-  // アバター画像のURL取得
-  const getAvatarUrl = () => {
-    if (user?.avatarUrl) {
-      return user.avatarUrl;
-    }
-    return "/images/circle-user-round.png"; // デフォルト画像
-  };
-
   // ユーザー表示名の取得
   const getUserDisplayName = () => {
     if (user?.display_name) {
@@ -74,6 +67,13 @@ const Header: React.FC = () => {
     }
     return "ユーザー";
   };
+
+  // アバター画像のプロップスを取得
+  const avatarProps = createAvatarProps(
+    user?.avatarUrl,
+    getUserDisplayName(),
+    "ユーザーアバター"
+  );
   
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white shadow-md">
@@ -220,7 +220,10 @@ const Header: React.FC = () => {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
-                <img src={getAvatarUrl()} alt="ユーザーアバター" className="w-8 h-8 rounded-full" />
+                <img 
+                  {...avatarProps}
+                  className="w-8 h-8 rounded-full"
+                />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

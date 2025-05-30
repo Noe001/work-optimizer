@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
+import React, { useState, useEffect, type FormEvent, type ChangeEvent, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,15 @@ import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, CheckCircle2, XCircle, Circle } from 'lucide-react';
 import { SignupRequest } from '@/types/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { 
+  createDetailedError,
+  getErrorMessage, 
+  getRecommendedAction,
+  createToastOptions,
+  isPasswordChangeError,
+  createUnifiedError,
+  formatValidationErrors 
+} from '@/utils/errorHandler';
 
 interface FormData {
   name: string;
@@ -18,14 +27,15 @@ interface FormData {
 }
 
 interface Validation {
-  name: { isValid: boolean };
-  email: { isValid: boolean };
+  name: { isValid: boolean; error?: string };
+  email: { isValid: boolean; error?: string };
   password: {
     hasMinLength: boolean;
     hasNumber: boolean;
     hasLetter: boolean;
+    error?: string;
   };
-  confirmPassword: { isValid: boolean };
+  confirmPassword: { isValid: boolean; error?: string };
 }
 
 const SignupView: React.FC = () => {
@@ -54,6 +64,12 @@ const SignupView: React.FC = () => {
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // フィールドへの参照
+  const nameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const confirmPasswordRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // 認証済みの場合はダッシュボードにリダイレクト
@@ -170,24 +186,55 @@ const SignupView: React.FC = () => {
     } catch (err: any) {
       console.error('Signup error details:', err);
       
-      // 予期しないエラーの場合のフォールバック
-      let errorMessage = 'アカウントの作成に失敗しました。入力内容を確認してください。';
-      if (err.errors && Array.isArray(err.errors) && err.errors.length > 0) {
-        errorMessage = err.errors[0];
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
-      setError(errorMessage);
+      // サーバーエラーの詳細処理を使用
+      handleServerError(err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // サーバーエラーの詳細処理
+  const handleServerError = (error: any) => {
+    const unifiedError = createUnifiedError(error);
+    
+    // フィールド固有のエラーをバリデーション状態に反映
+    const newValidation = { ...validation };
+    
+    if (unifiedError.fieldErrors.name) {
+      newValidation.name.error = unifiedError.fieldErrors.name;
+      setTimeout(() => nameRef.current?.focus(), 100);
+    }
+    
+    if (unifiedError.fieldErrors.email) {
+      newValidation.email.error = unifiedError.fieldErrors.email;
+      setTimeout(() => emailRef.current?.focus(), 100);
+    }
+    
+    if (unifiedError.fieldErrors.password) {
+      newValidation.password.error = unifiedError.fieldErrors.password;
+      setTimeout(() => passwordRef.current?.focus(), 100);
+    }
+    
+    if (unifiedError.fieldErrors.password_confirmation) {
+      newValidation.confirmPassword.error = unifiedError.fieldErrors.password_confirmation;
+      setTimeout(() => confirmPasswordRef.current?.focus(), 100);
+    }
+    
+    setValidation(newValidation);
+    
+    // メインエラーメッセージを設定
+    if (unifiedError.generalErrors.length > 0) {
+      setError(formatValidationErrors(unifiedError.generalErrors));
+    } else {
+      setError(unifiedError.message);
     }
   };
 
   const ValidationItem: React.FC<{
     isValid: boolean | null;
     message: string;
-  }> = ({ isValid, message }) => (
+    serverError?: string;
+  }> = ({ isValid, message, serverError }) => (
     <div className="flex items-center space-x-2 text-sm">
       {isValid === null ? (
         <Circle className="h-4 w-4 text-gray-300" />
@@ -199,6 +246,11 @@ const SignupView: React.FC = () => {
       <span className={isValid === null ? 'text-gray-400' : isValid ? 'text-green-600' : 'text-red-600'}>
         {message}
       </span>
+      {serverError && (
+        <div className="text-xs text-red-500 ml-2">
+          {serverError}
+        </div>
+      )}
     </div>
   );
 
@@ -229,10 +281,12 @@ const SignupView: React.FC = () => {
                 className={`w-full ${
                   formData.name ? (validation.name.isValid ? 'border-green-500' : 'border-red-500') : ''
                 }`}
+                ref={nameRef}
               />
               <ValidationItem
                 isValid={formData.name ? validation.name.isValid : null}
                 message="3〜20文字の英数字、ハイフン、アンダースコアが使用可能です"
+                serverError={validation.name.error}
               />
             </div>
 
@@ -249,10 +303,12 @@ const SignupView: React.FC = () => {
                 className={`w-full ${
                   formData.email ? (validation.email.isValid ? 'border-green-500' : 'border-red-500') : ''
                 }`}
+                ref={emailRef}
               />
               <ValidationItem
                 isValid={formData.email ? validation.email.isValid : null}
                 message="まだ登録されていない有効なメールアドレスを入力してください"
+                serverError={validation.email.error}
               />
             </div>
 
@@ -274,6 +330,7 @@ const SignupView: React.FC = () => {
                         : 'border-red-500'
                       : ''
                   }`}
+                  ref={passwordRef}
                 />
                 <button
                   type="button"
@@ -317,6 +374,7 @@ const SignupView: React.FC = () => {
                         : 'border-red-500'
                       : ''
                   }`}
+                  ref={confirmPasswordRef}
                 />
                 <button
                   type="button"

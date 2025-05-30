@@ -8,6 +8,15 @@ import Header from '@/components/Header';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import userService from '@/services/userService';
+import { 
+  createDetailedError,
+  getErrorMessage, 
+  getRecommendedAction,
+  createToastOptions,
+  isPasswordChangeError 
+} from '@/utils/errorHandler';
+import { createAvatarProps } from '@/utils/avatarUtils';
+import { ASSETS_CONFIG } from '@/config/app';
 
 interface UserProfile {
   id?: string;
@@ -93,6 +102,11 @@ const PasswordChangeCard: React.FC = () => {
   const [passwordErrors, setPasswordErrors] = useState<{[key: string]: string}>({});
   const { toast } = useToast();
 
+  // フィールドへの参照を追加
+  const currentPasswordRef = useRef<HTMLInputElement>(null);
+  const newPasswordRef = useRef<HTMLInputElement>(null);
+  const confirmPasswordRef = useRef<HTMLInputElement>(null);
+
   const validatePassword = () => {
     const errors: {[key: string]: string} = {};
 
@@ -130,6 +144,67 @@ const PasswordChangeCard: React.FC = () => {
     }
   };
 
+  // エラーコードに基づくエラーハンドリング
+  const handlePasswordError = (error: any) => {
+    // エラーハンドリングユーティリティを使用
+    const detailedError = createDetailedError(error);
+    const userFriendlyMessage = getErrorMessage(detailedError);
+    const recommendedAction = getRecommendedAction(detailedError);
+    
+    // フィールド固有のエラーを設定
+    const fieldErrors: {[key: string]: string} = {};
+    
+    // エラーコードに基づくフィールドフォーカス
+    switch (recommendedAction) {
+      case 'FOCUS_CURRENT_PASSWORD':
+        fieldErrors.currentPassword = userFriendlyMessage;
+        setTimeout(() => currentPasswordRef.current?.focus(), 100);
+        break;
+      case 'FOCUS_NEW_PASSWORD':
+        fieldErrors.newPassword = userFriendlyMessage;
+        setTimeout(() => newPasswordRef.current?.focus(), 100);
+        break;
+      case 'FOCUS_CONFIRM_PASSWORD':
+        fieldErrors.confirmPassword = userFriendlyMessage;
+        setTimeout(() => confirmPasswordRef.current?.focus(), 100);
+        break;
+      case 'HIGHLIGHT_REQUIRED':
+        // 必須フィールドのハイライト
+        if (!passwordData.currentPassword) {
+          fieldErrors.currentPassword = '現在のパスワードを入力してください。';
+          setTimeout(() => currentPasswordRef.current?.focus(), 100);
+        } else if (!passwordData.newPassword) {
+          fieldErrors.newPassword = '新しいパスワードを入力してください。';
+          setTimeout(() => newPasswordRef.current?.focus(), 100);
+        } else if (!passwordData.confirmPassword) {
+          fieldErrors.confirmPassword = 'パスワードの確認を入力してください。';
+          setTimeout(() => confirmPasswordRef.current?.focus(), 100);
+        }
+        break;
+      case 'SHOW_RETRY':
+        // リトライ用の一般的なエラー表示
+        fieldErrors.general = userFriendlyMessage;
+        break;
+      default:
+        fieldErrors.general = userFriendlyMessage;
+    }
+    
+    setPasswordErrors(fieldErrors);
+    
+    // パスワード変更エラーの場合は詳細なトーストも表示
+    if (isPasswordChangeError(detailedError)) {
+      const toastOptions = createToastOptions(detailedError);
+      toast(toastOptions);
+    } else {
+      // 一般的なエラーの場合
+      toast({
+        title: "エラー",
+        description: userFriendlyMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -159,19 +234,20 @@ const PasswordChangeCard: React.FC = () => {
         });
         setPasswordErrors({});
       } else {
-        toast({
-          title: "エラー",
-          description: response.message || "パスワードの変更に失敗しました。",
-          variant: "destructive",
+        // レスポンスにエラーがある場合
+        handlePasswordError({
+          response: {
+            data: {
+              message: response.message,
+              code: response.code,
+              errors: response.errors
+            }
+          }
         });
       }
     } catch (error: any) {
       console.error('Failed to change password:', error);
-      toast({
-        title: "エラー",
-        description: error.message || "パスワードの変更中にエラーが発生しました。",
-        variant: "destructive",
-      });
+      handlePasswordError(error);
     } finally {
       setIsChangingPassword(false);
     }
@@ -200,6 +276,7 @@ const PasswordChangeCard: React.FC = () => {
               aria-invalid={!!passwordErrors.currentPassword}
               aria-describedby={passwordErrors.currentPassword ? "current-password-error" : undefined}
               autoComplete="current-password"
+              ref={currentPasswordRef}
             />
             {passwordErrors.currentPassword && (
               <p id="current-password-error" className="text-red-500 text-sm mt-1 flex items-center" role="alert">
@@ -223,6 +300,7 @@ const PasswordChangeCard: React.FC = () => {
               aria-invalid={!!passwordErrors.newPassword}
               aria-describedby={passwordErrors.newPassword ? "new-password-error" : "new-password-help"}
               autoComplete="new-password"
+              ref={newPasswordRef}
             />
             <p id="new-password-help" className="text-xs text-gray-500 mt-1">
               6文字以上で入力してください
@@ -249,6 +327,7 @@ const PasswordChangeCard: React.FC = () => {
               aria-invalid={!!passwordErrors.confirmPassword}
               aria-describedby={passwordErrors.confirmPassword ? "confirm-password-error" : undefined}
               autoComplete="new-password"
+              ref={confirmPasswordRef}
             />
             {passwordErrors.confirmPassword && (
               <p id="confirm-password-error" className="text-red-500 text-sm mt-1 flex items-center" role="alert">
@@ -468,8 +547,7 @@ const Profile: React.FC = () => {
 
   const processFile = async (file: File) => {
     // ファイル形式チェック
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
+    if (!ASSETS_CONFIG.ALLOWED_IMAGE_TYPES.includes(file.type)) {
       toast({ 
         title: "エラー", 
         description: "JPEG、PNG、WebP、GIF形式のみ対応しています。", 
@@ -478,8 +556,8 @@ const Profile: React.FC = () => {
       return;
     }
 
-    // ファイルサイズチェック (5MB制限)
-    if (file.size > 5 * 1024 * 1024) {
+    // ファイルサイズチェック
+    if (file.size > ASSETS_CONFIG.MAX_AVATAR_SIZE) {
       toast({ 
         title: "エラー", 
         description: "ファイルサイズは5MB以下にしてください。", 
@@ -495,11 +573,12 @@ const Profile: React.FC = () => {
     img.onload = async () => {
       URL.revokeObjectURL(imageUrl);
       
-      // 最大解像度チェック (4000x4000)
-      if (img.width > 4000 || img.height > 4000) {
+      // 最大解像度チェック
+      const { width: maxWidth, height: maxHeight } = ASSETS_CONFIG.MAX_IMAGE_DIMENSIONS;
+      if (img.width > maxWidth || img.height > maxHeight) {
         toast({ 
           title: "エラー", 
-          description: "画像サイズは4000x4000ピクセル以下にしてください。", 
+          description: `画像サイズは${maxWidth}x${maxHeight}ピクセル以下にしてください。`, 
           variant: "destructive" 
         });
         return;
@@ -513,8 +592,8 @@ const Profile: React.FC = () => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        // プレビュー用にリサイズ (最大200x200)
-        const maxSize = 200;
+        // プレビュー用にリサイズ
+        const maxSize = ASSETS_CONFIG.AVATAR_PREVIEW_SIZE;
         let { width, height } = img;
         
         if (width > height) {
@@ -791,8 +870,7 @@ const Profile: React.FC = () => {
                 onDrop={handleDrop}
               >
                 <img
-                  src={profile.avatarUrl || '/images/circle-user-round.png'}
-                  alt="プロフィール画像"
+                  {...createAvatarProps(profile.avatarUrl, profile.name, 'プロフィール画像')}
                   className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full cursor-pointer hover:opacity-80 transition-all duration-200 ${isUploading ? 'opacity-50' : ''} ${isDragOver ? 'scale-105' : ''}`}
                   onClick={handleAvatarClick}
                 />
@@ -854,15 +932,15 @@ const Profile: React.FC = () => {
                 )}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                <div>
+              <div>
                   <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
                     名前 <span className="text-red-500" aria-label="必須項目">*</span>
                   </label>
-                  <Input
+                <Input
                     id="name"
-                    name="name"
-                    value={profile.name}
-                    onChange={handleInputChange}
+                  name="name"
+                  value={profile.name}
+                  onChange={handleInputChange}
                     disabled={!isEditing || isUpdating}
                     className={`w-full transition-colors ${validationErrors.name ? 'border-red-500 focus:border-red-500' : 'focus:border-blue-500'}`}
                     required
@@ -875,17 +953,17 @@ const Profile: React.FC = () => {
                       {validationErrors.name}
                     </p>
                   )}
-                </div>
-                <div>
+              </div>
+              <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                     メールアドレス <span className="text-red-500" aria-label="必須項目">*</span>
                   </label>
-                  <Input
+                <Input
                     id="email"
-                    name="email"
+                  name="email"
                     type="email"
-                    value={profile.email}
-                    onChange={handleInputChange}
+                  value={profile.email}
+                  onChange={handleInputChange}
                     disabled={!isEditing || isUpdating}
                     className={`w-full transition-colors ${validationErrors.email ? 'border-red-500 focus:border-red-500' : 'focus:border-blue-500'}`}
                     required
@@ -901,13 +979,13 @@ const Profile: React.FC = () => {
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                <div>
+              <div>
                   <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-2">部門</label>
-                  <Input
+                <Input
                     id="department"
-                    name="department"
+                  name="department"
                     value={profile.department || ''}
-                    onChange={handleInputChange}
+                  onChange={handleInputChange}
                     disabled={!isEditing || isUpdating}
                     className={`w-full transition-colors ${validationErrors.department ? 'border-red-500 focus:border-red-500' : 'focus:border-blue-500'}`}
                     aria-invalid={!!validationErrors.department}
@@ -919,14 +997,14 @@ const Profile: React.FC = () => {
                       {validationErrors.department}
                     </p>
                   )}
-                </div>
-                <div>
+              </div>
+              <div>
                   <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-2">ポジション</label>
-                  <Input
+                <Input
                     id="position"
-                    name="position"
+                  name="position"
                     value={profile.position || ''}
-                    onChange={handleInputChange}
+                  onChange={handleInputChange}
                     disabled={!isEditing || isUpdating}
                     className={`w-full transition-colors ${validationErrors.position ? 'border-red-500 focus:border-red-500' : 'focus:border-blue-500'}`}
                     aria-invalid={!!validationErrors.position}

@@ -9,6 +9,7 @@ export interface ApiResponse<T = any> {
   data?: T;
   code?: string;
   errors?: string[];
+  timestamp?: string;
 }
 
 // エラーレスポンス型
@@ -16,6 +17,7 @@ export interface ApiError {
   message: string;
   code?: string;
   errors?: string[];
+  timestamp?: string;
 }
 
 // ユーザー型
@@ -181,4 +183,47 @@ export interface AttendanceSummary {
     paid: number;
     sick: number;
   };
+}
+
+// バックエンドのエラーコード定数（フロントエンド用）
+
+// 認証エラーコード
+export const AUTH_ERROR_CODES = {
+  AUTHENTICATION_REQUIRED: 'AUTHENTICATION_REQUIRED',
+  TOKEN_MISSING: 'TOKEN_MISSING',
+  TOKEN_INVALID: 'TOKEN_INVALID',
+  TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+  TOKEN_MALFORMED: 'TOKEN_MALFORMED',
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  SESSION_EXPIRED: 'SESSION_EXPIRED',
+} as const;
+
+// ログインエラーコード
+export const LOGIN_ERROR_CODES = {
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  INVALID_PASSWORD: 'INVALID_PASSWORD',
+  MISSING_PARAMETERS: 'MISSING_PARAMETERS',
+} as const;
+
+// パスワード変更エラーコード
+export const PASSWORD_CHANGE_ERROR_CODES = {
+  MISSING_PARAMETERS: 'MISSING_PARAMETERS',
+  CURRENT_PASSWORD_INVALID: 'CURRENT_PASSWORD_INVALID',
+  PASSWORD_MISMATCH: 'PASSWORD_MISMATCH',
+  PASSWORD_TOO_SHORT: 'PASSWORD_TOO_SHORT',
+  UPDATE_FAILED: 'UPDATE_FAILED',
+} as const;
+
+// エラーコードの型定義
+export type AuthErrorCode = typeof AUTH_ERROR_CODES[keyof typeof AUTH_ERROR_CODES];
+export type LoginErrorCode = typeof LOGIN_ERROR_CODES[keyof typeof LOGIN_ERROR_CODES];
+export type PasswordChangeErrorCode = typeof PASSWORD_CHANGE_ERROR_CODES[keyof typeof PASSWORD_CHANGE_ERROR_CODES];
+
+// 全エラーコードの共用体型
+export type ApiErrorCode = AuthErrorCode | LoginErrorCode | PasswordChangeErrorCode;
+
+// エラーハンドリング用の型定義
+export interface DetailedApiError extends ApiError {
+  code: ApiErrorCode;
 } 

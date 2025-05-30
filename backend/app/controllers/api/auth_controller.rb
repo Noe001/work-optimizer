@@ -36,9 +36,12 @@ module Api
           :created
         )
       else
+        # バリデーションエラーの詳細な日本語メッセージを返す
+        detailed_errors = @user.errors.full_messages
+        
         render_error(
           'ユーザー登録に失敗しました',
-          @user.errors.full_messages,
+          detailed_errors,
           :unprocessable_entity
         )
       end

@@ -57,9 +57,12 @@ class Api::UsersController < ApplicationController
         'プロフィールが正常に更新されました。'
       )
     else
+      # バリデーションエラーの詳細な日本語メッセージを返す
+      detailed_errors = @user.errors.full_messages
+      
       render_error(
         'プロフィールの更新に失敗しました。',
-        @user.errors.full_messages,
+        detailed_errors,
         :unprocessable_entity
       )
     end

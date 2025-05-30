@@ -1,19 +1,32 @@
-import React from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
-import { 
-  User, 
-  Clock, 
-  Calendar, 
-  Building, 
-  Briefcase, 
-  CheckCircle, 
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  User,
+  Clock,
+  Users,
+  Building,
+  Briefcase,
+  CheckCircle,
   AlertCircle,
+  Calendar,
+  CheckSquare,
+  MessageSquare,
+  FileText,
+  Database,
+  Monitor,
+  Laptop,
+  Target,
+  Zap,
   TrendingUp,
-  Users
-} from 'lucide-react';
+  Clock9,
+  Building2,
+} from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import Header from "@/components/Header";
+import { createAvatarProps } from "@/utils/avatarUtils";
 
 export const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -40,8 +53,7 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-3">
                 <img
-                  src={user.avatarUrl || '/images/circle-user-round.png'}
-                  alt="ユーザーアバター"
+                  {...createAvatarProps(user.avatarUrl, user.display_name, 'ユーザーアバター')}
                   className="w-8 h-8 rounded-full"
                 />
                 <span className="text-sm text-gray-700">

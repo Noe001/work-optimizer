@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from 'lucide-react';
+import { 
+  getErrorMessage, 
+  getRecommendedAction, 
+  createDetailedError,
+  createToastOptions,
+  isLoginError 
+} from '@/utils/errorHandler';
+import { useToast } from '@/hooks/use-toast';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -15,6 +23,11 @@ const Login: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, isAuthenticated, isLoading, error: authError, clearError } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  // フィールドへの参照
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
 
   // 認証済みの場合はダッシュボードにリダイレクト
   useEffect(() => {
@@ -26,7 +39,7 @@ const Login: React.FC = () => {
   // AuthContextのエラーを監視してローカルエラーに反映
   useEffect(() => {
     if (authError) {
-      setError(authError);
+      handleErrorWithCodeHandling(authError);
     }
   }, [authError]);
 
@@ -35,6 +48,48 @@ const Login: React.FC = () => {
     clearError();
     setError('');
   }, [clearError]);
+
+  // エラーコードに基づく詳細なエラーハンドリング
+  const handleErrorWithCodeHandling = (errorMessage: string, errorCode?: string) => {
+    const errorObject = {
+      message: errorMessage,
+      code: errorCode,
+    };
+    
+    const detailedError = createDetailedError(errorObject);
+    const userFriendlyMessage = getErrorMessage(detailedError);
+    const recommendedAction = getRecommendedAction(detailedError);
+    
+    setError(userFriendlyMessage);
+    
+    // エラーコードに基づくアクション実行
+    switch (recommendedAction) {
+      case 'FOCUS_EMAIL':
+        setTimeout(() => emailRef.current?.focus(), 100);
+        break;
+      case 'FOCUS_PASSWORD':
+        setTimeout(() => passwordRef.current?.focus(), 100);
+        break;
+      case 'HIGHLIGHT_REQUIRED':
+        // 必須フィールドのハイライト（簡易実装）
+        if (!email) {
+          setTimeout(() => emailRef.current?.focus(), 100);
+        } else if (!password) {
+          setTimeout(() => passwordRef.current?.focus(), 100);
+        }
+        break;
+      case 'LOGOUT':
+      case 'REDIRECT_LOGIN':
+        // 既にログインページにいるのでアクション不要
+        break;
+    }
+    
+    // ログインエラーの場合は詳細なトーストも表示
+    if (isLoginError(detailedError)) {
+      const toastOptions = createToastOptions(detailedError);
+      toast(toastOptions);
+    }
+  };
 
   const handleInputChange = (field: 'email' | 'password', value: string) => {
     if (field === 'email') {
@@ -61,12 +116,11 @@ const Login: React.FC = () => {
       if (result.success) {
         // 成功時の処理 - AuthContextが認証状態を管理するため、
         // isAuthenticatedの変更でuseEffectによりダッシュボードに自動遷移される
-        // navigate('/'); // このコードは不要（useEffectで自動実行される）
       } else {
         // エラーはAuthContextで設定されるため、
         // authErrorの変更でuseEffectによりローカルエラーに反映される
         if (result.error) {
-          setError(result.error);
+          handleErrorWithCodeHandling(result.error);
         }
       }
     } catch (err: any) {
@@ -74,13 +128,18 @@ const Login: React.FC = () => {
       
       // 予期しないエラーの場合のフォールバック
       let errorMessage = 'ログイン中にエラーが発生しました。';
-      if (err.errors && Array.isArray(err.errors) && err.errors.length > 0) {
+      let errorCode = undefined;
+      
+      if (err.response?.data?.code) {
+        errorCode = err.response.data.code;
+        errorMessage = err.response.data.message || errorMessage;
+      } else if (err.errors && Array.isArray(err.errors) && err.errors.length > 0) {
         errorMessage = err.errors[0];
       } else if (err.message) {
         errorMessage = err.message;
       }
       
-      setError(errorMessage);
+      handleErrorWithCodeHandling(errorMessage, errorCode);
     } finally {
       setIsSubmitting(false);
     }
@@ -115,6 +174,7 @@ const Login: React.FC = () => {
             <div className="space-y-2">
               <Label htmlFor="email">メールアドレス</Label>
               <Input
+                ref={emailRef}
                 id="email"
                 type="email"
                 placeholder="name@example.com"
@@ -122,17 +182,20 @@ const Login: React.FC = () => {
                 onChange={(e) => handleInputChange('email', e.target.value)}
                 required
                 disabled={isSubmitting}
+                className={error && !email ? 'border-red-500' : ''}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">パスワード</Label>
               <Input
+                ref={passwordRef}
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => handleInputChange('password', e.target.value)}
                 required
                 disabled={isSubmitting}
+                className={error && !password ? 'border-red-500' : ''}
               />
             </div>
 
