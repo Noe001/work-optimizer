@@ -31,7 +31,17 @@ module Api
 
     # ログイン
     def login
-      @user = User.find_by(email: params[:email]&.downcase)
+      # authパラメータが存在する場合とない場合の両方に対応
+      if params[:auth].present?
+        auth_params = params.require(:auth).permit(:email, :password)
+        email = auth_params[:email]
+        password = auth_params[:password]
+      else
+        email = params[:email]
+        password = params[:password]
+      end
+      
+      @user = User.find_by(email: email&.downcase)
       
       unless @user
         return render_error(
@@ -41,7 +51,9 @@ module Api
         )
       end
       
-      unless @user.authenticate(params[:password])
+      auth_result = @user.authenticate(password)
+      
+      unless auth_result
         return render_error(
           'メールアドレスまたはパスワードが正しくありません',
           [],

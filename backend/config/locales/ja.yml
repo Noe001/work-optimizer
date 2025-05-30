@@ -1,2 +1,33 @@
 ja:
-  hello: "こんにちは" 
+  hello: "こんにちは"
+  
+  activerecord:
+    errors:
+      messages:
+        taken: "は既に使用されています"
+        blank: "を入力してください"
+        too_short: "は%{count}文字以上で入力してください"
+        too_long: "は%{count}文字以下で入力してください"
+        invalid: "は不正な値です"
+        confirmation: "と%{attribute}の入力が一致しません"
+      models:
+        user:
+          attributes:
+            email:
+              taken: "は既に登録されています"
+              invalid: "の形式が正しくありません"
+            password:
+              too_short: "は%{count}文字以上で入力してください"
+              blank: "を入力してください"
+            name:
+              blank: "を入力してください"
+              too_short: "は%{count}文字以上で入力してください"
+    attributes:
+      user:
+        email: "メールアドレス"
+        password: "パスワード"
+        password_confirmation: "パスワード（確認）"
+        name: "名前"
+        department: "部署"
+        position: "役職"
+        bio: "自己紹介" 

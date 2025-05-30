@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, CheckCircle2, XCircle, Circle } from 'lucide-react';
+import { SignupRequest } from '@/types/api';
+import { authAPI } from '@/services/api';
 
 interface FormData {
   name: string;
@@ -29,7 +30,6 @@ interface Validation {
 
 const SignupView: React.FC = () => {
   const navigate = useNavigate();
-  const { signup } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,10 +123,43 @@ const SignupView: React.FC = () => {
 
     setIsLoading(true);
     try {
-      await signup(formData.email, formData.password, formData.name);
-      navigate('/dashboard');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'アカウントの作成に失敗しました');
+      const signupData: SignupRequest = {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        password_confirmation: formData.confirmPassword,
+        department: '',
+        position: '',
+        bio: ''
+      };
+      
+      // authAPIを直接呼び出してエラーの詳細情報を保持
+      const response = await authAPI.signup(signupData);
+      
+      if (response.success && response.data) {
+        // 成功時の処理 - ローカルストレージに保存
+        const token = response.data.token;
+        const userData = response.data.user;
+        
+        localStorage.setItem('auth_token', token);
+        localStorage.setItem('user_data', JSON.stringify(userData));
+        
+        navigate('/dashboard');
+      } else {
+        setError('アカウントの作成に失敗しました。');
+      }
+    } catch (err: any) {
+      console.error('Signup error details:', err);
+      
+      // APIエラーの詳細処理
+      if (err.errors && Array.isArray(err.errors) && err.errors.length > 0) {
+        // バリデーションエラーがある場合、最初のエラーを表示
+        setError(err.errors[0]);
+      } else if (err.message) {
+        setError(err.message);
+      } else {
+        setError('アカウントの作成に失敗しました。入力内容を確認してください。');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -186,7 +219,7 @@ const SignupView: React.FC = () => {
                 type="email"
                 value={formData.email}
                 onChange={handleInputChange}
-                placeholder=""
+                placeholder={`例: user${Date.now().toString().slice(-4)}@example.com`}
                 required
                 className={`w-full ${
                   formData.email ? (validation.email.isValid ? 'border-green-500' : 'border-red-500') : ''
@@ -194,7 +227,7 @@ const SignupView: React.FC = () => {
               />
               <ValidationItem
                 isValid={formData.email ? validation.email.isValid : null}
-                message="有効なメールアドレスを入力してください"
+                message="まだ登録されていない有効なメールアドレスを入力してください"
               />
             </div>
 
@@ -275,7 +308,20 @@ const SignupView: React.FC = () => {
             </div>
 
             {error && (
-              <div className="text-sm text-red-500 text-center">{error}</div>
+              <div className="text-sm text-red-600 bg-red-50 p-4 rounded-lg border-l-4 border-red-500 shadow-sm animate-pulse">
+                <div className="flex items-start space-x-3">
+                  <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="font-medium">エラーが発生しました</div>
+                    <div className="mt-1">{error}</div>
+                    {error.includes('メールアドレス') && error.includes('登録されています') && (
+                      <div className="mt-2 text-xs text-red-500 bg-red-100 p-2 rounded">
+                        💡 <strong>ヒント:</strong> 別のメールアドレスを使用してください。例: user{Date.now().toString().slice(-4)}@example.com
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
 
             <Button type="submit" className="w-full" disabled={!isFormValid() || isLoading}>

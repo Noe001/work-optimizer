@@ -282,7 +282,7 @@ const PasswordChangeCard: React.FC = () => {
 
 const Profile: React.FC = () => {
   const { toast } = useToast();
-  const { updateUser, refreshUser } = useAuth();
+  const { updateUser } = useAuth();
   const [profile, setProfile] = useState<UserProfile>({
     name: '',
     email: '',
