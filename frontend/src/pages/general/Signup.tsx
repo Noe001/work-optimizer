@@ -10,11 +10,6 @@ import { Eye, EyeOff, CheckCircle2, XCircle, Circle } from 'lucide-react';
 import { SignupRequest } from '@/types/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
-  createDetailedError,
-  getErrorMessage, 
-  getRecommendedAction,
-  createToastOptions,
-  isPasswordChangeError,
   createUnifiedError,
   formatValidationErrors 
 } from '@/utils/errorHandler';
