@@ -1,8 +1,7 @@
-import React from 'react';
-import { ArrowLeft, BookOpen, FileText, Users, Tags, Plus, Image, Link, List } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, BookOpen, FileText, Users, Tags, Plus, Search, Filter, Edit, Trash2, Eye } from 'lucide-react';
 import Header from '@/components/Header';
-
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,7 +11,6 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -20,97 +18,162 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { Manual, ManualDepartmentOption, ManualCategoryOption } from '@/types/api';
+import manualService, { ManualListParams } from '@/services/manualService';
+import { useAuth } from '@/contexts/AuthContext';
 
-// Type definitions
-type Department = 'sales' | 'dev' | 'hr';
-type Category = 'procedure' | 'rules' | 'system';
-type AccessLevel = 'all' | 'department' | 'specific';
-type EditPermission = 'author' | 'department' | 'specific';
-
-interface SelectOption {
-  value: string;
-  label: string;
-}
-
-const departments: SelectOption[] = [
+// 選択肢の定義
+const departments: ManualDepartmentOption[] = [
   { value: 'sales', label: '営業部' },
   { value: 'dev', label: '開発部' },
   { value: 'hr', label: '人事部' },
 ];
 
-const categories: SelectOption[] = [
+const categories: ManualCategoryOption[] = [
   { value: 'procedure', label: '業務手順' },
   { value: 'rules', label: '規則・規定' },
   { value: 'system', label: 'システム操作' },
 ];
 
-const accessLevels: SelectOption[] = [
-  { value: 'all', label: '全社員' },
-  { value: 'department', label: '部門内' },
-  { value: 'specific', label: '指定メンバーのみ' },
+// フィルターオプション
+const filterOptions = [
+  { value: 'all', label: 'すべて' },
+  { value: 'my', label: '自分のマニュアル' },
+  { value: 'published', label: '公開中' },
+  { value: 'draft', label: '下書き' },
 ];
 
-const editPermissions: SelectOption[] = [
-  { value: 'author', label: '作成者のみ' },
-  { value: 'department', label: '部門管理者' },
-  { value: 'specific', label: '指定メンバー' },
-];
-
-interface ManualFormData {
-  title: string;
-  content: string;
-  department: Department | '';
-  category: Category | '';
-  accessLevel: AccessLevel | '';
-  editPermission: EditPermission | '';
-  tags: string[];
-}
-
-const CreateManual: React.FC = () => {
+const ManualView: React.FC = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = React.useState<ManualFormData>({
-    title: '社内Wiki作成手順',
-    content: '# 社内Wiki作成手順\n\nこのマニュアルでは、社内Wikiを効果的に作成するための手順を説明します。\n\n## 1. Wikiの目的を明確にする\n\nWikiを作成する目的（情報共有、ナレッジ蓄積など）を定義します。\n\n## 2. 構造を設計する\n\n情報のカテゴリ分けや、ページの階層構造を設計します。\n\n## 3. コンテンツを作成・編集する\n\n分かりやすい文章と図解でコンテンツを作成します。\n\n## 4. アクセス権限を設定する\n\n誰が閲覧・編集できるかを設定します。\n\n## 5. 公開・運用する\n\n公開後も定期的に内容を見直し、最新の状態を保ちます。',
-    department: 'dev',
-    category: 'procedure',
-    accessLevel: 'all',
-    editPermission: 'department',
-    tags: ['wiki', '手順', '情報共有', 'ナレッジ'],
-  });
+  const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  
+  const [manuals, setManuals] = useState<Manual[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [selectedManual, setSelectedManual] = useState<Manual | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [manualToDelete, setManualToDelete] = useState<Manual | null>(null);
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+  // 初期化時にURLパラメータからフィルター条件を読み取る
+  useEffect(() => {
+    const status = searchParams.get('status');
+    const department = searchParams.get('department');
+    const category = searchParams.get('category');
+    
+    if (status) {
+      setSelectedFilter(status);
+    }
+    if (department) {
+      setSelectedDepartment(department);
+    }
+    if (category) {
+      setSelectedCategory(category);
+    }
+    
+    loadManuals({ page: 1 });
+  }, [searchParams]);
+
+  // フィルター変更時の処理
+  useEffect(() => {
+    setCurrentPage(1);
+    loadManuals({ page: 1 });
+  }, [selectedFilter, selectedDepartment, selectedCategory]);
+
+  // ページ変更時の処理
+  useEffect(() => {
+    loadManuals();
+  }, [currentPage]);
+
+  // マニュアル一覧の読み込み
+  const loadManuals = async (params?: ManualListParams) => {
+    setLoading(true);
+    try {
+      const pageToLoad = params?.page ?? currentPage;
+      const loadParams: ManualListParams = {
+        page: pageToLoad,
+        per_page: 10,
+        query: searchQuery || undefined,
+        department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
+        category: selectedCategory !== 'all' ? selectedCategory : undefined,
+        ...params,
+      };
+
+      let response;
+      
+      if (selectedFilter === 'my') {
+        // 自分のマニュアルを取得
+        response = await manualService.getMyManuals(loadParams);
+      } else {
+        // 全マニュアルを取得
+        response = await manualService.getManuals(loadParams);
+        
+        // ステータスでフィルター（APIレベルではなくクライアントレベル）
+        if (selectedFilter === 'published' || selectedFilter === 'draft') {
+          if (response.success && response.data) {
+            const filteredData = response.data.data.filter(manual => manual.status === selectedFilter);
+            response.data.data = filteredData;
+          }
+        }
+      }
+
+      if (response.success && response.data) {
+        setManuals(response.data.data);
+        setTotalPages(response.data.meta.total_pages);
+      }
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSelectChange = (name: keyof ManualFormData) => (value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+  // マニュアル削除
+  const handleDelete = async (manual: Manual) => {
+    try {
+      await manualService.deleteManual(manual.id);
+      toast.success('マニュアルを削除しました');
+      setIsDeleteDialogOpen(false);
+      loadManuals();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   };
 
-  const handlePublish = () => {
-    // Implement publish logic
-    console.log('Publishing manual:', formData);
+  // 検索実行
+  const handleSearch = () => {
+    setCurrentPage(1);
+    loadManuals({ page: 1 });
   };
 
-  const handleSaveDraft = () => {
-    // Implement draft saving logic
-    console.log('Saving draft:', formData);
+  // フィルターリセット
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setSelectedDepartment('all');
+    setSelectedCategory('all');
+    setSelectedFilter('all');
+    setCurrentPage(1);
+    loadManuals({ page: 1, per_page: 10 });
   };
+
+  // ラベル変換関数
+  const getDepartmentLabel = (value: string) => departments.find(d => d.value === value)?.label || value;
+  const getCategoryLabel = (value: string) => categories.find(c => c.value === value)?.label || value;
 
   return (
     <>
@@ -121,265 +184,287 @@ const CreateManual: React.FC = () => {
           <Button 
             variant="ghost" 
             className="mb-4 p-0 hover:bg-transparent"
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/dashboard')}
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
             ダッシュボードに戻る
           </Button>
-          <h1 className="text-2xl font-bold text-foreground">マニュアル作成</h1>
-          <p className="text-muted-foreground">業務マニュアルの新規作成と編集ができます</p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Editor Card */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  <BookOpen className="inline-block mr-2 h-5 w-5" />
-                  マニュアル詳細
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="title">タイトル</Label>
-                    <Input
-                      id="title"
-                      name="title"
-                      placeholder="マニュアルのタイトルを入力"
-                      value={formData.title}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-
-                  <Tabs defaultValue="edit">
-                    <TabsList>
-                      <TabsTrigger value="edit">編集</TabsTrigger>
-                      <TabsTrigger value="preview">プレビュー</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="edit">
-                      <div className="space-y-4">
-                        {/* Editor Toolbar */}
-                        <div className="flex items-center space-x-2 border-b pb-2">
-                          <Button variant="outline" size="sm">
-                            <List className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Image className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Link className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                        <Textarea
-                          name="content"
-                          placeholder="マニュアルの内容を入力してください"
-                          value={formData.content}
-                          onChange={handleInputChange}
-                          className="min-h-[300px]"
-                        />
-                      </div>
-                    </TabsContent>
-                    <TabsContent value="preview">
-                      <div className="border rounded-md p-4 min-h-[500px]">
-                        {formData.content || 'プレビューがここに表示されます'}
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Settings Sidebar */}
-          <div className="space-y-6">
-            {/* Category Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  <Tags className="inline-block mr-2 h-5 w-5" />
-                  カテゴリー設定
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="department">部門</Label>
-                  <Select
-                    value={formData.department}
-                    onValueChange={handleSelectChange('department')}
-                  >
-                    <SelectTrigger id="department">
-                      <SelectValue placeholder="部門を選択" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departments.map((dept) => (
-                        <SelectItem key={dept.value} value={dept.value}>
-                          {dept.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="category">カテゴリー</Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={handleSelectChange('category')}
-                  >
-                    <SelectTrigger id="category">
-                      <SelectValue placeholder="カテゴリーを選択" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.value} value={cat.value}>
-                          {cat.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Button variant="outline" className="w-full">
-                  <Plus className="h-4 w-4 mr-2" />
-                  新規カテゴリーを作成
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Tags Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  <Tags className="inline-block mr-2 h-5 w-5" />
-                  タグ設定
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="tags">タグ</Label>
-                  <Input
-                    id="tags"
-                    name="tags"
-                    placeholder="タグをカンマ区切りで入力"
-                    value={formData.tags.join(', ')}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      tags: e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
-                    })}
-                  />
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {formData.tags.map((tag, index) => (
-                      <Badge key={index} variant="secondary" className="flex items-center gap-1">
-                        {tag}
-                        <button
-                          type="button"
-                          onClick={() => setFormData({
-                            ...formData,
-                            tags: formData.tags.filter((_, i) => i !== index)
-                          })}
-                          className="ml-1 inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
-                        >
-                          &times;
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Access Settings Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  <Users className="inline-block mr-2 h-5 w-5" />
-                  アクセス設定
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="access-level">公開範囲</Label>
-                  <Select
-                    value={formData.accessLevel}
-                    onValueChange={handleSelectChange('accessLevel')}
-                  >
-                    <SelectTrigger id="access-level">
-                      <SelectValue placeholder="公開範囲を選択" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accessLevels.map((level) => (
-                        <SelectItem key={level.value} value={level.value}>
-                          {level.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-permission">編集権限</Label>
-                  <Select
-                    value={formData.editPermission}
-                    onValueChange={handleSelectChange('editPermission')}
-                  >
-                    <SelectTrigger id="edit-permission">
-                      <SelectValue placeholder="編集権限を選択" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {editPermissions.map((perm) => (
-                        <SelectItem key={perm.value} value={perm.value}>
-                          {perm.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col space-y-2">
-              <Button onClick={handlePublish}>
-                マニュアルを公開
-              </Button>
-              <Button variant="outline" onClick={handleSaveDraft}>
-                下書きとして保存
-              </Button>
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">業務マニュアル</h1>
+              <p className="text-muted-foreground">組織の業務マニュアルを管理します</p>
             </div>
+            <Button onClick={() => navigate('/manual/create')}>
+              <Plus className="h-4 w-4 mr-2" />
+              新規作成
+            </Button>
           </div>
         </div>
 
-        {/* Tips Card */}
-        <Card className="mt-6">
+        {/* 検索・フィルター */}
+        <Card className="mb-6">
           <CardHeader>
-            <CardTitle>
-              <FileText className="inline-block mr-2 h-5 w-5" />
-              効果的なマニュアル作成のヒント
+            <CardTitle className="flex items-center">
+              <Search className="h-5 w-5 mr-2" />
+              検索・フィルター
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li className="flex items-start">
-                <span className="font-medium mr-2">・</span>
-                目的と対象読者を明確にし、適切な詳細レベルで記述しましょう
-              </li>
-              <li className="flex items-start">
-                <span className="font-medium mr-2">・</span>
-                画像や図表を活用し、視覚的に分かりやすい説明を心がけましょう
-              </li>
-              <li className="flex items-start">
-                <span className="font-medium mr-2">・</span>
-                定期的な更新と見直しを行い、常に最新の情報を維持しましょう
-              </li>
-            </ul>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div>
+                <Label htmlFor="search">キーワード検索</Label>
+                <Input
+                  id="search"
+                  placeholder="タイトルで検索..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                />
+              </div>
+              
+              <div>
+                <Label>表示条件</Label>
+                <Select value={selectedFilter} onValueChange={setSelectedFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="表示条件を選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filterOptions.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label>部門</Label>
+                <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="部門を選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    {departments.map(dept => (
+                      <SelectItem key={dept.value} value={dept.value}>
+                        {dept.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label>カテゴリー</Label>
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="カテゴリーを選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    {categories.map(cat => (
+                      <SelectItem key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex items-end space-x-2">
+                <Button onClick={handleSearch} className="flex-1">
+                  <Search className="h-4 w-4 mr-2" />
+                  検索
+                </Button>
+                <Button variant="outline" onClick={handleResetFilters}>
+                  <Filter className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
+
+        {/* マニュアル一覧 */}
+        <div className="grid gap-4">
+          {loading ? (
+            <div className="text-center py-8">読み込み中...</div>
+          ) : manuals.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-8">
+                <BookOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground mb-4">マニュアルが見つかりませんでした</p>
+                {selectedFilter === 'my' && (
+                  <Button onClick={() => navigate('/manual/create')}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    最初のマニュアルを作成
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            manuals.map((manual) => (
+              <Card key={manual.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <h3 className="text-lg font-semibold">{manual.title}</h3>
+                        <Badge variant={manual.status === 'published' ? 'default' : 'secondary'}>
+                          {manual.status === 'published' ? '公開中' : '下書き'}
+                        </Badge>
+                      </div>
+
+                      <div className="flex items-center space-x-4 text-sm text-muted-foreground mb-3">
+                        <span>
+                          <Users className="h-4 w-4 inline mr-1" />
+                          {getDepartmentLabel(manual.department)}
+                        </span>
+                        <span>
+                          <Tags className="h-4 w-4 inline mr-1" />
+                          {getCategoryLabel(manual.category)}
+                        </span>
+                        {manual.author && (
+                          <span>作成者: {manual.author.name}</span>
+                        )}
+                      </div>
+
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {manual.content?.substring(0, 150)}...
+                      </p>
+
+                      {manual.tags && (
+                        <div className="mt-3">
+                          {manual.tags.split(',').map((tag, index) => (
+                            <Badge key={index} variant="outline" className="mr-1">
+                              {tag.trim()}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center space-x-2 ml-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedManual(manual)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      {manual.can_edit && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(`/manual/edit/${manual.id}`)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setManualToDelete(manual);
+                              setIsDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+
+        {/* ページネーション */}
+        {totalPages > 1 && (
+          <div className="flex justify-center space-x-2 mt-6">
+            <Button
+              variant="outline"
+              disabled={currentPage === 1}
+              onClick={() => {
+                setCurrentPage(prev => {
+                  const newPage = Math.max(prev - 1, 1);
+                  loadManuals({ page: newPage, per_page: 10 });
+                  return newPage;
+                });
+              }}
+            >
+              前へ
+            </Button>
+            <span className="flex items-center px-4">
+              {currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              disabled={currentPage === totalPages}
+              onClick={() => {
+                setCurrentPage(prev => {
+                  const newPage = Math.min(prev + 1, totalPages);
+                  loadManuals({ page: newPage, per_page: 10 });
+                  return newPage;
+                });
+              }}
+            >
+              次へ
+            </Button>
+          </div>
+        )}
+
+        {/* マニュアル詳細表示ダイアログ */}
+        <Dialog open={!!selectedManual} onOpenChange={() => setSelectedManual(null)}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{selectedManual?.title}</DialogTitle>
+              <DialogDescription>
+                {selectedManual && (
+                  <div className="flex items-center space-x-4 text-sm">
+                    <span>{getDepartmentLabel(selectedManual.department)}</span>
+                    <span>{getCategoryLabel(selectedManual.category)}</span>
+                  </div>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4">
+              <div className="prose max-w-none">
+                {selectedManual?.content && (
+                  <div className="whitespace-pre-wrap">{selectedManual.content}</div>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* 削除確認ダイアログ */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>マニュアルの削除</DialogTitle>
+              <DialogDescription>
+                「{manualToDelete?.title}」を削除しますか？この操作は取り消せません。
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                キャンセル
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => manualToDelete && handleDelete(manualToDelete)}
+              >
+                削除
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </>
   );
 };
 
-export default CreateManual;
+export default ManualView;

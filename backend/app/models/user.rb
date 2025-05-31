@@ -121,6 +121,13 @@ class User < ApplicationRecord
     ).sum(:overtime_hours) || 0
   end
 
+  # 部門管理者かどうかを判定
+  def department_admin?
+    # roleが'admin'または'manager'の場合、部門管理者とする
+    # 実際のロジックは組織の要件に応じて調整
+    role.in?(['admin', 'manager']) || position&.downcase&.include?('manager')
+  end
+
   private
 
   # メールアドレスを小文字に変換

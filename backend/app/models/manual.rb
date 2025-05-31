@@ -1,4 +1,5 @@
 class Manual < ApplicationRecord
+  before_create :set_uuid
   belongs_to :user
 
   # 状態を定義
@@ -23,16 +24,16 @@ class Manual < ApplicationRecord
 
   # アクセスレベルを定義
   enum access_level: {
-    all: 'all',               # 全社員
+    all_users: 'all',        # 全社員
     department: 'department', # 部門内
     specific: 'specific'      # 指定メンバーのみ
   }
 
   # 編集権限を定義
   enum edit_permission: {
-    author: 'author',         # 作成者のみ
-    department: 'department', # 部門管理者
-    specific: 'specific'      # 指定メンバー
+    author_only: 'author',         # 作成者のみ
+    dept_admin: 'department',      # 部門管理者
+    specific_users: 'specific'     # 指定メンバー
   }
 
   # バリデーション
@@ -60,4 +61,11 @@ class Manual < ApplicationRecord
       )
     end
   }
+
+  private
+
+  # UUID生成
+  def set_uuid
+    self.id = SecureRandom.uuid if self.id.nil?
+  end
 end

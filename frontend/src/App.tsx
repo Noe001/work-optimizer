@@ -16,6 +16,8 @@ import TaskManagerView from './pages/general/TaskManager';
 import TeamChatView from './pages/general/TeamChat';
 import KnowledgeBaseView from './pages/general/KnowledgeBase';
 import ManualView from './pages/general/Manual';
+import ManualCreateView from './pages/general/ManualCreate';
+import ManualEditView from './pages/general/ManualEdit';
 import MeetingView from './pages/general/Meeting';
 import ProfileView from './pages/general/Profile';
 import SettingsView from './pages/general/Settings';
@@ -95,6 +97,20 @@ const App = () => (
         <Route path="/manual" element={
           <ProtectedRoute>
             <ManualView />
+          </ProtectedRoute>
+        } />
+        
+        {/* マニュアル作成 */}
+        <Route path="/manual/create" element={
+          <ProtectedRoute>
+            <ManualCreateView />
+          </ProtectedRoute>
+        } />
+        
+        {/* マニュアル編集 */}
+        <Route path="/manual/edit/:id" element={
+          <ProtectedRoute>
+            <ManualEditView />
           </ProtectedRoute>
         } />
 

@@ -133,15 +133,47 @@ export interface SubTask {
 
 // マニュアル関連の型
 export interface Manual {
-  id: number;
+  id: string;
   title: string;
   content: string;
-  department: string;
-  category: string;
-  access_level: string;
-  edit_permission: string;
+  user_id: string;
+  department: 'sales' | 'dev' | 'hr';
+  category: 'procedure' | 'rules' | 'system';
+  access_level: 'all' | 'department' | 'specific';
+  edit_permission: 'author' | 'department' | 'specific';
+  status: 'draft' | 'published';
+  tags?: string;
   created_at: string;
   updated_at: string;
+  author?: {
+    id: string;
+    name: string;
+  };
+  can_edit?: boolean;
+}
+
+// マニュアル部門の選択肢
+export interface ManualDepartmentOption {
+  value: 'sales' | 'dev' | 'hr';
+  label: string;
+}
+
+// マニュアルカテゴリーの選択肢
+export interface ManualCategoryOption {
+  value: 'procedure' | 'rules' | 'system';
+  label: string;
+}
+
+// マニュアルアクセスレベルの選択肢
+export interface ManualAccessLevelOption {
+  value: 'all' | 'department' | 'specific';
+  label: string;
+}
+
+// マニュアル編集権限の選択肢
+export interface ManualEditPermissionOption {
+  value: 'author' | 'department' | 'specific';
+  label: string;
 }
 
 // 勤怠管理関連の型

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2025_05_28_053438) do
+ActiveRecord::Schema[7.2].define(version: 2025_05_31_091955) do
   create_table "active_storage_attachments", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "name", null: false
     t.string "record_type", null: false
@@ -70,6 +70,17 @@ ActiveRecord::Schema[7.2].define(version: 2025_05_28_053438) do
     t.text "content"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "user_id"
+    t.string "department"
+    t.string "category"
+    t.string "access_level", default: "all"
+    t.string "edit_permission", default: "author"
+    t.string "status", default: "draft"
+    t.text "tags"
+    t.index ["category"], name: "index_manuals_on_category"
+    t.index ["department"], name: "index_manuals_on_department"
+    t.index ["status"], name: "index_manuals_on_status"
+    t.index ["user_id"], name: "index_manuals_on_user_id"
   end
 
   create_table "meeting_participants", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
