@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowLeft, BookOpen, FileText, Users, Tags, Plus, Image, Link, List } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import Header from '@/components/Header';
 
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,7 @@ interface ManualFormData {
 }
 
 const CreateManual: React.FC = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = React.useState<ManualFormData>({
     title: '社内Wiki作成手順',
     content: '# 社内Wiki作成手順\n\nこのマニュアルでは、社内Wikiを効果的に作成するための手順を説明します。\n\n## 1. Wikiの目的を明確にする\n\nWikiを作成する目的（情報共有、ナレッジ蓄積など）を定義します。\n\n## 2. 構造を設計する\n\n情報のカテゴリ分けや、ページの階層構造を設計します。\n\n## 3. コンテンツを作成・編集する\n\n分かりやすい文章と図解でコンテンツを作成します。\n\n## 4. アクセス権限を設定する\n\n誰が閲覧・編集できるかを設定します。\n\n## 5. 公開・運用する\n\n公開後も定期的に内容を見直し、最新の状態を保ちます。',
@@ -116,7 +118,11 @@ const CreateManual: React.FC = () => {
       <div className="p-6 bg-background min-h-screen bg-gray-50">
         {/* Header */}
         <div className="mb-6">
-          <Button variant="ghost" className="mb-4 p-0 hover:bg-transparent">
+          <Button 
+            variant="ghost" 
+            className="mb-4 p-0 hover:bg-transparent"
+            onClick={() => navigate('/')}
+          >
             <ArrowLeft className="h-5 w-5 mr-2" />
             ダッシュボードに戻る
           </Button>

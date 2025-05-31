@@ -3,6 +3,7 @@ import { ArrowLeft , Bell, CheckCircle, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Header from '@/components/Header';
+import { useNavigate } from 'react-router-dom';
 
 interface Notification {
   id: number;
@@ -17,6 +18,8 @@ const NotificationCenter: React.FC = () => {
     { id: 2, title: 'システム更新', description: 'システムが更新されました。', read: false },
     { id: 3, title: '会議リマインダー', description: '明日の会議をお忘れなく。', read: true },
   ]);
+
+  const navigate = useNavigate();
 
   const markAsRead = (id: number) => {
     setNotifications((prev) =>
@@ -35,7 +38,11 @@ const NotificationCenter: React.FC = () => {
       <Header />
       <div className="p-6 bg-background min-h-screen bg-gray-50">
         <div className="mb-6">
-          <Button variant="ghost" className="mb-4 p-0 hover:bg-transparent">
+          <Button 
+            variant="ghost" 
+            className="mb-4 p-0 hover:bg-transparent"
+            onClick={() => navigate('/')}
+          >
             <ArrowLeft className="h-5 w-5 mr-2" />
             ダッシュボードに戻る
           </Button>

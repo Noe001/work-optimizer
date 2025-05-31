@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ArrowLeft, Calendar, Users, Plus, FileText, Tag, Trash2 } from 'lucide-react';
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
+import { useNavigate } from 'react-router-dom';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -68,6 +69,7 @@ interface MeetingFormData {
 }
 
 const CreateMeeting: React.FC = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = React.useState<MeetingFormData>({
     title: '',
     type: '',
@@ -133,7 +135,11 @@ const CreateMeeting: React.FC = () => {
       <div className="p-6 bg-background min-h-screen bg-gray-50">
         {/* Header */}
         <div className="mb-6">
-          <Button variant="ghost" className="mb-4 p-0 hover:bg-transparent">
+          <Button 
+            variant="ghost" 
+            className="mb-4 p-0 hover:bg-transparent"
+            onClick={() => navigate('/')}
+          >
             <ArrowLeft className="h-5 w-5 mr-2" />
             ダッシュボードに戻る
           </Button>

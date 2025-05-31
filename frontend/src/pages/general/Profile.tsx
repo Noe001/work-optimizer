@@ -17,6 +17,7 @@ import {
 } from '@/utils/errorHandler';
 import { createAvatarProps } from '@/utils/avatarUtils';
 import { ASSETS_CONFIG } from '@/config/app';
+import { useNavigate } from 'react-router-dom';
 
 interface UserProfile {
   id?: string;
@@ -360,6 +361,7 @@ const PasswordChangeCard: React.FC = () => {
 };
 
 const Profile: React.FC = () => {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { updateUser } = useAuth();
   const [profile, setProfile] = useState<UserProfile>({
@@ -847,7 +849,11 @@ const Profile: React.FC = () => {
       <Header />
       <div className="p-4 sm:p-6 bg-background min-h-screen bg-gray-50">
         <div className="mb-6">
-          <Button variant="ghost" className="mb-4 p-0 hover:bg-transparent">
+          <Button 
+            variant="ghost" 
+            className="mb-4 p-0 hover:bg-transparent"
+            onClick={() => navigate('/')}
+          >
             <ArrowLeft className="h-5 w-5 mr-2" />
             <span className="hidden sm:inline">ダッシュボードに戻る</span>
             <span className="sm:hidden">戻る</span>
