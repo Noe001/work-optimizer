@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import Header from '@/components/Header'
+import { useNavigate } from 'react-router-dom'
 
 const KnowledgeCreationPage = () => {
   const [title, setTitle] = useState("")
@@ -22,6 +23,7 @@ const KnowledgeCreationPage = () => {
   const [content, setContent] = useState("")
   const [tagInput, setTagInput] = useState("")
   const [tags, setTags] = useState<string[]>([])
+  const navigate = useNavigate();
 
   // カテゴリ一覧（既存のコードから取得）
   const knowledgeCategories = [
@@ -74,7 +76,11 @@ const KnowledgeCreationPage = () => {
       <Header />
       <div className="p-6 bg-background min-h-screen bg-gray-50">
         <div className="mb-6">
-          <Button variant="ghost" className="mb-4 p-0 hover:bg-transparent">
+          <Button 
+            variant="ghost" 
+            className="mb-4 p-0 hover:bg-transparent"
+            onClick={() => navigate('/')}
+          >
             <ArrowLeft className="h-5 w-5 mr-2" />
             ダッシュボードに戻る
           </Button>

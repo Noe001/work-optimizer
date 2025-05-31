@@ -26,6 +26,41 @@ module JWTConfig
   
   # 秘密鍵を取得するメソッド
   def self.secret_key
-    Rails.application.config.secret_key_base.to_s
+    key = Rails.application.credentials.jwt_secret_key || 
+          ENV['JWT_SECRET_KEY'] || 
+          Rails.application.config.secret_key_base
+    
+    raise 'JWT secret key is not configured' if key.blank?
+    key.to_s
+  end
+  
+  # トークンの有効期限を取得
+  def self.expiration_time
+    ENV.fetch('JWT_EXPIRATION_HOURS', 24).to_i.hours
+  end
+  
+  # リフレッシュトークンの有効期限
+  def self.refresh_expiration_time
+    ENV.fetch('JWT_REFRESH_EXPIRATION_DAYS', 7).to_i.days
+  end
+  
+  # トークンをデコード
+  def self.decode(token)
+    JWT.decode(token, secret_key, true, { algorithm: ALGORITHM })
+  rescue JWT::DecodeError => e
+    Rails.logger.error "JWT decode error: #{e.message}"
+    nil
+  end
+  
+  # トークンの有効性をチェック
+  def self.valid_token?(token)
+    decoded = decode(token)
+    return false unless decoded
+    
+    payload = decoded.first
+    exp_time = Time.at(payload['exp'])
+    exp_time > Time.current
+  rescue
+    false
   end
 end 

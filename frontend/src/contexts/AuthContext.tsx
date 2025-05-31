@@ -2,25 +2,34 @@ import React, { createContext, useState, useContext, useEffect, ReactNode } from
 import { authAPI } from '../services/api';
 import axios from 'axios';
 import { AUTH_ERROR_EVENT } from '../services/api';
+import { User, SignupRequest, LoginRequest } from '../types/api';
 
 // 認証コンテキストの型定義
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  signup: (email: string, password: string, name: string) => Promise<boolean>;
+  user: User | null;
+  error: string | null;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (data: SignupRequest) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  user: any;
+  updateUser: (userData: Partial<User>) => void;
+  refreshUser: () => Promise<void>;
+  clearError: () => void;
 }
 
 // デフォルト値を設定
 const defaultAuthContext: AuthContextType = {
   isAuthenticated: false,
   isLoading: true,
-  login: async () => false,
-  signup: async () => false,
+  user: null,
+  error: null,
+  login: async () => ({ success: false }),
+  signup: async () => ({ success: false }),
   logout: () => {},
-  user: null
+  updateUser: () => {},
+  refreshUser: async () => {},
+  clearError: () => {}
 };
 
 // コンテキストの作成
@@ -37,29 +46,26 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // 初期化時に保存されている認証情報を確認
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('auth_token');
-      const userData = localStorage.getItem('user_data');
       
       if (token) {
         try {
           // バックエンドでトークンの検証を行う
-          try {
-            const response = await authAPI.me();
-            if (response && response.data && response.data.success) {
-              setIsAuthenticated(true);
-              setUser(response.data.data || (userData ? JSON.parse(userData) : null));
-            } else {
-              clearAuthData();
-            }
-          } catch (error) {
+          const response = await authAPI.me();
+          if (response.success && response.data) {
+            setIsAuthenticated(true);
+            setUser(response.data);
+          } else {
             clearAuthData();
           }
         } catch (error) {
+          console.error('Auth check failed:', error);
           clearAuthData();
         }
       }
@@ -91,20 +97,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.removeItem('user_data');
     setIsAuthenticated(false);
     setUser(null);
+    setError(null);
     // APIクライアントの認証ヘッダーもクリア
     delete axios.defaults.headers.common['Authorization'];
   };
 
+  // エラーをクリアする関数
+  const clearError = () => {
+    setError(null);
+  };
+
   // ログイン関数
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      // APIクライアントを使用
-      const response = await authAPI.login(email, password);
+      setError(null);
+      const loginData: LoginRequest = { email, password };
+      const response = await authAPI.login(loginData);
       
-      if (response && response.data && response.data.success) {
+      if (response.success && response.data) {
         // 成功時の処理
-        const token = response.data.data?.token || '';
-        const userData = response.data.data?.user || null;
+        const token = response.data.token;
+        const userData = response.data.user;
         
         // トークンとユーザーデータをストレージに保存
         localStorage.setItem('auth_token', token);
@@ -114,25 +127,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsAuthenticated(true);
         setUser(userData);
         
-        return true;
+        return { success: true };
       }
       
-      return false;
-    } catch (error) {
-      return false;
+      const errorMessage = response.message || 'ログインに失敗しました';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } catch (error: any) {
+      console.error('Login failed:', error);
+      
+      let errorMessage = 'ログインに失敗しました';
+      if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+        errorMessage = error.errors[0];
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
     }
   };
 
   // サインアップ関数
-  const signup = async (email: string, password: string, name: string): Promise<boolean> => {
+  const signup = async (data: SignupRequest): Promise<{ success: boolean; error?: string }> => {
     try {
-      // APIクライアントを使用
-      const response = await authAPI.signup(name, email, password);
+      setError(null);
+      const response = await authAPI.signup(data);
       
-      if (response && response.data && response.data.success) {
+      if (response.success && response.data) {
         // 成功時の処理
-        const token = response.data.data?.token || '';
-        const userData = response.data.data?.user || null;
+        const token = response.data.token;
+        const userData = response.data.user;
         
         localStorage.setItem('auth_token', token);
         localStorage.setItem('user_data', JSON.stringify(userData));
@@ -141,18 +166,58 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsAuthenticated(true);
         setUser(userData);
         
-        return true;
+        return { success: true };
       }
       
-      return false;
-    } catch (error) {
-      return false;
+      const errorMessage = response.message || 'アカウントの作成に失敗しました';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } catch (error: any) {
+      console.error('Signup failed:', error);
+      
+      let errorMessage = 'アカウントの作成に失敗しました';
+      if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+        errorMessage = error.errors[0];
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
     }
   };
 
   // ログアウト関数
-  const logout = () => {
-    clearAuthData();
+  const logout = async () => {
+    try {
+      await authAPI.logout();
+    } catch (error) {
+      console.error('Logout API call failed:', error);
+    } finally {
+      clearAuthData();
+    }
+  };
+
+  // ユーザー情報の更新
+  const updateUser = (userData: Partial<User>) => {
+    if (user) {
+      const updatedUser = { ...user, ...userData };
+      setUser(updatedUser);
+      localStorage.setItem('user_data', JSON.stringify(updatedUser));
+    }
+  };
+
+  // ユーザー情報の再取得
+  const refreshUser = async () => {
+    try {
+      const response = await authAPI.me();
+      if (response.success && response.data) {
+        setUser(response.data);
+        localStorage.setItem('user_data', JSON.stringify(response.data));
+      }
+    } catch (error) {
+      console.error('Failed to refresh user data:', error);
+    }
   };
 
   return (
@@ -160,10 +225,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       value={{
         isAuthenticated,
         isLoading,
+        user,
+        error,
         login,
         signup,
         logout,
-        user
+        updateUser,
+        refreshUser,
+        clearError
       }}
     >
       {children}

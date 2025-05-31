@@ -28,6 +28,7 @@ import {
   Clock,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { createAvatarProps } from "@/utils/avatarUtils";
 
 // ナビゲーションリンクの定義
 const navigationLinks = [
@@ -48,13 +49,31 @@ const creationMenuItems = [
 const Header: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   
   // ログアウト処理
   const handleLogout = async () => {
     await logout();
     navigate('/login', { replace: true });
   };
+
+  // ユーザー表示名の取得
+  const getUserDisplayName = () => {
+    if (user?.display_name) {
+      return user.display_name;
+    }
+    if (user?.name) {
+      return user.name;
+    }
+    return "ユーザー";
+  };
+
+  // アバター画像のプロップスを取得
+  const avatarProps = createAvatarProps(
+    user?.avatarUrl,
+    getUserDisplayName(),
+    "ユーザーアバター"
+  );
   
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white shadow-md">
@@ -201,11 +220,14 @@ const Header: React.FC = () => {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
-                <img src="/images/circle-user-round.png" alt="ユーザーアバター" className="w-8 h-8 rounded-full" />
+                <img 
+                  {...avatarProps}
+                  className="w-8 h-8 rounded-full"
+                />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>田中 太郎</DropdownMenuLabel>
+              <DropdownMenuLabel>{getUserDisplayName()}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link to="/profile" className="cursor-pointer flex items-center">

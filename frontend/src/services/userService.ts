@@ -129,7 +129,26 @@ const userService = {
    */
   async updateProfile(userData: Partial<User>): Promise<ApiResponse<User>> {
     try {
-      return await api.put<User>('/api/users/profile', userData);
+      return await api.put<User>('/api/profile', userData);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * ユーザープロファイル情報（詳細）を更新
+   * @param profileData 更新するプロファイルデータ
+   */
+  async updateUserProfileData(profileData: {
+    name: string;
+    email: string;
+    department: string | null;
+    position: string | null;
+    bio: string | null;
+    avatarUrl?: string | null;
+  }): Promise<ApiResponse<User>> {
+    try {
+      return await api.put<User>('/api/profile', profileData);
     } catch (error) {
       throw error;
     }
@@ -161,6 +180,34 @@ const userService = {
         password_confirmation
       });
     } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * パスワードを変更
+   * @param currentPassword 現在のパスワード
+   * @param newPassword 新しいパスワード
+   * @param confirmPassword パスワード確認
+   */
+  async changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Promise<ApiResponse<null>> {
+    try {
+      return await api.put<null>('/api/auth/change-password', {
+        current_password: currentPassword,
+        new_password: newPassword,
+        password_confirmation: confirmPassword
+      });
+    } catch (error: any) {
+      // パスワード変更の場合は401エラーでもログアウトさせない
+      if (error.response?.status === 401) {
+        return {
+          success: false,
+          message: error.response?.data?.message || '現在のパスワードが正しくありません',
+          data: null
+        };
+      }
+      
+      // その他のエラーはそのまま投げる
       throw error;
     }
   }

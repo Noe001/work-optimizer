@@ -2,40 +2,95 @@
  * APIレスポンスの基本的な型定義
  */
 
-// APIレスポンス共通インターフェース
-export interface ApiResponse<T> {
+// API共通レスポンス型
+export interface ApiResponse<T = any> {
   success: boolean;
+  message: string;
   data?: T;
-  message?: string;
+  code?: string;
   errors?: string[];
+  timestamp?: string;
 }
 
-// エラーレスポンスの型
+// エラーレスポンス型
 export interface ApiError {
   message: string;
   code?: string;
-  errors?: Record<string, string[]>;
+  errors?: string[];
+  timestamp?: string;
 }
 
-// ページネーション用の型
-export interface PaginatedResponse<T> {
-  data: T[];
-  meta: {
-    current_page: number;
-    last_page: number;
-    per_page: number;
-    total: number;
-  };
-}
-
-// ユーザー関連の型
+// ユーザー型
 export interface User {
   id: string;
   name: string;
   email: string;
-  avatar?: string;
+  department?: string;
+  position?: string;
+  bio?: string;
+  avatarUrl?: string;
+  role?: string;
+  status?: string;
+  display_name: string;
+  profile_complete: boolean;
+  paid_leave_balance: number;
+  sick_leave_balance: number;
+  monthly_work_hours: number;
+  monthly_overtime_hours: number;
   created_at: string;
   updated_at: string;
+  organizations?: OrganizationMembership[];
+}
+
+// 組織メンバーシップ型
+export interface OrganizationMembership {
+  id: string;
+  name: string;
+  role: string;
+}
+
+// 認証レスポンス型
+export interface AuthResponse {
+  user: User;
+  token: string;
+}
+
+// ログインリクエスト型
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+// サインアップリクエスト型
+export interface SignupRequest {
+  name: string;
+  email: string;
+  password: string;
+  password_confirmation: string;
+  department?: string;
+  position?: string;
+  bio?: string;
+}
+
+// パスワード変更リクエスト型
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+  password_confirmation: string;
+}
+
+// ページネーション型
+export interface PaginationMeta {
+  current_page: number;
+  total_pages: number;
+  total_count: number;
+  per_page: number;
+}
+
+// ページネーション付きレスポンス型
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: PaginationMeta;
 }
 
 // ミーティング関連の型
@@ -128,4 +183,47 @@ export interface AttendanceSummary {
     paid: number;
     sick: number;
   };
+}
+
+// バックエンドのエラーコード定数（フロントエンド用）
+
+// 認証エラーコード
+export const AUTH_ERROR_CODES = {
+  AUTHENTICATION_REQUIRED: 'AUTHENTICATION_REQUIRED',
+  TOKEN_MISSING: 'TOKEN_MISSING',
+  TOKEN_INVALID: 'TOKEN_INVALID',
+  TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+  TOKEN_MALFORMED: 'TOKEN_MALFORMED',
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  SESSION_EXPIRED: 'SESSION_EXPIRED',
+} as const;
+
+// ログインエラーコード
+export const LOGIN_ERROR_CODES = {
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  INVALID_PASSWORD: 'INVALID_PASSWORD',
+  MISSING_PARAMETERS: 'MISSING_PARAMETERS',
+} as const;
+
+// パスワード変更エラーコード
+export const PASSWORD_CHANGE_ERROR_CODES = {
+  MISSING_PARAMETERS: 'MISSING_PARAMETERS',
+  CURRENT_PASSWORD_INVALID: 'CURRENT_PASSWORD_INVALID',
+  PASSWORD_MISMATCH: 'PASSWORD_MISMATCH',
+  PASSWORD_TOO_SHORT: 'PASSWORD_TOO_SHORT',
+  UPDATE_FAILED: 'UPDATE_FAILED',
+} as const;
+
+// エラーコードの型定義
+export type AuthErrorCode = typeof AUTH_ERROR_CODES[keyof typeof AUTH_ERROR_CODES];
+export type LoginErrorCode = typeof LOGIN_ERROR_CODES[keyof typeof LOGIN_ERROR_CODES];
+export type PasswordChangeErrorCode = typeof PASSWORD_CHANGE_ERROR_CODES[keyof typeof PASSWORD_CHANGE_ERROR_CODES];
+
+// 全エラーコードの共用体型
+export type ApiErrorCode = AuthErrorCode | LoginErrorCode | PasswordChangeErrorCode;
+
+// エラーハンドリング用の型定義
+export interface DetailedApiError extends ApiError {
+  code: ApiErrorCode;
 } 

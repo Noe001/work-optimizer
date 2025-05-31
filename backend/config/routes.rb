@@ -20,6 +20,7 @@ Rails.application.routes.draw do
     post '/login', to: 'auth#login'
     post 'auth/logout', to: 'auth#logout'
     get 'auth/me', to: 'auth#me'
+    put 'auth/change-password', to: 'auth#change_password'
     
     # セッションベースの認証エンドポイント
     get '/sessions/new', to: 'sessions#new'
@@ -67,6 +68,9 @@ Rails.application.routes.draw do
     
     # ユーザー管理
     resources :users, only: [:index, :show, :update, :destroy]
+    
+    # プロフィール管理
+    put '/profile', to: 'users#update_profile'
     
     # 組織関連
     resources :organizations do
