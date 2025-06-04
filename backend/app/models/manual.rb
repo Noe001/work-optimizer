@@ -24,17 +24,17 @@ class Manual < ApplicationRecord
 
   # アクセスレベルを定義
   enum access_level: {
-    all_users: 'all',        # 全社員
+    all: 'all',              # 全社員
     department: 'department', # 部門内
     specific: 'specific'      # 指定メンバーのみ
-  }
+  }, _prefix: 'access'
 
   # 編集権限を定義
   enum edit_permission: {
-    author_only: 'author',         # 作成者のみ
-    dept_admin: 'department',      # 部門管理者
-    specific_users: 'specific'     # 指定メンバー
-  }
+    author: 'author',         # 作成者のみ
+    department: 'department', # 部門管理者
+    specific: 'specific'      # 指定メンバー
+  }, _prefix: 'edit'
 
   # バリデーション
   validates :title, presence: true
@@ -45,7 +45,7 @@ class Manual < ApplicationRecord
   validates :status, presence: true
 
   # デフォルトのスコープとして公開中のマニュアルを取得
-  scope :published, -> { where(status: 'published') }
+  scope :published, -> { where(manuals: { status: 'published' }) }
   
   # 特定のユーザーがアクセスできるマニュアルを取得するスコープ
   scope :accessible_by, ->(user) {
@@ -53,7 +53,7 @@ class Manual < ApplicationRecord
       none
     else
       where(
-        'status = ? AND (access_level = ? OR (access_level = ? AND department = ?) OR (access_level = ? AND user_id = ?))',
+        'manuals.status = ? AND (manuals.access_level = ? OR (manuals.access_level = ? AND manuals.department = ?) OR (manuals.access_level = ? AND manuals.user_id = ?))',
         'published',
         'all',
         'department', user.department,

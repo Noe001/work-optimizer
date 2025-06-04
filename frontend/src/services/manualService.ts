@@ -1,5 +1,6 @@
 import { api } from './api';
 import { ApiResponse, Manual, PaginatedResponse } from '../types/api';
+import { ErrorHandler } from '../utils/errorHandler';
 
 // マニュアル一覧取得のパラメータ
 export interface ManualListParams {
@@ -58,15 +59,16 @@ class ManualService {
   // マニュアル一覧取得
   async getManuals(params?: ManualListParams): Promise<ApiResponse<PaginatedResponse<Manual>>> {
     try {
-      const response = await api.get('/api/manuals', { params });
-      const apiResponse = response.data as ApiResponse<PaginatedResponse<Manual>>;
       
-      if (apiResponse.success && apiResponse.data) {
-        // データが既にフラット形式の場合はそのまま使用
-        const manuals = apiResponse.data.data;
+      const response = await api.get('/api/manuals', { params });
+      const responseData = response.data as any;
+      
+      // バックエンドが {success: true, data: {...}} 形式で返す場合
+      if (responseData && responseData.success && responseData.data) {
+        const apiResponse = responseData as ApiResponse<PaginatedResponse<Manual>>;
         const transformedData = {
-          data: manuals, // 変換不要
-          meta: apiResponse.data.meta
+          data: apiResponse.data!.data,
+          meta: apiResponse.data!.meta
         };
         
         return {
@@ -75,9 +77,26 @@ class ManualService {
         };
       }
       
+      // バックエンドが {data: Array, meta: {...}} 形式で返す場合（successフィールドなし）
+      if (responseData && responseData.data && Array.isArray(responseData.data) && responseData.meta) {
+        // 正しい形式にラップ
+        const wrappedResponse: ApiResponse<PaginatedResponse<Manual>> = {
+          success: true,
+          message: 'マニュアル一覧を正常に取得しました',
+          data: {
+            data: responseData.data as Manual[],
+            meta: responseData.meta
+          }
+        };
+        
+        return wrappedResponse;
+      }
+      
+      const apiResponse = response.data as ApiResponse<PaginatedResponse<Manual>>;
       return apiResponse;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'マニュアル一覧の取得に失敗しました');
+      const message = ErrorHandler.getErrorMessage(error) || 'マニュアル一覧の取得に失敗しました';
+      throw new Error(message);
     }
   }
 
@@ -103,7 +122,8 @@ class ManualService {
       
       return apiResponse;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'マニュアル検索に失敗しました');
+      const message = ErrorHandler.getErrorMessage(error) || 'マニュアル検索に失敗しました';
+      throw new Error(message);
     }
   }
 
@@ -129,7 +149,8 @@ class ManualService {
       
       return apiResponse;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || '自分のマニュアル取得に失敗しました');
+      const message = ErrorHandler.getErrorMessage(error) || '自分のマニュアル取得に失敗しました';
+      throw new Error(message);
     }
   }
 
@@ -158,33 +179,42 @@ class ManualService {
     try {
       console.log('=== manualService.createManual ===');
       console.log('送信データ:', data);
-      console.log('APIエンドポイント: POST /api/manuals');
-      console.log('リクエストボディ:', { manual: data });
       
       const response = await api.post('/api/manuals', { manual: data });
-      console.log('APIレスポンス:', response);
+      console.log('APIレスポンス:', response.data);
       
-      const apiResponse = response.data as ApiResponse<Manual>;
+      const responseData = response.data as any;
       
-      if (apiResponse.success && apiResponse.data) {
-        const transformedData = transformManualData(apiResponse.data);
-        console.log('変換後データ:', transformedData);
-        
-        return {
-          ...apiResponse,
-          data: transformedData
+      // レスポンスが直接マニュアルオブジェクトの場合（ActiveModel::Serializerが直接オブジェクトを返す場合）
+      if (responseData && responseData.id && !responseData.success) {
+        console.log('直接マニュアルオブジェクトを受信:', responseData);
+        const manualData = responseData as Manual;
+        const wrappedResponse: ApiResponse<Manual> = {
+          success: true,
+          message: 'マニュアルが正常に作成されました',
+          data: manualData
         };
+        console.log('マニュアル作成成功:', manualData);
+        return wrappedResponse;
       }
       
-      console.log('APIレスポンス（成功フラグfalse）:', apiResponse);
-      return apiResponse;
+      // 正規のApiResponse形式の場合
+      const apiResponse = responseData as ApiResponse<Manual>;
+      console.log('success フラグ:', apiResponse.success);
+      console.log('data 存在:', !!apiResponse.data);
+      
+      if (apiResponse.success) {
+        console.log('マニュアル作成成功:', apiResponse.data);
+        return apiResponse;
+      } else {
+        console.log('APIレスポンス（エラー）:', apiResponse);
+        return apiResponse;
+      }
     } catch (error: any) {
       console.error('=== manualService.createManual エラー ===');
       console.error('エラーオブジェクト:', error);
-      console.error('レスポンスデータ:', error.response?.data);
-      console.error('レスポンスステータス:', error.response?.status);
-      console.error('リクエスト設定:', error.config);
-      throw new Error(error.response?.data?.message || 'マニュアルの作成に失敗しました');
+      const message = ErrorHandler.getErrorMessage(error) || 'マニュアルの作成に失敗しました';
+      throw new Error(message);
     }
   }
 

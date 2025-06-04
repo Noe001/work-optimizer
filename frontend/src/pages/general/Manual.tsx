@@ -28,30 +28,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Manual, ManualDepartmentOption, ManualCategoryOption } from '@/types/api';
+import { Manual } from '@/types/api';
 import manualService, { ManualListParams } from '@/services/manualService';
 import { useAuth } from '@/contexts/AuthContext';
-
-// 選択肢の定義
-const departments: ManualDepartmentOption[] = [
-  { value: 'sales', label: '営業部' },
-  { value: 'dev', label: '開発部' },
-  { value: 'hr', label: '人事部' },
-];
-
-const categories: ManualCategoryOption[] = [
-  { value: 'procedure', label: '業務手順' },
-  { value: 'rules', label: '規則・規定' },
-  { value: 'system', label: 'システム操作' },
-];
-
-// フィルターオプション
-const filterOptions = [
-  { value: 'all', label: 'すべて' },
-  { value: 'my', label: '自分のマニュアル' },
-  { value: 'published', label: '公開中' },
-  { value: 'draft', label: '下書き' },
-];
+import { 
+  DEPARTMENTS, 
+  CATEGORIES, 
+  FILTER_OPTIONS, 
+  getDepartmentLabel, 
+  getCategoryLabel,
+  getStatusBadgeVariant 
+} from '@/constants/manual';
 
 const ManualView: React.FC = () => {
   const navigate = useNavigate();
@@ -133,8 +120,13 @@ const ManualView: React.FC = () => {
       }
 
       if (response.success && response.data) {
-        setManuals(response.data.data);
-        setTotalPages(response.data.meta.total_pages);
+        if (Array.isArray(response.data.data)) {
+          setManuals(response.data.data);
+          setTotalPages(response.data.meta.total_pages);
+        } else {
+          setManuals([]);
+          setTotalPages(1);
+        }
       }
     } catch (error: any) {
       toast.error(error.message);
@@ -172,8 +164,7 @@ const ManualView: React.FC = () => {
   };
 
   // ラベル変換関数
-  const getDepartmentLabel = (value: string) => departments.find(d => d.value === value)?.label || value;
-  const getCategoryLabel = (value: string) => categories.find(c => c.value === value)?.label || value;
+
 
   return (
     <>
@@ -229,7 +220,7 @@ const ManualView: React.FC = () => {
                     <SelectValue placeholder="表示条件を選択" />
                   </SelectTrigger>
                   <SelectContent>
-                    {filterOptions.map(option => (
+                    {FILTER_OPTIONS.map(option => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
@@ -246,7 +237,7 @@ const ManualView: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">すべて</SelectItem>
-                    {departments.map(dept => (
+                    {DEPARTMENTS.map(dept => (
                       <SelectItem key={dept.value} value={dept.value}>
                         {dept.label}
                       </SelectItem>
@@ -263,7 +254,7 @@ const ManualView: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">すべて</SelectItem>
-                    {categories.map(cat => (
+                    {CATEGORIES.map(cat => (
                       <SelectItem key={cat.value} value={cat.value}>
                         {cat.label}
                       </SelectItem>
@@ -310,7 +301,7 @@ const ManualView: React.FC = () => {
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-2">
                         <h3 className="text-lg font-semibold">{manual.title}</h3>
-                        <Badge variant={manual.status === 'published' ? 'default' : 'secondary'}>
+                        <Badge variant={getStatusBadgeVariant(manual.status)}>
                           {manual.status === 'published' ? '公開中' : '下書き'}
                         </Badge>
                       </div>

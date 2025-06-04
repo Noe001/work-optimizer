@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { 
   AUTH_ERROR_CODES, 
   LOGIN_ERROR_CODES, 
@@ -312,4 +313,91 @@ export function createUnifiedError(error: any): {
     fieldErrors,
     generalErrors
   };
+}
+
+export interface ApiError {
+  success: false;
+  message: string;
+  code?: string;
+  errors?: string[];
+  timestamp?: string;
+}
+
+export interface ApiErrorResponse {
+  response?: {
+    data?: ApiError;
+    status?: number;
+  };
+  message?: string;
+}
+
+export class ErrorHandler {
+  static handle(error: any, context?: string): void {
+    console.error(`=== エラー発生 ${context ? `(${context})` : ''} ===`);
+    console.error('エラーオブジェクト:', error);
+    
+    let message = 'エラーが発生しました';
+    
+    if (error?.response?.data) {
+      const apiError = error.response.data as ApiError;
+      message = apiError.message || message;
+      
+      // 詳細エラーがある場合は追加表示
+      if (apiError.errors && apiError.errors.length > 0) {
+        console.error('詳細エラー:', apiError.errors);
+        message += '\n詳細: ' + apiError.errors.join(', ');
+      }
+      
+      console.error('APIエラーコード:', apiError.code);
+      console.error('HTTPステータス:', error.response.status);
+    } else if (error?.message) {
+      message = error.message;
+    }
+    
+    toast.error(message);
+  }
+
+  static handleValidation(errors: string[]): void {
+    const message = 'バリデーションエラーが発生しました:\n' + errors.join('\n');
+    toast.error(message);
+  }
+
+  static handleNetwork(): void {
+    toast.error('ネットワークエラーが発生しました。接続を確認してください。');
+  }
+
+  static handleUnauthorized(): void {
+    toast.error('認証が必要です。ログインしてください。');
+  }
+
+  static handleForbidden(): void {
+    toast.error('この操作を実行する権限がありません。');
+  }
+
+  static handleNotFound(resource?: string): void {
+    const message = resource ? `${resource}が見つかりません` : 'リソースが見つかりません';
+    toast.error(message);
+  }
+
+  static handleServerError(): void {
+    toast.error('サーバーエラーが発生しました。しばらく時間をおいて再試行してください。');
+  }
+
+  static getErrorMessage(error: any): string {
+    if (error?.response?.data?.message) {
+      return error.response.data.message;
+    }
+    if (error?.message) {
+      return error.message;
+    }
+    return 'エラーが発生しました';
+  }
+
+  static isNetworkError(error: any): boolean {
+    return !error?.response && error?.message?.includes('Network Error');
+  }
+
+  static getStatusCode(error: any): number | null {
+    return error?.response?.status || null;
+  }
 } 

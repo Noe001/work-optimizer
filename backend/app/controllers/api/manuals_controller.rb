@@ -1,6 +1,8 @@
 module Api
   class ManualsController < ApplicationController
-    # before_action :authenticate_user  # 一時的にコメントアウト
+    include ErrorHandler
+    
+    before_action :authenticate_user
     before_action :set_manual, only: [:show, :update, :destroy]
     before_action :check_edit_permission, only: [:update, :destroy]
 
@@ -8,38 +10,43 @@ module Api
     # マニュアル一覧の取得
     def index
       begin
-        # フィルター条件に応じてマニュアルを取得
-        @manuals = Manual.accessible_by(current_user)
+        # フィルター条件に応じてマニュアルを取得（N+1クエリ解消のためincludesを使用）
+        @manuals = Manual.includes(:user).accessible_by(current_user)
         
         # 部門でフィルター
-        if params[:department].present?
+        if params[:department].present? && params[:department] != 'all'
           @manuals = @manuals.where(department: params[:department])
         end
         
         # カテゴリでフィルター
-        if params[:category].present?
+        if params[:category].present? && params[:category] != 'all'
           @manuals = @manuals.where(category: params[:category])
         end
         
-        # 検索クエリでフィルター
+        # 検索クエリでフィルター（SQLインジェクション対策）
         if params[:query].present?
-          @manuals = @manuals.where('title LIKE ?', "%#{params[:query]}%")
+          sanitized_query = ActiveRecord::Base.sanitize_sql_like(params[:query])
+          @manuals = @manuals.where('title ILIKE ?', "%#{sanitized_query}%")
         end
         
+        # ソート順（デフォルトは更新日時の降順）
+        @manuals = @manuals.order(updated_at: :desc)
+        
         # ページネーション
-        paginated = @manuals.page(params[:page] || 1).per(params[:per_page] || 10)
+        page_size = [params[:per_page]&.to_i || 10, 100].min # 最大100件まで
+        paginated = @manuals.page(params[:page] || 1).per(page_size)
         
         # シリアライザーを使ってJSONレスポンスを生成
         serialized_data = ActiveModel::Serializer::CollectionSerializer.new(
           paginated, 
           serializer: ManualSerializer,
           current_user: current_user
-        )
+        ).as_json
         
         render json: {
           success: true,
           data: {
-            data: serialized_data.as_json,
+            data: serialized_data,
             meta: {
               total_count: @manuals.count,
               total_pages: paginated.total_pages,
@@ -61,7 +68,7 @@ module Api
     # GET /api/manuals/search
     # マニュアルの詳細検索
     def search
-      @manuals = Manual.accessible_by(current_user)
+      @manuals = Manual.includes(:user).accessible_by(current_user)
       
       # 部門でフィルター
       if params[:department].present?
@@ -160,7 +167,7 @@ module Api
       
       # ステータスでフィルター
       if params[:status].present?
-        @manuals = @manuals.where(status: params[:status])
+        @manuals = @manuals.where(manuals: { status: params[:status] })
       end
       
       # ページネーション
@@ -186,16 +193,13 @@ module Api
     def show
       # 閲覧権限のチェック
       unless can_view?(@manual)
-        return render json: { 
-          success: false, 
-          message: 'このマニュアルを閲覧する権限がありません'
-        }, status: :forbidden
+        return handle_forbidden('このマニュアルを閲覧する権限がありません')
       end
 
-      serialized_data = ManualSerializer.new(@manual, current_user: current_user)
+      serialized_data = ManualSerializer.new(@manual, current_user: current_user).as_json
       render json: {
         success: true,
-        data: serialized_data.as_json
+        data: serialized_data
       }
     end
 
@@ -206,12 +210,33 @@ module Api
       @manual.user = current_user
 
       if @manual.save
-        serialized_data = ManualSerializer.new(@manual, current_user: current_user)
-        render json: {
+        # 手動シリアライゼーション
+        manual_data = {
+          id: @manual.id,
+          title: @manual.title,
+          content: @manual.content,
+          department: @manual.department,
+          category: @manual.category,
+          access_level: @manual.access_level,
+          edit_permission: @manual.edit_permission,
+          status: @manual.status,
+          created_at: @manual.created_at,
+          updated_at: @manual.updated_at,
+          tags: @manual.tags,
+          author: {
+            id: @manual.user.id,
+            name: @manual.user.name
+          },
+          can_edit: @manual.user_id == current_user.id
+        }
+        
+        response_data = {
           success: true,
           message: 'マニュアルが正常に作成されました',
-          data: serialized_data.as_json
-        }, status: :created
+          data: manual_data
+        }
+        
+        render json: response_data, status: :created
       else
         render json: {
           success: false,
@@ -225,11 +250,11 @@ module Api
     # マニュアルを更新
     def update
       if @manual.update(manual_params)
-        serialized_data = ManualSerializer.new(@manual, current_user: current_user)
+        serialized_data = ManualSerializer.new(@manual, current_user: current_user).as_json
         render json: {
           success: true,
           message: 'マニュアルが正常に更新されました',
-          data: serialized_data.as_json
+          data: serialized_data
         }
       else
         render json: {
@@ -272,10 +297,7 @@ module Api
     # 編集権限のチェック
     def check_edit_permission
       unless can_edit?(@manual)
-        render json: {
-          success: false,
-          message: 'このマニュアルを編集する権限がありません'
-        }, status: :forbidden
+        handle_forbidden('このマニュアルを編集する権限がありません')
       end
     end
 
@@ -285,12 +307,11 @@ module Api
       return manual.user_id == current_user.id if manual.draft?
 
       # 公開済みマニュアルの場合はアクセスレベルに基づいてチェック
-      case manual.access_level
-      when 'all'
+      if manual.access_all?
         true # 全社員がアクセス可能
-      when 'department'
+      elsif manual.access_department?
         manual.department == current_user.department # 同じ部門のみアクセス可能
-      when 'specific'
+      elsif manual.access_specific?
         # 特定のユーザーにアクセス権限がある場合の処理
         # この実装はプロジェクトの要件に応じて拡張する必要があります
         manual.user_id == current_user.id # 仮実装：作成者のみアクセス可能
@@ -301,12 +322,11 @@ module Api
 
     # 編集権限のチェック
     def can_edit?(manual)
-      case manual.edit_permission
-      when 'author'
+      if manual.edit_author?
         manual.user_id == current_user.id
-      when 'department'
-        manual.department == current_user.department # && current_user.department_admin?
-      when 'specific'
+      elsif manual.edit_department?
+        manual.department == current_user.department && current_user.department_admin?
+      elsif manual.edit_specific?
         # 特定のユーザーに編集権限がある場合の処理
         # この実装はプロジェクトの要件に応じて拡張する必要があります
         manual.user_id == current_user.id
@@ -329,9 +349,14 @@ module Api
       )
     end
 
-    # current_userをオーバーライド（テスト用）
+    # 開発環境でのみテスト用ユーザーを使用
     def current_user
-      @current_user ||= User.first
+      if Rails.env.development?
+        @current_user ||= User.first
+      else
+        # 本番環境では適切な認証システムからユーザーを取得
+        super
+      end
     end
   end
 end 

@@ -552,22 +552,22 @@ const ManualsTab: React.FC = () => {
       if (response.success && response.data) {
         setRecentManuals(response.data.data);
         
-        // 統計情報を計算
-        const allResponse = await manualService.getManuals({ 
-          page: 1, 
-          per_page: 100 // 統計用
-        });
-        
-        if (allResponse.success && allResponse.data) {
-          const allManuals = allResponse.data.data;
-          const published = allManuals.filter(m => m.status === 'published').length;
-          const drafts = allManuals.filter(m => m.status === 'draft').length;
+        // 統計情報を効率的に取得（メタ情報を活用）
+        if (response.success && response.data?.meta) {
+          const meta = response.data.meta;
+          
+          // 各ステータスの統計を個別に取得
+          const [publishedResponse, draftResponse, myResponse] = await Promise.all([
+            manualService.getManuals({ page: 1, per_page: 1 }), // 公開中の総数取得用
+            manualService.getMyManuals({ page: 1, per_page: 1, status: 'draft' }),
+            manualService.getMyManuals({ page: 1, per_page: 1 })
+          ]);
           
           setStats({
-            total: allManuals.length,
-            published,
-            drafts,
-            myManuals: allManuals.filter(m => m.author?.id === user?.id).length
+            total: meta.total_count || 0,
+            published: publishedResponse.data?.meta?.total_count || 0,
+            drafts: draftResponse.data?.meta?.total_count || 0,
+            myManuals: myResponse.data?.meta?.total_count || 0
           });
         }
       }

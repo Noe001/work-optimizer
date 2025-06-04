@@ -20,33 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ManualDepartmentOption, ManualCategoryOption, ManualAccessLevelOption, ManualEditPermissionOption } from '@/types/api';
 import manualService, { ManualFormData } from '@/services/manualService';
-
-// 選択肢の定義
-const departments: ManualDepartmentOption[] = [
-  { value: 'sales', label: '営業部' },
-  { value: 'dev', label: '開発部' },
-  { value: 'hr', label: '人事部' },
-];
-
-const categories: ManualCategoryOption[] = [
-  { value: 'procedure', label: '業務手順' },
-  { value: 'rules', label: '規則・規定' },
-  { value: 'system', label: 'システム操作' },
-];
-
-const accessLevels: ManualAccessLevelOption[] = [
-  { value: 'all', label: '全社員' },
-  { value: 'department', label: '部門内' },
-  { value: 'specific', label: '指定メンバーのみ' },
-];
-
-const editPermissions: ManualEditPermissionOption[] = [
-  { value: 'author', label: '作成者のみ' },
-  { value: 'department', label: '部門管理者' },
-  { value: 'specific', label: '指定メンバー' },
-];
+import { DEPARTMENTS, CATEGORIES, ACCESS_LEVELS, EDIT_PERMISSIONS } from '@/constants/manual';
 
 const ManualCreateView: React.FC = () => {
   const navigate = useNavigate();
@@ -142,7 +117,9 @@ const ManualCreateView: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <Label htmlFor="title">タイトル *</Label>
+                  <Label htmlFor="title">
+                    タイトル <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="title"
                     name="title"
@@ -190,7 +167,9 @@ const ManualCreateView: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label>部門 *</Label>
+                  <Label>
+                    部門 <span className="text-red-500">*</span>
+                  </Label>
                   <Select
                     value={formData.department}
                     onValueChange={handleSelectChange('department')}
@@ -200,7 +179,7 @@ const ManualCreateView: React.FC = () => {
                       <SelectValue placeholder="部門を選択" />
                     </SelectTrigger>
                     <SelectContent>
-                      {departments.map(dept => (
+                      {DEPARTMENTS.map(dept => (
                         <SelectItem key={dept.value} value={dept.value}>
                           {dept.label}
                         </SelectItem>
@@ -210,7 +189,9 @@ const ManualCreateView: React.FC = () => {
                 </div>
 
                 <div>
-                  <Label>カテゴリー *</Label>
+                  <Label>
+                    カテゴリー <span className="text-red-500">*</span>
+                  </Label>
                   <Select
                     value={formData.category}
                     onValueChange={handleSelectChange('category')}
@@ -220,7 +201,7 @@ const ManualCreateView: React.FC = () => {
                       <SelectValue placeholder="カテゴリーを選択" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map(cat => (
+                      {CATEGORIES.map(cat => (
                         <SelectItem key={cat.value} value={cat.value}>
                           {cat.label}
                         </SelectItem>
@@ -249,7 +230,7 @@ const ManualCreateView: React.FC = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {accessLevels.map(level => (
+                      {ACCESS_LEVELS.map(level => (
                         <SelectItem key={level.value} value={level.value}>
                           {level.label}
                         </SelectItem>
@@ -268,7 +249,7 @@ const ManualCreateView: React.FC = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {editPermissions.map(perm => (
+                      {EDIT_PERMISSIONS.map(perm => (
                         <SelectItem key={perm.value} value={perm.value}>
                           {perm.label}
                         </SelectItem>
