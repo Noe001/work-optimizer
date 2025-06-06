@@ -1,6 +1,6 @@
 module Api
   class ManualsController < ApplicationController
-    include ErrorHandler
+    include ErrorHandler  # グローバルエラーハンドリング（本番環境では詳細情報を隠蔽）
     
     before_action :authenticate_user
     before_action :set_manual, only: [:show, :update, :destroy]
@@ -9,60 +9,39 @@ module Api
     # GET /api/manuals
     # マニュアル一覧の取得
     def index
-      begin
-        # フィルター条件に応じてマニュアルを取得（N+1クエリ解消のためincludesを使用）
-        @manuals = Manual.includes(:user).accessible_by(current_user)
-        
-        # 部門でフィルター
-        if params[:department].present? && params[:department] != 'all'
-          @manuals = @manuals.where(department: params[:department])
-        end
-        
-        # カテゴリでフィルター
-        if params[:category].present? && params[:category] != 'all'
-          @manuals = @manuals.where(category: params[:category])
-        end
-        
-        # 検索クエリでフィルター（SQLインジェクション対策）
-        if params[:query].present?
-          sanitized_query = ActiveRecord::Base.sanitize_sql_like(params[:query])
-          @manuals = @manuals.where('title ILIKE ?', "%#{sanitized_query}%")
-        end
-        
-        # ソート順（デフォルトは更新日時の降順）
-        @manuals = @manuals.order(updated_at: :desc)
-        
-        # ページネーション
-        page_size = [params[:per_page]&.to_i || 10, 100].min # 最大100件まで
-        paginated = @manuals.page(params[:page] || 1).per(page_size)
-        
-        # シリアライザーを使ってJSONレスポンスを生成
-        serialized_data = ActiveModel::Serializer::CollectionSerializer.new(
-          paginated, 
-          serializer: ManualSerializer,
-          current_user: current_user
-        ).as_json
-        
-        render json: {
-          success: true,
-          data: {
-            data: serialized_data,
-            meta: {
-              total_count: @manuals.count,
-              total_pages: paginated.total_pages,
-              current_page: paginated.current_page
-            }
-          }
-        }
-      rescue => e
-        render json: {
-          success: false,
-          message: "エラー: #{e.class} - #{e.message}",
-          code: e.class.name,
-          errors: [],
-          timestamp: Time.current.iso8601
-        }, status: :internal_server_error
+      # フィルター条件に応じてマニュアルを取得（N+1クエリ解消のためincludesを使用）
+      @manuals = Manual.includes(:user).accessible_by(current_user)
+      
+      # 部門でフィルター
+      if params[:department].present? && params[:department] != 'all'
+        @manuals = @manuals.where(department: params[:department])
       end
+      
+      # カテゴリでフィルター
+      if params[:category].present? && params[:category] != 'all'
+        @manuals = @manuals.where(category: params[:category])
+      end
+      
+      # ステータスでフィルター（バックエンドで処理）
+      if params[:status].present? && params[:status] != 'all'
+        @manuals = @manuals.where(status: params[:status])
+      end
+      
+      # 検索クエリでフィルター（SQLインジェクション対策）
+      if params[:query].present?
+        sanitized_query = ActiveRecord::Base.sanitize_sql_like(params[:query])
+        @manuals = @manuals.where('title ILIKE ? OR content ILIKE ?', "%#{sanitized_query}%", "%#{sanitized_query}%")
+      end
+      
+      # ソート順（デフォルトは更新日時の降順）
+      @manuals = @manuals.order(updated_at: :desc)
+      
+      # ページネーション
+      page_size = [params[:per_page]&.to_i || 10, 100].min # 最大100件まで
+      paginated = @manuals.page(params[:page] || 1).per(page_size)
+      
+      # シリアライザーを使ってJSONレスポンスを生成
+      manuals_collection_response(@manuals, paginated)
     end
 
     # GET /api/manuals/search
@@ -80,14 +59,16 @@ module Api
         @manuals = @manuals.where(category: params[:category])
       end
       
-      # タイトルでフィルター
+      # タイトルでフィルター（SQLインジェクション対策）
       if params[:title].present?
-        @manuals = @manuals.where('title LIKE ?', "%#{params[:title]}%")
+        sanitized_title = ActiveRecord::Base.sanitize_sql_like(params[:title])
+        @manuals = @manuals.where('title ILIKE ?', "%#{sanitized_title}%")
       end
       
-      # 内容でフィルター
+      # 内容でフィルター（SQLインジェクション対策）
       if params[:content].present?
-        @manuals = @manuals.where('content LIKE ?', "%#{params[:content]}%")
+        sanitized_content = ActiveRecord::Base.sanitize_sql_like(params[:content])
+        @manuals = @manuals.where('content ILIKE ?', "%#{sanitized_content}%")
       end
       
       # 作成者でフィルター
@@ -130,62 +111,43 @@ module Api
       # ページネーション
       paginated = @manuals.page(params[:page] || 1).per(params[:per_page] || 10)
       
-      render json: {
-        success: true,
-        data: ActiveModel::Serializer::CollectionSerializer.new(
-          paginated, 
-          serializer: ManualSerializer,
-          current_user: current_user
-        ).as_json,
-        meta: {
-          total_count: @manuals.count,
-          total_pages: paginated.total_pages,
-          current_page: paginated.current_page,
-          filters: {
-            department: params[:department],
-            category: params[:category],
-            title: params[:title],
-            content: params[:content],
-            author_id: params[:author_id],
-            created_after: params[:created_after],
-            created_before: params[:created_before],
-            updated_after: params[:updated_after],
-            updated_before: params[:updated_before]
-          },
-          sort: {
-            order_by: order_column,
-            order: order_direction
-          }
-        }
-      }
+      # 検索結果レスポンス（フィルターとソート情報を含む）
+      search_response(@manuals, paginated, order_column, order_direction)
     end
     
+    # GET /api/manuals/stats
+    # ダッシュボード用の統計情報を取得
+    def stats
+      all_manuals = Manual.accessible_by(current_user)
+      my_manuals = Manual.where(user_id: current_user.id)
+      
+      stats = {
+        total: all_manuals.count,
+        published: all_manuals.where(status: 'published').count,
+        drafts: my_manuals.where(status: 'draft').count,
+        my_manuals: my_manuals.count
+      }
+      
+      render json: {
+        success: true,
+        data: stats
+      }
+    end
+
     # GET /api/manuals/my
     # 自分が作成したマニュアル一覧
     def my
       @manuals = Manual.where(user_id: current_user.id)
       
       # ステータスでフィルター
-      if params[:status].present?
-        @manuals = @manuals.where(manuals: { status: params[:status] })
+      if params[:status].present? && params[:status] != 'all'
+        @manuals = @manuals.where(status: params[:status])
       end
       
       # ページネーション
       paginated = @manuals.page(params[:page] || 1).per(params[:per_page] || 10)
       
-      render json: {
-        success: true,
-        data: ActiveModel::Serializer::CollectionSerializer.new(
-          paginated, 
-          serializer: ManualSerializer,
-          current_user: current_user
-        ).as_json,
-        meta: {
-          total_count: @manuals.count,
-          total_pages: paginated.total_pages,
-          current_page: paginated.current_page
-        }
-      }
+      manuals_collection_response(@manuals, paginated)
     end
 
     # GET /api/manuals/:id
@@ -196,11 +158,7 @@ module Api
         return handle_forbidden('このマニュアルを閲覧する権限がありません')
       end
 
-      serialized_data = ManualSerializer.new(@manual, current_user: current_user).as_json
-      render json: {
-        success: true,
-        data: serialized_data
-      }
+      manual_response(@manual)
     end
 
     # POST /api/manuals
@@ -210,33 +168,7 @@ module Api
       @manual.user = current_user
 
       if @manual.save
-        # 手動シリアライゼーション
-        manual_data = {
-          id: @manual.id,
-          title: @manual.title,
-          content: @manual.content,
-          department: @manual.department,
-          category: @manual.category,
-          access_level: @manual.access_level,
-          edit_permission: @manual.edit_permission,
-          status: @manual.status,
-          created_at: @manual.created_at,
-          updated_at: @manual.updated_at,
-          tags: @manual.tags,
-          author: {
-            id: @manual.user.id,
-            name: @manual.user.name
-          },
-          can_edit: @manual.user_id == current_user.id
-        }
-        
-        response_data = {
-          success: true,
-          message: 'マニュアルが正常に作成されました',
-          data: manual_data
-        }
-        
-        render json: response_data, status: :created
+        manual_response(@manual, message: 'マニュアルが正常に作成されました', status: :created)
       else
         render json: {
           success: false,
@@ -250,12 +182,7 @@ module Api
     # マニュアルを更新
     def update
       if @manual.update(manual_params)
-        serialized_data = ManualSerializer.new(@manual, current_user: current_user).as_json
-        render json: {
-          success: true,
-          message: 'マニュアルが正常に更新されました',
-          data: serialized_data
-        }
+        manual_response(@manual, message: 'マニュアルが正常に更新されました')
       else
         render json: {
           success: false,
@@ -283,6 +210,76 @@ module Api
     end
 
     private
+
+    # マニュアル用レスポンス生成ヘルパー
+    def manual_response(manual, message: nil, status: :ok)
+      serialized_data = ManualSerializer.new(manual, current_user: current_user).as_json
+      response_body = {
+        success: true,
+        data: serialized_data
+      }
+      response_body[:message] = message if message.present?
+      
+      render json: response_body, status: status
+    end
+
+    # マニュアル一覧用レスポンス生成ヘルパー
+    def manuals_collection_response(manuals, paginated, message: nil)
+      serialized_data = ActiveModel::Serializer::CollectionSerializer.new(
+        paginated, 
+        serializer: ManualSerializer,
+        current_user: current_user
+      ).as_json
+      
+      response_body = {
+        success: true,
+        data: {
+          data: serialized_data,
+          meta: {
+            total_count: manuals.count,
+            total_pages: paginated.total_pages,
+            current_page: paginated.current_page
+          }
+        }
+      }
+      response_body[:message] = message if message.present?
+      
+      render json: response_body
+    end
+
+    # 検索結果用レスポンス生成ヘルパー（フィルターとソート情報を含む）
+    def search_response(manuals, paginated, order_column, order_direction)
+      serialized_data = ActiveModel::Serializer::CollectionSerializer.new(
+        paginated, 
+        serializer: ManualSerializer,
+        current_user: current_user
+      ).as_json
+      
+      render json: {
+        success: true,
+        data: serialized_data,
+        meta: {
+          total_count: manuals.count,
+          total_pages: paginated.total_pages,
+          current_page: paginated.current_page,
+          filters: {
+            department: params[:department],
+            category: params[:category],
+            title: params[:title],
+            content: params[:content],
+            author_id: params[:author_id],
+            created_after: params[:created_after],
+            created_before: params[:created_before],
+            updated_after: params[:updated_after],
+            updated_before: params[:updated_before]
+          },
+          sort: {
+            order_by: order_column,
+            order: order_direction
+          }
+        }
+      }
+    end
 
     # マニュアルを設定
     def set_manual
@@ -349,12 +346,15 @@ module Api
       )
     end
 
-    # 開発環境でのみテスト用ユーザーを使用
+    # 開発用のcurrent_userオーバーライド
+    # 注意: 開発環境でのテスト目的のみ。本番環境では親クラスの認証メソッドを使用
+    # TODO: 開発が完了したらこのメソッドを削除すること
     def current_user
       if Rails.env.development?
+        # 開発環境: デバッグ用に最初のユーザーを使用
         @current_user ||= User.first
       else
-        # 本番環境では適切な認証システムからユーザーを取得
+        # 本番環境: ApplicationControllerの認証システムを使用
         super
       end
     end

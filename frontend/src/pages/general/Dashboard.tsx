@@ -543,33 +543,25 @@ const ManualsTab: React.FC = () => {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // 最近のマニュアルを取得（最新5件）
-      const response = await manualService.getManuals({ 
-        page: 1, 
-        per_page: 5 
-      });
+      // 最近のマニュアルと統計情報を並列取得
+      const [manualsResponse, statsResponse] = await Promise.all([
+        manualService.getManuals({ page: 1, per_page: 5 }),
+        manualService.getStats()
+      ]);
       
-      if (response.success && response.data) {
-        setRecentManuals(response.data.data);
-        
-        // 統計情報を効率的に取得（メタ情報を活用）
-        if (response.success && response.data?.meta) {
-          const meta = response.data.meta;
-          
-          // 各ステータスの統計を個別に取得
-          const [publishedResponse, draftResponse, myResponse] = await Promise.all([
-            manualService.getManuals({ page: 1, per_page: 1 }), // 公開中の総数取得用
-            manualService.getMyManuals({ page: 1, per_page: 1, status: 'draft' }),
-            manualService.getMyManuals({ page: 1, per_page: 1 })
-          ]);
-          
-          setStats({
-            total: meta.total_count || 0,
-            published: publishedResponse.data?.meta?.total_count || 0,
-            drafts: draftResponse.data?.meta?.total_count || 0,
-            myManuals: myResponse.data?.meta?.total_count || 0
-          });
-        }
+      // 最近のマニュアルを設定
+      if (manualsResponse.success && manualsResponse.data) {
+        setRecentManuals(manualsResponse.data.data);
+      }
+      
+      // 統計情報を設定
+      if (statsResponse.success && statsResponse.data) {
+        setStats({
+          total: statsResponse.data.total,
+          published: statsResponse.data.published,
+          drafts: statsResponse.data.drafts,
+          myManuals: statsResponse.data.my_manuals
+        });
       }
     } catch (error: any) {
       console.error('ダッシュボードデータの取得に失敗:', error);

@@ -107,16 +107,13 @@ const ManualView: React.FC = () => {
         // 自分のマニュアルを取得
         response = await manualService.getMyManuals(loadParams);
       } else {
+        // ステータスフィルターをloadParamsに追加（バックエンドで処理）
+        if (selectedFilter === 'published' || selectedFilter === 'draft') {
+          loadParams.status = selectedFilter;
+        }
+        
         // 全マニュアルを取得
         response = await manualService.getManuals(loadParams);
-        
-        // ステータスでフィルター（APIレベルではなくクライアントレベル）
-        if (selectedFilter === 'published' || selectedFilter === 'draft') {
-          if (response.success && response.data) {
-            const filteredData = response.data.data.filter(manual => manual.status === selectedFilter);
-            response.data.data = filteredData;
-          }
-        }
       }
 
       if (response.success && response.data) {

@@ -1,14 +1,6 @@
 class ManualSerializer < ActiveModel::Serializer
   attributes :id, :title, :content, :department, :category, :access_level, :edit_permission, :status, :created_at, :updated_at, :tags, :author, :can_edit
   
-  def access_level
-    object.access_level
-  end
-  
-  def edit_permission
-    object.edit_permission
-  end
-  
   def author
     if object.user.present?
       {

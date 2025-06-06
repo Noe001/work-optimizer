@@ -9,6 +9,7 @@ export interface ManualListParams {
   department?: string;
   category?: string;
   query?: string;
+  status?: string;
 }
 
 // マニュアル詳細検索のパラメータ
@@ -40,60 +41,16 @@ export interface ManualFormData {
   tags?: string;
 }
 
-// JSONAPI形式のレスポンスデータ変換ユーティリティ
-const transformManualData = (jsonApiData: any): Manual => {
-  // バックエンドからフラットな形式で返される場合はそのまま返す
-  if (jsonApiData && typeof jsonApiData === 'object' && jsonApiData.id) {
-    return jsonApiData as Manual;
-  }
-  
-  // JSONAPI形式の場合は従来通り変換
-  const { id, attributes } = jsonApiData;
-  return {
-    id,
-    ...attributes
-  };
-};
+
 
 class ManualService {
   // マニュアル一覧取得
   async getManuals(params?: ManualListParams): Promise<ApiResponse<PaginatedResponse<Manual>>> {
     try {
-      
       const response = await api.get('/api/manuals', { params });
-      const responseData = response.data as any;
       
-      // バックエンドが {success: true, data: {...}} 形式で返す場合
-      if (responseData && responseData.success && responseData.data) {
-        const apiResponse = responseData as ApiResponse<PaginatedResponse<Manual>>;
-        const transformedData = {
-          data: apiResponse.data!.data,
-          meta: apiResponse.data!.meta
-        };
-        
-        return {
-          ...apiResponse,
-          data: transformedData
-        };
-      }
-      
-      // バックエンドが {data: Array, meta: {...}} 形式で返す場合（successフィールドなし）
-      if (responseData && responseData.data && Array.isArray(responseData.data) && responseData.meta) {
-        // 正しい形式にラップ
-        const wrappedResponse: ApiResponse<PaginatedResponse<Manual>> = {
-          success: true,
-          message: 'マニュアル一覧を正常に取得しました',
-          data: {
-            data: responseData.data as Manual[],
-            meta: responseData.meta
-          }
-        };
-        
-        return wrappedResponse;
-      }
-      
-      const apiResponse = response.data as ApiResponse<PaginatedResponse<Manual>>;
-      return apiResponse;
+      // バックエンドは統一された {success: true, data: {...}} 形式で返す
+      return response.data as ApiResponse<PaginatedResponse<Manual>>;
     } catch (error: any) {
       const message = ErrorHandler.getErrorMessage(error) || 'マニュアル一覧の取得に失敗しました';
       throw new Error(message);
@@ -104,25 +61,22 @@ class ManualService {
   async searchManuals(params?: ManualSearchParams): Promise<ApiResponse<PaginatedResponse<Manual>>> {
     try {
       const response = await api.get('/api/manuals/search', { params });
-      const apiResponse = response.data as ApiResponse<PaginatedResponse<Manual>>;
       
-      if (apiResponse.success && apiResponse.data) {
-        // データが既にフラット形式の場合はそのまま使用
-        const manuals = apiResponse.data.data;
-        const transformedData = {
-          data: manuals, // 変換不要
-          meta: apiResponse.data.meta
-        };
-        
-        return {
-          ...apiResponse,
-          data: transformedData
-        };
-      }
-      
-      return apiResponse;
+      // バックエンドは統一された形式で返す
+      return response.data as ApiResponse<PaginatedResponse<Manual>>;
     } catch (error: any) {
       const message = ErrorHandler.getErrorMessage(error) || 'マニュアル検索に失敗しました';
+      throw new Error(message);
+    }
+  }
+
+  // ダッシュボード用統計情報取得
+  async getStats(): Promise<ApiResponse<{ total: number; published: number; drafts: number; my_manuals: number }>> {
+    try {
+      const response = await api.get('/api/manuals/stats');
+      return response.data as ApiResponse<{ total: number; published: number; drafts: number; my_manuals: number }>;
+    } catch (error: any) {
+      const message = ErrorHandler.getErrorMessage(error) || 'マニュアル統計の取得に失敗しました';
       throw new Error(message);
     }
   }
@@ -131,23 +85,9 @@ class ManualService {
   async getMyManuals(params?: { page?: number; per_page?: number; status?: string }): Promise<ApiResponse<PaginatedResponse<Manual>>> {
     try {
       const response = await api.get('/api/manuals/my', { params });
-      const apiResponse = response.data as ApiResponse<PaginatedResponse<Manual>>;
       
-      if (apiResponse.success && apiResponse.data) {
-        // データが既にフラット形式の場合はそのまま使用
-        const manuals = apiResponse.data.data;
-        const transformedData = {
-          data: manuals, // 変換不要
-          meta: apiResponse.data.meta
-        };
-        
-        return {
-          ...apiResponse,
-          data: transformedData
-        };
-      }
-      
-      return apiResponse;
+      // バックエンドは統一された形式で返す
+      return response.data as ApiResponse<PaginatedResponse<Manual>>;
     } catch (error: any) {
       const message = ErrorHandler.getErrorMessage(error) || '自分のマニュアル取得に失敗しました';
       throw new Error(message);
@@ -158,17 +98,9 @@ class ManualService {
   async getManual(id: string): Promise<ApiResponse<Manual>> {
     try {
       const response = await api.get(`/api/manuals/${id}`);
-      const apiResponse = response.data as ApiResponse<Manual>;
       
-      if (apiResponse.success && apiResponse.data) {
-        // データが既にフラット形式の場合はそのまま使用
-        return {
-          ...apiResponse,
-          data: apiResponse.data // 変換不要
-        };
-      }
-      
-      return apiResponse;
+      // バックエンドは統一された形式で返す
+      return response.data as ApiResponse<Manual>;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'マニュアル詳細の取得に失敗しました');
     }
@@ -177,42 +109,11 @@ class ManualService {
   // マニュアル作成
   async createManual(data: ManualFormData): Promise<ApiResponse<Manual>> {
     try {
-      console.log('=== manualService.createManual ===');
-      console.log('送信データ:', data);
-      
       const response = await api.post('/api/manuals', { manual: data });
-      console.log('APIレスポンス:', response.data);
       
-      const responseData = response.data as any;
-      
-      // レスポンスが直接マニュアルオブジェクトの場合（ActiveModel::Serializerが直接オブジェクトを返す場合）
-      if (responseData && responseData.id && !responseData.success) {
-        console.log('直接マニュアルオブジェクトを受信:', responseData);
-        const manualData = responseData as Manual;
-        const wrappedResponse: ApiResponse<Manual> = {
-          success: true,
-          message: 'マニュアルが正常に作成されました',
-          data: manualData
-        };
-        console.log('マニュアル作成成功:', manualData);
-        return wrappedResponse;
-      }
-      
-      // 正規のApiResponse形式の場合
-      const apiResponse = responseData as ApiResponse<Manual>;
-      console.log('success フラグ:', apiResponse.success);
-      console.log('data 存在:', !!apiResponse.data);
-      
-      if (apiResponse.success) {
-        console.log('マニュアル作成成功:', apiResponse.data);
-        return apiResponse;
-      } else {
-        console.log('APIレスポンス（エラー）:', apiResponse);
-        return apiResponse;
-      }
+      // バックエンドは統一された形式で返す
+      return response.data as ApiResponse<Manual>;
     } catch (error: any) {
-      console.error('=== manualService.createManual エラー ===');
-      console.error('エラーオブジェクト:', error);
       const message = ErrorHandler.getErrorMessage(error) || 'マニュアルの作成に失敗しました';
       throw new Error(message);
     }
@@ -222,18 +123,9 @@ class ManualService {
   async updateManual(id: string, data: ManualFormData): Promise<ApiResponse<Manual>> {
     try {
       const response = await api.patch(`/api/manuals/${id}`, { manual: data });
-      const apiResponse = response.data as ApiResponse<Manual>;
       
-      if (apiResponse.success && apiResponse.data) {
-        const transformedData = transformManualData(apiResponse.data);
-        
-        return {
-          ...apiResponse,
-          data: transformedData
-        };
-      }
-      
-      return apiResponse;
+      // バックエンドは統一された形式で返す
+      return response.data as ApiResponse<Manual>;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'マニュアルの更新に失敗しました');
     }
@@ -255,18 +147,9 @@ class ManualService {
       const response = await api.patch(`/api/manuals/${id}`, { 
         manual: { status: 'published' } 
       });
-      const apiResponse = response.data as ApiResponse<Manual>;
       
-      if (apiResponse.success && apiResponse.data) {
-        const transformedData = transformManualData(apiResponse.data);
-        
-        return {
-          ...apiResponse,
-          data: transformedData
-        };
-      }
-      
-      return apiResponse;
+      // バックエンドは統一された形式で返す
+      return response.data as ApiResponse<Manual>;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'マニュアルの公開に失敗しました');
     }
@@ -277,18 +160,9 @@ class ManualService {
     try {
       const draftData = { ...data, status: 'draft' };
       const response = await api.patch(`/api/manuals/${id}`, { manual: draftData });
-      const apiResponse = response.data as ApiResponse<Manual>;
       
-      if (apiResponse.success && apiResponse.data) {
-        const transformedData = transformManualData(apiResponse.data);
-        
-        return {
-          ...apiResponse,
-          data: transformedData
-        };
-      }
-      
-      return apiResponse;
+      // バックエンドは統一された形式で返す
+      return response.data as ApiResponse<Manual>;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || '下書きの保存に失敗しました');
     }
@@ -300,18 +174,9 @@ class ManualService {
       const response = await api.patch(`/api/manuals/${id}`, { 
         manual: { status: 'draft' } 
       });
-      const apiResponse = response.data as ApiResponse<Manual>;
       
-      if (apiResponse.success && apiResponse.data) {
-        const transformedData = transformManualData(apiResponse.data);
-        
-        return {
-          ...apiResponse,
-          data: transformedData
-        };
-      }
-      
-      return apiResponse;
+      // バックエンドは統一された形式で返す
+      return response.data as ApiResponse<Manual>;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'マニュアルの非公開に失敗しました');
     }
