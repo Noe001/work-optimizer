@@ -118,24 +118,10 @@ const ManualView: React.FC = () => {
         response = await manualService.getManuals(loadParams);
       }
 
-      // レスポンス形式の自動判定と対応
-      let manualsData: Manual[] = [];
-      let metaData: any = null;
-      
+      // 統一されたレスポンス形式を処理
       if (response.success && response.data) {
-        // 新しい形式: {success: true, data: {data: [...], meta: {...}}}
-        if (response.data.data && Array.isArray(response.data.data)) {
-          manualsData = response.data.data;
-          metaData = response.data.meta;
-        }
-        // 旧形式または直接配列: {success: true, data: [...]}
-        else if (Array.isArray(response.data)) {
-          manualsData = response.data;
-          metaData = { total_pages: 1, current_page: 1, total_count: response.data.length };
-        }
-        
-        setManuals(manualsData);
-        setTotalPages(metaData?.total_pages || 1);
+        setManuals(response.data.data);
+        setTotalPages(response.data.meta.total_pages);
       } else {
         setManuals([]);
         setTotalPages(1);

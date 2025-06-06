@@ -1,6 +1,6 @@
 import { api } from './api';
 import { ApiResponse, Manual, PaginatedResponse } from '../types/api';
-import { ErrorHandler } from '../utils/errorHandler';
+import { getErrorMessage } from '../utils/errorHandler';
 
 // マニュアル一覧取得のパラメータ
 export interface ManualListParams {
@@ -49,22 +49,14 @@ class ManualService {
     try {
       const response = await api.get('/api/manuals', { params });
       
-      // レスポンス形式をチェック
+      // バックエンドは {data: [...], meta: {...}} 形式で返すため、標準形式に変換
       const responseData = response.data as any;
-      if (responseData.success !== undefined) {
-        // 期待される形式: {success: true, data: {...}}
-        return responseData as ApiResponse<PaginatedResponse<Manual>>;
-      } else if (responseData.data && responseData.meta) {
-        // 直接データ形式: {data: [...], meta: {...}}
-        return {
-          success: true,
-          data: responseData
-        } as ApiResponse<PaginatedResponse<Manual>>;
-      } else {
-        throw new Error('Unexpected response format');
-      }
+      return {
+        success: true,
+        data: responseData
+      } as ApiResponse<PaginatedResponse<Manual>>;
     } catch (error: any) {
-      const message = ErrorHandler.getErrorMessage(error) || 'マニュアル一覧の取得に失敗しました';
+      const message = getErrorMessage(error) || 'マニュアル一覧の取得に失敗しました';
       throw new Error(message);
     }
   }
@@ -77,7 +69,7 @@ class ManualService {
       // バックエンドは統一された形式で返す
       return response.data as ApiResponse<PaginatedResponse<Manual>>;
     } catch (error: any) {
-      const message = ErrorHandler.getErrorMessage(error) || 'マニュアル検索に失敗しました';
+      const message = getErrorMessage(error) || 'マニュアル検索に失敗しました';
       throw new Error(message);
     }
   }
@@ -88,7 +80,7 @@ class ManualService {
       const response = await api.get('/api/manuals/stats');
       return response.data as ApiResponse<{ total: number; published: number; drafts: number; my_manuals: number }>;
     } catch (error: any) {
-      const message = ErrorHandler.getErrorMessage(error) || 'マニュアル統計の取得に失敗しました';
+      const message = getErrorMessage(error) || 'マニュアル統計の取得に失敗しました';
       throw new Error(message);
     }
   }
@@ -98,10 +90,15 @@ class ManualService {
     try {
       const response = await api.get('/api/manuals/my', { params });
       
-      // バックエンドは統一された形式で返す
-      return response.data as ApiResponse<PaginatedResponse<Manual>>;
+      // バックエンドは {data: [...], meta: {...}} 形式で返すため、標準形式に変換
+      // （getManuals と同様に manuals_collection_response を使用）
+      const responseData = response.data as any;
+      return {
+        success: true,
+        data: responseData
+      } as ApiResponse<PaginatedResponse<Manual>>;
     } catch (error: any) {
-      const message = ErrorHandler.getErrorMessage(error) || '自分のマニュアル取得に失敗しました';
+      const message = getErrorMessage(error) || '自分のマニュアル取得に失敗しました';
       throw new Error(message);
     }
   }
@@ -126,7 +123,7 @@ class ManualService {
       // バックエンドは統一された形式で返す
       return response.data as ApiResponse<Manual>;
     } catch (error: any) {
-      const message = ErrorHandler.getErrorMessage(error) || 'マニュアルの作成に失敗しました';
+      const message = getErrorMessage(error) || 'マニュアルの作成に失敗しました';
       throw new Error(message);
     }
   }

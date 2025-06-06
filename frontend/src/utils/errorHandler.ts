@@ -73,12 +73,30 @@ export const ERROR_ACTIONS: Record<ApiErrorCode, UserAction> = {
 
 /**
  * APIエラーをユーザーフレンドリーなメッセージに変換
+ * 任意のエラー形式に対応（既存の型安全性を維持しつつ、柔軟性を向上）
  */
-export function getErrorMessage(error: ApiError): string {
-  if (error.code && isValidErrorCode(error.code)) {
+export function getErrorMessage(error: any): string {
+  // 既存のApiError形式の処理（型安全性を維持）
+  if (error?.code && isValidErrorCode(error.code)) {
     return ERROR_MESSAGES[error.code as ApiErrorCode];
   }
-  return error.message || 'エラーが発生しました。';
+  
+  // Axiosエラーレスポンスの処理
+  if (error?.response?.data?.message) {
+    return error.response.data.message;
+  }
+  
+  // 直接的なメッセージの処理
+  if (error?.message) {
+    return error.message;
+  }
+  
+  // 既存のApiError形式
+  if (typeof error === 'object' && error.message) {
+    return error.message;
+  }
+  
+  return 'エラーが発生しました。';
 }
 
 /**
@@ -332,33 +350,35 @@ export interface ApiErrorResponse {
 }
 
 export class ErrorHandler {
+  /**
+   * 統合エラーハンドリング
+   * 既存の関数と統合し、重複を排除
+   */
   static handle(error: any, context?: string): void {
     console.error(`=== エラー発生 ${context ? `(${context})` : ''} ===`);
     console.error('エラーオブジェクト:', error);
     
-    let message = 'エラーが発生しました';
+    // 統一されたgetErrorMessage関数を使用
+    const message = getErrorMessage(error);
     
-    if (error?.response?.data) {
-      const apiError = error.response.data as ApiError;
-      message = apiError.message || message;
-      
-      // 詳細エラーがある場合は追加表示
-      if (apiError.errors && apiError.errors.length > 0) {
-        console.error('詳細エラー:', apiError.errors);
-        message += '\n詳細: ' + apiError.errors.join(', ');
-      }
-      
-      console.error('APIエラーコード:', apiError.code);
+    // 詳細エラーがある場合は追加表示
+    if (error?.response?.data?.errors && error.response.data.errors.length > 0) {
+      console.error('詳細エラー:', error.response.data.errors);
+    }
+    
+    if (error?.response?.data?.code) {
+      console.error('APIエラーコード:', error.response.data.code);
+    }
+    
+    if (error?.response?.status) {
       console.error('HTTPステータス:', error.response.status);
-    } else if (error?.message) {
-      message = error.message;
     }
     
     toast.error(message);
   }
 
   static handleValidation(errors: string[]): void {
-    const message = 'バリデーションエラーが発生しました:\n' + errors.join('\n');
+    const message = formatValidationErrors(errors);
     toast.error(message);
   }
 
@@ -383,14 +403,11 @@ export class ErrorHandler {
     toast.error('サーバーエラーが発生しました。しばらく時間をおいて再試行してください。');
   }
 
+  /**
+   * @deprecated getErrorMessage関数を直接使用してください
+   */
   static getErrorMessage(error: any): string {
-    if (error?.response?.data?.message) {
-      return error.response.data.message;
-    }
-    if (error?.message) {
-      return error.message;
-    }
-    return 'エラーが発生しました';
+    return getErrorMessage(error);
   }
 
   static isNetworkError(error: any): boolean {

@@ -248,33 +248,34 @@ module Api
 
     # 検索結果用レスポンス生成ヘルパー（フィルターとソート情報を含む）
     def search_response(manuals, paginated, order_column, order_direction)
-      serialized_data = ActiveModel::Serializer::CollectionSerializer.new(
-        paginated, 
-        serializer: ManualSerializer,
-        current_user: current_user
-      ).as_json
+      # 手動でシリアライズ（manuals_collection_responseと同様）
+      serialized_data = paginated.map do |manual|
+        ManualSerializer.new(manual, current_user: current_user).as_json
+      end
       
       render json: {
         success: true,
-        data: serialized_data,
-        meta: {
-          total_count: manuals.count,
-          total_pages: paginated.total_pages,
-          current_page: paginated.current_page,
-          filters: {
-            department: params[:department],
-            category: params[:category],
-            title: params[:title],
-            content: params[:content],
-            author_id: params[:author_id],
-            created_after: params[:created_after],
-            created_before: params[:created_before],
-            updated_after: params[:updated_after],
-            updated_before: params[:updated_before]
-          },
-          sort: {
-            order_by: order_column,
-            order: order_direction
+        data: {
+          data: serialized_data,
+          meta: {
+            total_count: manuals.count,
+            total_pages: paginated.total_pages,
+            current_page: paginated.current_page,
+            filters: {
+              department: params[:department],
+              category: params[:category],
+              title: params[:title],
+              content: params[:content],
+              author_id: params[:author_id],
+              created_after: params[:created_after],
+              created_before: params[:created_before],
+              updated_after: params[:updated_after],
+              updated_before: params[:updated_before]
+            },
+            sort: {
+              order_by: order_column,
+              order: order_direction
+            }
           }
         }
       }
