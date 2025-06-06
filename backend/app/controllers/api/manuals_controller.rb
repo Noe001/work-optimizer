@@ -225,11 +225,10 @@ module Api
 
     # マニュアル一覧用レスポンス生成ヘルパー
     def manuals_collection_response(manuals, paginated, message: nil)
-      serialized_data = ActiveModel::Serializer::CollectionSerializer.new(
-        paginated, 
-        serializer: ManualSerializer,
-        current_user: current_user
-      ).as_json
+      # 手動でシリアライズ（ActiveModel::Serializer::CollectionSerializerの問題を回避）
+      serialized_data = paginated.map do |manual|
+        ManualSerializer.new(manual, current_user: current_user).as_json
+      end
       
       response_body = {
         success: true,
@@ -346,17 +345,6 @@ module Api
       )
     end
 
-    # 開発用のcurrent_userオーバーライド
-    # 注意: 開発環境でのテスト目的のみ。本番環境では親クラスの認証メソッドを使用
-    # TODO: 開発が完了したらこのメソッドを削除すること
-    def current_user
-      if Rails.env.development?
-        # 開発環境: デバッグ用に最初のユーザーを使用
-        @current_user ||= User.first
-      else
-        # 本番環境: ApplicationControllerの認証システムを使用
-        super
-      end
-    end
+
   end
 end 

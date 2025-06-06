@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { Manual } from '@/types/api';
 import manualService, { ManualListParams } from '@/services/manualService';
 import { useAuth } from '@/contexts/AuthContext';
+
 import { 
   DEPARTMENTS, 
   CATEGORIES, 
@@ -90,6 +91,7 @@ const ManualView: React.FC = () => {
   // マニュアル一覧の読み込み
   const loadManuals = async (params?: ManualListParams) => {
     setLoading(true);
+
     try {
       const pageToLoad = params?.page ?? currentPage;
       const loadParams: ManualListParams = {
@@ -116,14 +118,27 @@ const ManualView: React.FC = () => {
         response = await manualService.getManuals(loadParams);
       }
 
+      // レスポンス形式の自動判定と対応
+      let manualsData: Manual[] = [];
+      let metaData: any = null;
+      
       if (response.success && response.data) {
-        if (Array.isArray(response.data.data)) {
-          setManuals(response.data.data);
-          setTotalPages(response.data.meta.total_pages);
-        } else {
-          setManuals([]);
-          setTotalPages(1);
+        // 新しい形式: {success: true, data: {data: [...], meta: {...}}}
+        if (response.data.data && Array.isArray(response.data.data)) {
+          manualsData = response.data.data;
+          metaData = response.data.meta;
         }
+        // 旧形式または直接配列: {success: true, data: [...]}
+        else if (Array.isArray(response.data)) {
+          manualsData = response.data;
+          metaData = { total_pages: 1, current_page: 1, total_count: response.data.length };
+        }
+        
+        setManuals(manualsData);
+        setTotalPages(metaData?.total_pages || 1);
+      } else {
+        setManuals([]);
+        setTotalPages(1);
       }
     } catch (error: any) {
       toast.error(error.message);

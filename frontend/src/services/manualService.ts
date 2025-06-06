@@ -49,8 +49,20 @@ class ManualService {
     try {
       const response = await api.get('/api/manuals', { params });
       
-      // バックエンドは統一された {success: true, data: {...}} 形式で返す
-      return response.data as ApiResponse<PaginatedResponse<Manual>>;
+      // レスポンス形式をチェック
+      const responseData = response.data as any;
+      if (responseData.success !== undefined) {
+        // 期待される形式: {success: true, data: {...}}
+        return responseData as ApiResponse<PaginatedResponse<Manual>>;
+      } else if (responseData.data && responseData.meta) {
+        // 直接データ形式: {data: [...], meta: {...}}
+        return {
+          success: true,
+          data: responseData
+        } as ApiResponse<PaginatedResponse<Manual>>;
+      } else {
+        throw new Error('Unexpected response format');
+      }
     } catch (error: any) {
       const message = ErrorHandler.getErrorMessage(error) || 'マニュアル一覧の取得に失敗しました';
       throw new Error(message);

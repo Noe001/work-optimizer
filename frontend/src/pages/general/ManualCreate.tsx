@@ -50,9 +50,7 @@ const ManualCreateView: React.FC = () => {
 
   // マニュアル保存
   const handleSave = async (status: 'draft' | 'published') => {
-    console.log('=== マニュアル保存開始 ===');
-    console.log('フォームデータ:', formData);
-    console.log('ステータス:', status);
+
 
     if (!formData.title.trim()) {
       toast.error('タイトルを入力してください');
@@ -71,18 +69,11 @@ const ManualCreateView: React.FC = () => {
 
     try {
       const dataToSave = { ...formData, status };
-      console.log('送信データ:', dataToSave);
-      
       const result = await manualService.createManual(dataToSave);
-      console.log('API結果:', result);
       
       toast.success(status === 'draft' ? '下書きを保存しました' : 'マニュアルを作成しました');
       navigate('/manual');
     } catch (error: any) {
-      console.error('=== マニュアル保存エラー ===');
-      console.error('エラー詳細:', error);
-      console.error('エラーメッセージ:', error.message);
-      console.error('エラースタック:', error.stack);
       toast.error(error.message || 'マニュアルの作成に失敗しました');
     }
   };
