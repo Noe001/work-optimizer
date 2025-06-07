@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Tags, Users, Save, Send } from 'lucide-react';
+import { ArrowLeft, BookOpen, Tags, Users, Save, Send, Edit, Eye } from 'lucide-react';
 import Header from '@/components/Header';
 import { Button } from "@/components/ui/button";
 import {
@@ -19,9 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import manualService, { ManualFormData } from '@/services/manualService';
 import { DEPARTMENTS, CATEGORIES, ACCESS_LEVELS, EDIT_PERMISSIONS } from '@/constants/manual';
+import { renderMarkdown } from '@/utils/markdown';
 
 const ManualCreateView: React.FC = () => {
   const navigate = useNavigate();
@@ -122,15 +124,50 @@ const ManualCreateView: React.FC = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="content">内容</Label>
-                  <Textarea
-                    id="content"
-                    name="content"
-                    placeholder="マニュアルの内容を入力してください"
-                    value={formData.content}
-                    onChange={handleInputChange}
-                    className="min-h-[400px]"
-                  />
+                  <Label htmlFor="content">内容（Markdown対応）</Label>
+                  <Tabs defaultValue="edit" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="edit" className="flex items-center gap-2">
+                        <Edit className="h-4 w-4" />
+                        編集
+                      </TabsTrigger>
+                      <TabsTrigger value="preview" className="flex items-center gap-2">
+                        <Eye className="h-4 w-4" />
+                        プレビュー
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="edit" className="mt-4">
+                      <Textarea
+                        id="content"
+                        name="content"
+                        placeholder="マニュアルの内容をMarkdown形式で入力してください&#10;&#10;例:&#10;# 見出し1&#10;## 見出し2&#10;**太字** *斜体*&#10;- リスト項目1&#10;- リスト項目2&#10;&#10;```&#10;コードブロック&#10;```"
+                        value={formData.content}
+                        onChange={handleInputChange}
+                        className="min-h-[400px] font-mono"
+                      />
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        MarkdownでHTMLを記述できます。見出し、リスト、コードブロック、リンクなどがサポートされています。
+                      </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="preview" className="mt-4">
+                      <div className="border rounded-md p-4 min-h-[400px] bg-white">
+                        {formData.content ? (
+                          <div 
+                            className="prose max-w-none prose-sm"
+                            dangerouslySetInnerHTML={{ 
+                              __html: renderMarkdown(formData.content) 
+                            }}
+                          />
+                        ) : (
+                          <div className="text-muted-foreground italic">
+                            内容を入力するとここにプレビューが表示されます
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+                  </Tabs>
                 </div>
 
                 <div>

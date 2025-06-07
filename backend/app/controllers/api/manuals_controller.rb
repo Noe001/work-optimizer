@@ -214,6 +214,7 @@ module Api
     # マニュアル用レスポンス生成ヘルパー
     def manual_response(manual, message: nil, status: :ok)
       serialized_data = ManualSerializer.new(manual, current_user: current_user).as_json
+      
       response_body = {
         success: true,
         data: serialized_data

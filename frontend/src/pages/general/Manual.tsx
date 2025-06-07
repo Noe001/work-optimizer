@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { Manual } from '@/types/api';
 import manualService, { ManualListParams } from '@/services/manualService';
 import { useAuth } from '@/contexts/AuthContext';
+import { renderMarkdown, getMarkdownPreview } from '@/utils/markdown';
 
 import { 
   DEPARTMENTS, 
@@ -319,7 +320,7 @@ const ManualView: React.FC = () => {
                       </div>
 
                       <p className="text-sm text-muted-foreground line-clamp-2">
-                        {manual.content?.substring(0, 150)}...
+                        {getMarkdownPreview(manual.content || '', 150)}
                       </p>
 
                       {manual.tags && (
@@ -407,22 +408,57 @@ const ManualView: React.FC = () => {
 
         {/* マニュアル詳細表示ダイアログ */}
         <Dialog open={!!selectedManual} onOpenChange={() => setSelectedManual(null)}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogContent 
+            className="max-w-4xl max-h-[80vh] overflow-y-auto"
+            aria-describedby={selectedManual ? `manual-description-${selectedManual.id}` : undefined}
+          >
             <DialogHeader>
               <DialogTitle>{selectedManual?.title}</DialogTitle>
-              <DialogDescription>
-                {selectedManual && (
-                  <div className="flex items-center space-x-4 text-sm">
-                    <span>{getDepartmentLabel(selectedManual.department)}</span>
-                    <span>{getCategoryLabel(selectedManual.category)}</span>
+            </DialogHeader>
+            {selectedManual && (
+              <div 
+                id={`manual-description-${selectedManual.id}`}
+                className="mb-4"
+              >
+                <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                  <span className="flex items-center">
+                    <Users className="h-4 w-4 inline mr-1" />
+                    {getDepartmentLabel(selectedManual.department)}
+                  </span>
+                  <span className="flex items-center">
+                    <Tags className="h-4 w-4 inline mr-1" />
+                    {getCategoryLabel(selectedManual.category)}
+                  </span>
+                  {selectedManual.author && (
+                    <span>作成者: {selectedManual.author.name}</span>
+                  )}
+                  <span>
+                    ステータス: {selectedManual.status === 'published' ? '公開中' : '下書き'}
+                  </span>
+                </div>
+                {selectedManual.tags && (
+                  <div className="mt-2">
+                    {selectedManual.tags.split(',').map((tag, index) => (
+                      <Badge key={index} variant="outline" className="mr-1">
+                        {tag.trim()}
+                      </Badge>
+                    ))}
                   </div>
                 )}
-              </DialogDescription>
-            </DialogHeader>
+              </div>
+            )}
             <div className="mt-4">
-              <div className="prose max-w-none">
-                {selectedManual?.content && (
-                  <div className="whitespace-pre-wrap">{selectedManual.content}</div>
+              <div className="prose max-w-none prose-lg">
+                {selectedManual?.content ? (
+                  <div 
+                    dangerouslySetInnerHTML={{ 
+                      __html: renderMarkdown(selectedManual.content) 
+                    }}
+                  />
+                ) : (
+                  <div className="text-muted-foreground italic">
+                    内容がありません
+                  </div>
                 )}
               </div>
             </div>
@@ -431,10 +467,10 @@ const ManualView: React.FC = () => {
 
         {/* 削除確認ダイアログ */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent>
+          <DialogContent aria-describedby="delete-dialog-description">
             <DialogHeader>
               <DialogTitle>マニュアルの削除</DialogTitle>
-              <DialogDescription>
+              <DialogDescription id="delete-dialog-description">
                 「{manualToDelete?.title}」を削除しますか？この操作は取り消せません。
               </DialogDescription>
             </DialogHeader>

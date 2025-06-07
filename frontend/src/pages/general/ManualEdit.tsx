@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Tags, Users, Save, Send } from 'lucide-react';
+import { ArrowLeft, BookOpen, Tags, Users, Save, Send, Edit, Eye } from 'lucide-react';
 import Header from '@/components/Header';
 import { Button } from "@/components/ui/button";
 import {
@@ -19,39 +19,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ManualDepartmentOption, ManualCategoryOption, ManualAccessLevelOption, ManualEditPermissionOption } from '@/types/api';
 import manualService, { ManualFormData } from '@/services/manualService';
-
-// 選択肢の定義
-const departments: ManualDepartmentOption[] = [
-  { value: 'sales', label: '営業部' },
-  { value: 'dev', label: '開発部' },
-  { value: 'hr', label: '人事部' },
-];
-
-const categories: ManualCategoryOption[] = [
-  { value: 'procedure', label: '業務手順' },
-  { value: 'rules', label: '規則・規定' },
-  { value: 'system', label: 'システム操作' },
-];
-
-const accessLevels: ManualAccessLevelOption[] = [
-  { value: 'all', label: '全社員' },
-  { value: 'department', label: '部門内' },
-  { value: 'specific', label: '指定メンバーのみ' },
-];
-
-const editPermissions: ManualEditPermissionOption[] = [
-  { value: 'author', label: '作成者のみ' },
-  { value: 'department', label: '部門管理者' },
-  { value: 'specific', label: '指定メンバー' },
-];
+import { DEPARTMENTS, CATEGORIES, ACCESS_LEVELS, EDIT_PERMISSIONS } from '@/constants/manual';
+import { renderMarkdown } from '@/utils/markdown';
 
 const ManualEditView: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // フォームデータ
   const [formData, setFormData] = useState<ManualFormData>({
@@ -69,6 +47,9 @@ const ManualEditView: React.FC = () => {
   useEffect(() => {
     if (id) {
       loadManualForEdit(id);
+    } else {
+      setError('マニュアルIDが指定されていません');
+      setLoading(false);
     }
   }, [id]);
 
@@ -76,23 +57,44 @@ const ManualEditView: React.FC = () => {
   const loadManualForEdit = async (manualId: string) => {
     try {
       setLoading(true);
+      setError(null);
+      
       const response = await manualService.getManual(manualId);
-      if (response.success && response.data) {
-        const manual = response.data;
-        setFormData({
-          title: manual.title,
-          content: manual.content,
-          department: manual.department,
-          category: manual.category,
-          access_level: manual.access_level,
-          edit_permission: manual.edit_permission,
-          status: manual.status,
-          tags: manual.tags || '',
-        });
+      
+      if (!response) {
+        throw new Error('APIからレスポンスが返されませんでした');
       }
+      
+      if (!response.success) {
+        throw new Error(response.message || 'マニュアルの取得に失敗しました');
+      }
+      
+      if (!response.data) {
+        throw new Error('マニュアルデータが見つかりません');
+      }
+      
+      const manual = response.data;
+      
+      const newFormData = {
+        title: manual.title || '',
+        content: manual.content || '',
+        department: manual.department || '',
+        category: manual.category || '',
+        access_level: manual.access_level || 'all',
+        edit_permission: manual.edit_permission || 'author',
+        status: manual.status || 'draft',
+        tags: manual.tags || '',
+      };
+      
+      setFormData(newFormData);
+      
     } catch (error: any) {
-      toast.error(error.message);
-      navigate('/manual');
+      const errorMessage = error.message || 'マニュアルの読み込みに失敗しました';
+      setError(errorMessage);
+      toast.error(errorMessage);
+      
+      // エラーが発生した場合は一覧ページに戻らず、エラー状態を表示
+      // navigate('/manual');
     } finally {
       setLoading(false);
     }
@@ -132,20 +134,60 @@ const ManualEditView: React.FC = () => {
 
     try {
       const dataToSave = { ...formData, status };
+      
       await manualService.updateManual(id, dataToSave);
       toast.success(status === 'draft' ? '下書きを保存しました' : 'マニュアルを更新しました');
       navigate('/manual');
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message || 'マニュアルの保存に失敗しました');
     }
   };
+
+  // エラー状態の表示
+  if (error) {
+    return (
+      <>
+        <Header />
+        <div className="p-6 bg-background min-h-screen bg-gray-50">
+          <div className="mb-6">
+            <Button 
+              variant="ghost" 
+              className="mb-4 p-0 hover:bg-transparent"
+              onClick={() => navigate('/manual')}
+            >
+              <ArrowLeft className="h-5 w-5 mr-2" />
+              マニュアル一覧に戻る
+            </Button>
+          </div>
+          
+          <Card>
+            <CardContent className="text-center py-8">
+              <div className="text-red-500 mb-4">エラーが発生しました</div>
+              <p className="text-muted-foreground mb-4">{error}</p>
+              <div className="space-x-2">
+                <Button onClick={() => id && loadManualForEdit(id)} variant="outline">
+                  再読み込み
+                </Button>
+                <Button onClick={() => navigate('/manual')}>
+                  マニュアル一覧に戻る
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </>
+    );
+  }
 
   if (loading) {
     return (
       <>
         <Header />
         <div className="p-6 bg-background min-h-screen bg-gray-50">
-          <div className="text-center py-8">読み込み中...</div>
+          <div className="text-center py-8">
+            <div className="text-lg font-medium mb-2">読み込み中...</div>
+            <div className="text-sm text-muted-foreground">マニュアルデータを取得しています</div>
+          </div>
         </div>
       </>
     );
@@ -168,6 +210,8 @@ const ManualEditView: React.FC = () => {
           <h1 className="text-2xl font-bold text-foreground">マニュアル編集</h1>
           <p className="text-muted-foreground">マニュアルの内容を編集します</p>
         </div>
+
+
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* メインエディター */}
@@ -193,15 +237,50 @@ const ManualEditView: React.FC = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="content">内容</Label>
-                  <Textarea
-                    id="content"
-                    name="content"
-                    placeholder="マニュアルの内容を入力してください"
-                    value={formData.content}
-                    onChange={handleInputChange}
-                    className="min-h-[400px]"
-                  />
+                  <Label htmlFor="content">内容（Markdown対応）</Label>
+                  <Tabs defaultValue="edit" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="edit" className="flex items-center gap-2">
+                        <Edit className="h-4 w-4" />
+                        編集
+                      </TabsTrigger>
+                      <TabsTrigger value="preview" className="flex items-center gap-2">
+                        <Eye className="h-4 w-4" />
+                        プレビュー
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="edit" className="mt-4">
+                      <Textarea
+                        id="content"
+                        name="content"
+                        placeholder="マニュアルの内容をMarkdown形式で入力してください&#10;&#10;例:&#10;# 見出し1&#10;## 見出し2&#10;**太字** *斜体*&#10;- リスト項目1&#10;- リスト項目2&#10;&#10;```&#10;コードブロック&#10;```"
+                        value={formData.content}
+                        onChange={handleInputChange}
+                        className="min-h-[400px] font-mono"
+                      />
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        MarkdownでHTMLを記述できます。見出し、リスト、コードブロック、リンクなどがサポートされています。
+                      </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="preview" className="mt-4">
+                      <div className="border rounded-md p-4 min-h-[400px] bg-white">
+                        {formData.content ? (
+                          <div 
+                            className="prose max-w-none prose-sm"
+                            dangerouslySetInnerHTML={{ 
+                              __html: renderMarkdown(formData.content) 
+                            }}
+                          />
+                        ) : (
+                          <div className="text-muted-foreground italic">
+                            内容を入力するとここにプレビューが表示されます
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+                  </Tabs>
                 </div>
 
                 <div>
@@ -233,13 +312,12 @@ const ManualEditView: React.FC = () => {
                   <Select
                     value={formData.department}
                     onValueChange={handleSelectChange('department')}
-                    required
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="部門を選択" />
                     </SelectTrigger>
                     <SelectContent>
-                      {departments.map(dept => (
+                      {DEPARTMENTS.map(dept => (
                         <SelectItem key={dept.value} value={dept.value}>
                           {dept.label}
                         </SelectItem>
@@ -253,13 +331,12 @@ const ManualEditView: React.FC = () => {
                   <Select
                     value={formData.category}
                     onValueChange={handleSelectChange('category')}
-                    required
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="カテゴリーを選択" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map(cat => (
+                      {CATEGORIES.map(cat => (
                         <SelectItem key={cat.value} value={cat.value}>
                           {cat.label}
                         </SelectItem>
@@ -288,7 +365,7 @@ const ManualEditView: React.FC = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {accessLevels.map(level => (
+                      {ACCESS_LEVELS.map(level => (
                         <SelectItem key={level.value} value={level.value}>
                           {level.label}
                         </SelectItem>
@@ -307,7 +384,7 @@ const ManualEditView: React.FC = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {editPermissions.map(perm => (
+                      {EDIT_PERMISSIONS.map(perm => (
                         <SelectItem key={perm.value} value={perm.value}>
                           {perm.label}
                         </SelectItem>

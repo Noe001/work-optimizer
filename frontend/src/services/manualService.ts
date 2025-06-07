@@ -66,8 +66,8 @@ class ManualService {
     try {
       const response = await api.get('/api/manuals/search', { params });
       
-      // バックエンドは統一された形式で返す
-      return response.data as ApiResponse<PaginatedResponse<Manual>>;
+      // api.get() は既に ApiResponse<PaginatedResponse<Manual>> 形式を返す
+      return response as ApiResponse<PaginatedResponse<Manual>>;
     } catch (error: any) {
       const message = getErrorMessage(error) || 'マニュアル検索に失敗しました';
       throw new Error(message);
@@ -78,7 +78,7 @@ class ManualService {
   async getStats(): Promise<ApiResponse<{ total: number; published: number; drafts: number; my_manuals: number }>> {
     try {
       const response = await api.get('/api/manuals/stats');
-      return response.data as ApiResponse<{ total: number; published: number; drafts: number; my_manuals: number }>;
+      return response as ApiResponse<{ total: number; published: number; drafts: number; my_manuals: number }>;
     } catch (error: any) {
       const message = getErrorMessage(error) || 'マニュアル統計の取得に失敗しました';
       throw new Error(message);
@@ -106,12 +106,29 @@ class ManualService {
   // マニュアル詳細取得
   async getManual(id: string): Promise<ApiResponse<Manual>> {
     try {
+      if (!id) {
+        throw new Error('マニュアルIDが指定されていません');
+      }
+      
       const response = await api.get(`/api/manuals/${id}`);
       
-      // バックエンドは統一された形式で返す
-      return response.data as ApiResponse<Manual>;
+      if (!response) {
+        throw new Error('APIからレスポンスが返されませんでした');
+      }
+      
+      if (!response.success) {
+        throw new Error(response.message || 'マニュアルの取得に失敗しました');
+      }
+      
+      if (!response.data) {
+        throw new Error('マニュアルデータが見つかりません');
+      }
+      
+      // api.get() は既に ApiResponse<Manual> 形式を返すので、型キャストして返す
+      return response as ApiResponse<Manual>;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'マニュアル詳細の取得に失敗しました');
+      const errorMessage = error.response?.data?.message || error.message || 'マニュアル詳細の取得に失敗しました';
+      throw new Error(errorMessage);
     }
   }
 
@@ -120,8 +137,8 @@ class ManualService {
     try {
       const response = await api.post('/api/manuals', { manual: data });
       
-      // バックエンドは統一された形式で返す
-      return response.data as ApiResponse<Manual>;
+      // api.post() は既に ApiResponse<Manual> 形式を返す
+      return response as ApiResponse<Manual>;
     } catch (error: any) {
       const message = getErrorMessage(error) || 'マニュアルの作成に失敗しました';
       throw new Error(message);
@@ -133,8 +150,8 @@ class ManualService {
     try {
       const response = await api.patch(`/api/manuals/${id}`, { manual: data });
       
-      // バックエンドは統一された形式で返す
-      return response.data as ApiResponse<Manual>;
+      // api.patch() は既に ApiResponse<Manual> 形式を返す
+      return response as ApiResponse<Manual>;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'マニュアルの更新に失敗しました');
     }
@@ -144,7 +161,7 @@ class ManualService {
   async deleteManual(id: string): Promise<ApiResponse<void>> {
     try {
       const response = await api.delete(`/api/manuals/${id}`);
-      return response.data as ApiResponse<void>;
+      return response as ApiResponse<void>;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'マニュアルの削除に失敗しました');
     }
@@ -157,8 +174,8 @@ class ManualService {
         manual: { status: 'published' } 
       });
       
-      // バックエンドは統一された形式で返す
-      return response.data as ApiResponse<Manual>;
+      // api.patch() は既に ApiResponse<Manual> 形式を返す
+      return response as ApiResponse<Manual>;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'マニュアルの公開に失敗しました');
     }
@@ -170,8 +187,8 @@ class ManualService {
       const draftData = { ...data, status: 'draft' };
       const response = await api.patch(`/api/manuals/${id}`, { manual: draftData });
       
-      // バックエンドは統一された形式で返す
-      return response.data as ApiResponse<Manual>;
+      // api.patch() は既に ApiResponse<Manual> 形式を返す
+      return response as ApiResponse<Manual>;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || '下書きの保存に失敗しました');
     }
@@ -184,8 +201,8 @@ class ManualService {
         manual: { status: 'draft' } 
       });
       
-      // バックエンドは統一された形式で返す
-      return response.data as ApiResponse<Manual>;
+      // api.patch() は既に ApiResponse<Manual> 形式を返す
+      return response as ApiResponse<Manual>;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'マニュアルの非公開に失敗しました');
     }

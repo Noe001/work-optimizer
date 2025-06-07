@@ -40,6 +40,7 @@ import { getTaskProgress } from '@/services/taskService'
 import { useAuth } from '@/contexts/AuthContext'
 import { manualService } from '@/services'
 import type { Manual } from '@/types/api'
+import { getMarkdownPreview } from '@/utils/markdown'
 
 // Meeting型定義
 interface LocalMeeting {
@@ -679,7 +680,7 @@ const ManualsTab: React.FC = () => {
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                          {manual.content?.substring(0, 100)}...
+                          {getMarkdownPreview(manual.content || '', 100)}
                         </p>
                       </div>
                       <div className="flex space-x-2 ml-4">

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2025_06_06_140942) do
+ActiveRecord::Schema[7.2].define(version: 2025_05_28_053438) do
   create_table "active_storage_attachments", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "name", null: false
     t.string "record_type", null: false
@@ -68,8 +68,6 @@ ActiveRecord::Schema[7.2].define(version: 2025_06_06_140942) do
   create_table "manuals", id: :string, charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "title", null: false
     t.text "content"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
     t.string "user_id", null: false
     t.string "department", null: false
     t.string "category", null: false
@@ -77,6 +75,8 @@ ActiveRecord::Schema[7.2].define(version: 2025_06_06_140942) do
     t.string "edit_permission", default: "author", null: false
     t.string "status", default: "draft", null: false
     t.text "tags"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["category"], name: "index_manuals_on_category"
     t.index ["department"], name: "index_manuals_on_department"
     t.index ["status"], name: "index_manuals_on_status"
