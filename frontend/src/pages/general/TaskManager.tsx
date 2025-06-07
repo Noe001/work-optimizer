@@ -4,11 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, Search, Plus, Filter, List, CalendarDays, ChevronUp, ChevronDown, Edit, Trash2, Loader2, X } from "lucide-react";
+import { Calendar, Search, Plus, Filter, List, CalendarDays, ChevronUp, ChevronDown, Edit, Trash2, Loader2, X, User, AlertCircle, FileText } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link } from "react-router-dom";
@@ -18,7 +18,7 @@ import { usePaginatedApi } from "@/hooks";
 import { ApiError } from "@/components/ui/api-error";
 import { LoadingIndicator } from "@/components/ui/loading-indicator";
 import { useToast } from "@/hooks";
-import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
+import { renderMarkdown, getMarkdownPreview } from '@/utils/markdown';
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -92,7 +92,8 @@ const TaskManagerView: React.FC = () => {
   const { toast } = useToast();
 
   // 削除確認用の状態を追加
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<UITask | null>(null);
 
   // 拡張フィルター機能
   const [filterTags, setFilterTags] = useState<string[]>([]);
@@ -357,33 +358,23 @@ const TaskManagerView: React.FC = () => {
   };
 
   // 削除処理関数を TaskManagerView に移動
-  const handleDeleteTask = async () => {
-    if (!selectedTaskId) return;
-
-    if (!deleteConfirm) {
-      setDeleteConfirm(true);
-      return;
-    }
-
+  const handleDeleteTask = async (task: UITask) => {
     try {
-      setTaskOperationLoading(true); // 削除操作のローディング開始
-      const taskIdString = selectedTaskId.toString();
-      const response = await taskService.deleteTask(taskIdString);
+      setTaskOperationLoading(true);
+      const response = await taskService.deleteTask(task.id.toString());
       if (response.success) {
         showSuccessToast("タスクが削除されました");
+        setIsDeleteDialogOpen(false);
         closeTaskDetails(); // ダイアログを閉じる
-        setDeleteConfirm(false); // 確認状態をリセット
         fetchData(true); // タスク一覧を再取得
       } else {
         showErrorToast(response.message || "タスクの削除に失敗しました");
-        setDeleteConfirm(false); // 確認状態をリセット
       }
     } catch (error) {
       console.error("タスク削除エラー:", error);
       showErrorToast("タスクの削除中にエラーが発生しました");
-      setDeleteConfirm(false); // 確認状態をリセット
     } finally {
-      setTaskOperationLoading(false); // 削除操作のローディング終了
+      setTaskOperationLoading(false);
     }
   };
 
@@ -483,10 +474,7 @@ const TaskManagerView: React.FC = () => {
                     <CardContent className="p-3 pt-2">
                       {task.description && (
                         <CardDescription className="line-clamp-2 mb-2">
-                          <MarkdownRenderer 
-                            content={task.description} 
-                            className="text-sm !line-clamp-2 !p-0 !m-0 [&_h1]:!text-sm [&_h2]:!text-sm [&_h3]:!text-sm [&_h4]:!text-sm [&_h5]:!text-sm [&_h6]:!text-sm [&_h1]:!font-normal [&_h2]:!font-normal [&_h3]:!font-normal [&_h4]:!font-normal [&_h5]:!font-normal [&_h6]:!font-normal [&_h1]:!my-0 [&_h2]:!my-0 [&_h3]:!my-0 [&_h4]:!my-0 [&_h5]:!my-0 [&_h6]:!my-0 [&_h1]:!mt-0 [&_h1]:!mb-0 [&_p]:!my-0 [&_ul]:!my-0 [&_ol]:!my-0 [&_blockquote]:!my-0" 
-                          />
+                          {getMarkdownPreview(task.description, 100)}
                         </CardDescription>
                       )}
                       <div className="flex flex-wrap gap-1 mb-2">
@@ -587,7 +575,12 @@ const TaskManagerView: React.FC = () => {
                   <div className="mb-4">
                     <h4 className="text-sm font-medium mb-2">説明</h4>
                     <div className="border-t-2 border-b-2 border-border py-3 my-1">
-                      <MarkdownRenderer content={task.description} preserveLineBreaks={true} />
+                                             <div 
+                         className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground [&_h1]:text-xl [&_h2]:text-lg [&_p]:my-0.5 [&_h1]:mb-1 [&_h2]:mb-1 [&_h3]:mb-0.5 [&_h4]:mb-0.5 [&_h5]:mb-0.5 [&_h6]:mb-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_blockquote]:my-1 [&_h1]:border-b [&_h1]:border-gray-300 [&_h1]:pb-1"
+                         dangerouslySetInnerHTML={{ 
+                           __html: renderMarkdown(task.description) 
+                         }}
+                       />
                     </div>
                   </div>
                 )}
@@ -1411,50 +1404,118 @@ const TaskManagerView: React.FC = () => {
 
         {/* タスク詳細ダイアログ */}
         <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
-          <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
-            <DialogHeader className="flex flex-row justify-between items-start pr-6 pb-4">
-              {/* 左側のタイトルと説明 */}
-              <div>
-                <DialogTitle className="text-[1.8rem]">{tasks.find((t) => t.id === selectedTaskId)?.title || 'タスク詳細'}</DialogTitle>
-                <DialogDescription>
-                  {tasks.find((t) => t.id === selectedTaskId)?.createdAt && (
-                     `作成日： ${new Date(tasks.find((t) => t.id === selectedTaskId)!.createdAt).toLocaleDateString('ja-JP', {year: 'numeric', month: '2-digit', day: '2-digit'})}`
-                  )}
-                </DialogDescription>
-              </div>
-              {/* 右側のボタン */}
-              {selectedTaskId && tasks.find((t) => t.id === selectedTaskId) && (
-                <div className="flex space-x-2 flex-shrink-0 mt-1">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="h-8 px-3 text-xs"
-                    asChild
-                  >
-                    <Link to={`/tasks/edit/${selectedTaskId}`}>
-                      <Edit className="h-4 w-4 mr-1" /> 編集
-                    </Link>
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="h-8 px-3 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={handleDeleteTask}
-                    disabled={taskOperationLoading}
-                  >
-                    {taskOperationLoading && deleteConfirm ? (
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4 mr-1" />
-                    )}
-                    {deleteConfirm ? "確定" : "削除"}
-                  </Button>
-                </div>
-              )}
-            </DialogHeader>
-            {selectedTaskId && (
+          <DialogContent 
+            className="max-w-5xl max-h-[90vh] p-0 flex flex-col"
+            aria-describedby={selectedTaskId ? `task-description-${selectedTaskId}` : undefined}
+          >
+            {selectedTaskId && tasks.find((t) => t.id === selectedTaskId) && (
               <>
-                {tasks.find((t) => t.id === selectedTaskId) ? (
+                {/* ヘッダー部分 */}
+                <div className="bg-muted/30 p-6 border-b flex-shrink-0">
+                  <DialogHeader className="space-y-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <DialogTitle className="text-3xl font-bold text-foreground leading-tight">
+                          {tasks.find((t) => t.id === selectedTaskId)?.title || 'タスク詳細'}
+                        </DialogTitle>
+                        <Badge 
+                          className={`${statusColors[tasks.find((t) => t.id === selectedTaskId)?.status || "未着手"]} text-xs font-medium px-3 py-1 flex-shrink-0`}
+                        >
+                          {tasks.find((t) => t.id === selectedTaskId)?.status}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center space-x-2 mr-12">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          className="flex items-center gap-2"
+                        >
+                          <Link to={`/tasks/edit/${selectedTaskId}`}>
+                            <Edit className="h-4 w-4" />
+                            編集
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const currentTask = tasks.find((t) => t.id === selectedTaskId);
+                            if (currentTask) {
+                              setTaskToDelete(currentTask);
+                              setIsDeleteDialogOpen(true);
+                            }
+                          }}
+                          className="flex items-center gap-2 text-destructive hover:text-destructive"
+                          disabled={taskOperationLoading}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          削除
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* メタ情報グリッド */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                      <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
+                        <div className="bg-primary/5 p-2 rounded-full">
+                          <User className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground font-medium">担当者</div>
+                          <div className="text-sm font-semibold text-foreground">
+                            {tasks.find((t) => t.id === selectedTaskId)?.assignee?.name || "未設定"}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
+                        <div className="bg-secondary/60 p-2 rounded-full">
+                          <AlertCircle className="h-4 w-4 text-secondary-foreground" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground font-medium">優先度</div>
+                          <div className="text-sm font-semibold text-foreground">
+                            {tasks.find((t) => t.id === selectedTaskId)?.priority}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
+                        <div className="bg-accent/60 p-2 rounded-full">
+                          <Calendar className="h-4 w-4 text-accent-foreground" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground font-medium">期限日</div>
+                          <div className="text-sm font-semibold text-foreground">
+                            {tasks.find((t) => t.id === selectedTaskId)?.dueDate || "未設定"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* タグ表示 */}
+                    {tasks.find((t) => t.id === selectedTaskId)?.tags && tasks.find((t) => t.id === selectedTaskId)!.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-4">
+                        {tasks.find((t) => t.id === selectedTaskId)!.tags.map((tag, index) => (
+                          <Badge 
+                            key={index} 
+                            variant="outline" 
+                            className="bg-background/80 text-foreground border"
+                          >
+                            {tag.trim()}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </DialogHeader>
+                </div>
+
+                {/* コンテンツ部分 */}
+                <div 
+                  id={`task-description-${selectedTaskId}`}
+                  className="flex-1 overflow-y-auto p-6 bg-background min-h-0"
+                >
                   <TaskDetails 
                     task={tasks.find((t) => t.id === selectedTaskId)!} 
                     onClose={closeTaskDetails}
@@ -1462,14 +1523,46 @@ const TaskManagerView: React.FC = () => {
                     updatingSubtasks={updatingSubtasks}
                     handleToggleSubtask={handleToggleSubtask}
                   />
-                ) : (
-                  <div className="p-4 text-center">
-                    <p className="mb-4 text-muted-foreground">タスクが見つかりませんでした</p>
-                    <Button variant="outline" onClick={closeTaskDetails}>閉じる</Button>
-                  </div>
-                )}
+                </div>
               </>
             )}
+            {selectedTaskId && !tasks.find((t) => t.id === selectedTaskId) && (
+              <div className="p-4 text-center">
+                <p className="mb-4 text-muted-foreground">タスクが見つかりませんでした</p>
+                <Button variant="outline" onClick={closeTaskDetails}>閉じる</Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* 削除確認ダイアログ */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent aria-describedby="delete-dialog-description">
+            <DialogHeader>
+              <DialogTitle>タスクの削除</DialogTitle>
+              <DialogDescription id="delete-dialog-description">
+                「{taskToDelete?.title}」を削除しますか？この操作は取り消せません。
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                キャンセル
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => taskToDelete && handleDeleteTask(taskToDelete)}
+                disabled={taskOperationLoading}
+              >
+                {taskOperationLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    削除中...
+                  </>
+                ) : (
+                  '削除'
+                )}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -1500,117 +1593,60 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
   };
 
   return (
-    <div className="p-4 max-h-[calc(90vh-2rem)] overflow-y-auto">
-      <div className="mb-6">
-        <h3 className="text-lg font-medium mb-2">説明</h3>
-        <div className="border-t-2 border-b-2 border-border py-4 my-2">
-          {task.description ? (
-            <MarkdownRenderer content={task.description} preserveLineBreaks={true} />
-          ) : (
-            <div className="text-base text-muted-foreground italic">説明なし</div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <h3 className="text-lg font-medium mb-2">サブタスク</h3>
-          {task.subtasks && task.subtasks.length > 0 ? (
-            <div className="space-y-2">
-              {task.subtasks.map((subtask) => (
-                <div key={subtask.id} className="flex items-center p-2 hover:bg-muted/40 rounded-md">
-                  <Checkbox 
-                    checked={subtask.completed} 
-                    className="mr-3 h-5 w-5" 
-                    disabled={updatingSubtasks[subtask.id]}
-                    onCheckedChange={() => toggleSubtask(subtask.id)}
-                  />
-                  <span className={`text-base ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
-                    {subtask.title}
-                    {updatingSubtasks[subtask.id] && (
-                      <Loader2 className="h-3 w-3 inline ml-2 animate-spin" />
-                    )}
-                  </span>
-                </div>
-              ))}
-              <div className="mt-4">
-                <div className="flex justify-between items-center text-sm mb-2">
-                  <span>{calculateTaskProgress(task)}% 完了</span>
-                  <span>
-                    {task.subtasks.filter((st) => st.completed).length}/{task.subtasks.length}
-                  </span>
-                </div>
-                <Progress value={calculateTaskProgress(task)} className="h-2.5" />
-              </div>
-            </div>
-          ) : (
-            <div className="text-muted-foreground italic text-base">サブタスクはありません</div>
-          )}
-        </div>
-
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-lg font-medium mb-2">優先度</h3>
-              <Badge className={`${priorityColors[task.priority]} text-sm px-2 py-0.5`}>
-                {task.priority}
-              </Badge>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-medium mb-2">ステータス</h3>
-              <Badge variant="outline" className="text-sm px-2 py-0.5">
-                {task.status}
-              </Badge>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-medium mb-2">担当者</h3>
-              {task.assignee ? (
-                <div className="flex items-center space-x-3">
-                  <Avatar className="h-8 w-8">
-                    {task.assignee.avatar ? (
-                      <AvatarImage
-                        src={task.assignee.avatar}
-                        alt={task.assignee.name}
-                      />
-                    ) : null}
-                    <AvatarFallback>{task.assignee.initials}</AvatarFallback>
-                  </Avatar>
-                  <span className="text-base">{task.assignee.name}</span>
-                </div>
-              ) : (
-                <div className="text-muted-foreground italic text-base">未着手</div>
-              )}
-            </div>
-
-            <div>
-              <h3 className="text-lg font-medium mb-2">期限日</h3>
-              {task.dueDate ? (
-                <div className="flex items-center text-sm">
-                  <Calendar className="h-4 w-4 mr-1" />
-                  {task.dueDate}
-                </div>
-              ) : (
-                <div className="text-muted-foreground italic text-base">期限日は未設定です</div>
-              )}
-            </div>
+    <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground [&_h1]:text-[1.75rem] [&_h2]:text-2xl [&_h3]:text-xl [&_h4]:text-base [&_p]:my-0.5 [&_h1]:mb-1 [&_h2]:mb-1 [&_h2]:mt-0.5 [&_h3]:mb-0.5 [&_h4]:mb-0.5 [&_h5]:mb-0.5 [&_h6]:mb-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_blockquote]:my-1 [&_h1]:border-b [&_h1]:border-gray-300 [&_h1]:pb-1">
+      {/* 説明セクション */}
+      {task.description ? (
+        <div 
+          dangerouslySetInnerHTML={{ 
+            __html: renderMarkdown(task.description) 
+          }}
+        />
+      ) : (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <p className="text-muted-foreground italic">
+              説明がありません
+            </p>
           </div>
-
-          {task.tags && task.tags.length > 0 && (
-            <div>
-              <h3 className="text-lg font-medium mb-2">タグ</h3>
-              <div className="flex flex-wrap gap-1.5">
-                {task.tags.map((tag, index) => (
-                  <Badge key={index} variant="secondary" className="text-xs">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
-      </div>
+      )}
+
+      {/* サブタスクセクション */}
+      {task.subtasks && task.subtasks.length > 0 && (
+        <div className="mt-8 border-t-2 border-muted-foreground/70 pt-6">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            サブタスク
+          </h2>
+          <div className="space-y-2 mb-4">
+            {task.subtasks.map((subtask) => (
+              <div key={subtask.id} className="flex items-center p-3 hover:bg-muted/40 rounded-md border">
+                <Checkbox 
+                  checked={subtask.completed} 
+                  className="mr-3 h-5 w-5" 
+                  disabled={updatingSubtasks[subtask.id]}
+                  onCheckedChange={() => toggleSubtask(subtask.id)}
+                />
+                <span className={`text-base ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
+                  {subtask.title}
+                  {updatingSubtasks[subtask.id] && (
+                    <Loader2 className="h-3 w-3 inline ml-2 animate-spin" />
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-muted/20 p-4 rounded-lg">
+            <div className="flex justify-between items-center text-sm mb-2">
+              <span className="font-medium">{calculateTaskProgress(task)}% 完了</span>
+              <span className="text-muted-foreground">
+                {task.subtasks.filter((st) => st.completed).length}/{task.subtasks.length} 完了
+              </span>
+            </div>
+            <Progress value={calculateTaskProgress(task)} className="h-3" />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

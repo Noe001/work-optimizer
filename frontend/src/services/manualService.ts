@@ -47,7 +47,7 @@ class ManualService {
   // マニュアル一覧取得
   async getManuals(params?: ManualListParams): Promise<ApiResponse<PaginatedResponse<Manual>>> {
     try {
-      const response = await api.get('/api/manuals', { params });
+      const response = await api.get('/api/manuals', params);
       
       // バックエンドは {data: [...], meta: {...}} 形式で返すため、標準形式に変換
       const responseData = response.data as any;
@@ -56,6 +56,7 @@ class ManualService {
         data: responseData
       } as ApiResponse<PaginatedResponse<Manual>>;
     } catch (error: any) {
+
       const message = getErrorMessage(error) || 'マニュアル一覧の取得に失敗しました';
       throw new Error(message);
     }
@@ -88,7 +89,8 @@ class ManualService {
   // 自分が作成したマニュアル一覧
   async getMyManuals(params?: { page?: number; per_page?: number; status?: string }): Promise<ApiResponse<PaginatedResponse<Manual>>> {
     try {
-      const response = await api.get('/api/manuals/my', { params });
+
+      const response = await api.get('/api/manuals/my', params);
       
       // バックエンドは {data: [...], meta: {...}} 形式で返すため、標準形式に変換
       // （getManuals と同様に manuals_collection_response を使用）

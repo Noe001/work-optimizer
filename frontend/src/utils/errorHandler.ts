@@ -360,8 +360,8 @@ export class ErrorHandler {
     
     // 統一されたgetErrorMessage関数を使用
     const message = getErrorMessage(error);
-    
-    // 詳細エラーがある場合は追加表示
+      
+      // 詳細エラーがある場合は追加表示
     if (error?.response?.data?.errors && error.response.data.errors.length > 0) {
       console.error('詳細エラー:', error.response.data.errors);
     }

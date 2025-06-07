@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, BookOpen, FileText, Users, Tags, Plus, Search, Filter, Edit, Trash2, Eye } from 'lucide-react';
+import { ArrowLeft, BookOpen, FileText, Users, Tags, Plus, Search, Filter, Edit, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import ReactPaginate from 'react-paginate';
 import Header from '@/components/Header';
 import { Button } from "@/components/ui/button";
 import {
@@ -30,7 +31,6 @@ import {
 import { toast } from "sonner";
 import { Manual } from '@/types/api';
 import manualService, { ManualListParams } from '@/services/manualService';
-import { useAuth } from '@/contexts/AuthContext';
 import { renderMarkdown, getMarkdownPreview } from '@/utils/markdown';
 
 import { 
@@ -45,12 +45,12 @@ import {
 const ManualView: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
   
   const [manuals, setManuals] = useState<Manual[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -58,6 +58,7 @@ const ManualView: React.FC = () => {
   const [selectedManual, setSelectedManual] = useState<Manual | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [manualToDelete, setManualToDelete] = useState<Manual | null>(null);
+  const [isMetaVisible, setIsMetaVisible] = useState(true);
 
   // 初期化時にURLパラメータからフィルター条件を読み取る
   useEffect(() => {
@@ -84,25 +85,49 @@ const ManualView: React.FC = () => {
     loadManuals({ page: 1 });
   }, [selectedFilter, selectedDepartment, selectedCategory]);
 
-  // ページ変更時の処理
-  useEffect(() => {
-    loadManuals();
-  }, [currentPage]);
-
-  // マニュアル一覧の読み込み
-  const loadManuals = async (params?: ManualListParams) => {
-    setLoading(true);
-
-    try {
-      const pageToLoad = params?.page ?? currentPage;
-      const loadParams: ManualListParams = {
-        page: pageToLoad,
+  // ページ変更ハンドラー（React-Paginate用）
+  const handlePageChange = (selectedItem: { selected: number }) => {
+    const newPage = selectedItem.selected + 1; // React-Paginateは0ベースなので+1
+    
+    // ページが実際に変わった場合のみ処理
+    if (newPage !== currentPage) {
+      setCurrentPage(newPage);
+      
+      // 現在のフィルター条件を含めてリクエスト
+      const params: ManualListParams = {
+        page: newPage,
         per_page: 10,
         query: searchQuery || undefined,
         department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
         category: selectedCategory !== 'all' ? selectedCategory : undefined,
-        ...params,
       };
+      
+      // ステータスフィルターがある場合は追加
+      if (selectedFilter === 'published' || selectedFilter === 'draft') {
+        params.status = selectedFilter;
+      }
+      
+      loadManuals(params);
+    }
+  };
+
+  // マニュアル一覧の読み込み（ページネーション対応）
+  const loadManuals = async (params?: ManualListParams) => {
+    setLoading(true);
+
+    try {
+      // ページネーションパラメータを確実に設定
+      const pageToLoad = params?.page ?? currentPage;
+      const loadParams: ManualListParams = {
+        page: pageToLoad,
+        per_page: 10, // 1ページあたり10件に制限
+        query: searchQuery || undefined,
+        department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
+        category: selectedCategory !== 'all' ? selectedCategory : undefined,
+        ...params, // 追加パラメータで上書き可能
+      };
+
+
 
       let response;
       
@@ -123,9 +148,11 @@ const ManualView: React.FC = () => {
       if (response.success && response.data) {
         setManuals(response.data.data);
         setTotalPages(response.data.meta.total_pages);
+        setTotalCount(response.data.meta.total_count);
       } else {
         setManuals([]);
         setTotalPages(1);
+        setTotalCount(0);
       }
     } catch (error: any) {
       toast.error(error.message);
@@ -140,6 +167,7 @@ const ManualView: React.FC = () => {
       await manualService.deleteManual(manual.id);
       toast.success('マニュアルを削除しました');
       setIsDeleteDialogOpen(false);
+      setSelectedManual(null); // 詳細ポップアップも閉じる
       loadManuals();
     } catch (error: any) {
       toast.error(error.message);
@@ -294,7 +322,10 @@ const ManualView: React.FC = () => {
             </Card>
           ) : (
             manuals.map((manual) => (
-              <Card key={manual.id} className="hover:shadow-md transition-shadow">
+              <Card key={manual.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => {
+                setSelectedManual(manual);
+                setIsMetaVisible(true);
+              }}>
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -334,36 +365,7 @@ const ManualView: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="flex items-center space-x-2 ml-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedManual(manual)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      {manual.can_edit && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => navigate(`/manual/edit/${manual.id}`)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setManualToDelete(manual);
-                              setIsDeleteDialogOpen(true);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
+
                   </div>
                 </CardContent>
               </Card>
@@ -371,97 +373,224 @@ const ManualView: React.FC = () => {
           )}
         </div>
 
-        {/* ページネーション */}
+        {/* 検索結果の情報表示 */}
+        <div className="flex justify-between items-center mt-6 mb-4">
+          <div className="text-sm text-muted-foreground">
+            {totalCount > 0 ? (
+              <>
+                {((currentPage - 1) * 10) + 1}〜{Math.min(currentPage * 10, totalCount)}件 / 全{totalCount}件
+              </>
+            ) : (
+              '検索結果がありません'
+            )}
+          </div>
+          {totalPages > 1 && (
+            <div className="text-sm text-muted-foreground">
+              ページ {currentPage} / {totalPages}
+            </div>
+          )}
+        </div>
+
+        {/* React-Paginateを使用したページネーション */}
         {totalPages > 1 && (
-          <div className="flex justify-center space-x-2 mt-6">
-            <Button
-              variant="outline"
-              disabled={currentPage === 1}
-              onClick={() => {
-                setCurrentPage(prev => {
-                  const newPage = Math.max(prev - 1, 1);
-                  loadManuals({ page: newPage, per_page: 10 });
-                  return newPage;
-                });
-              }}
-            >
-              前へ
-            </Button>
-            <span className="flex items-center px-4">
-              {currentPage} / {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              disabled={currentPage === totalPages}
-              onClick={() => {
-                setCurrentPage(prev => {
-                  const newPage = Math.min(prev + 1, totalPages);
-                  loadManuals({ page: newPage, per_page: 10 });
-                  return newPage;
-                });
-              }}
-            >
-              次へ
-            </Button>
+          <div className="flex justify-center mt-6">
+            <div className="flex items-center space-x-2">
+              {/* 前のページボタン */}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === 1}
+                onClick={() => currentPage > 1 && handlePageChange({ selected: currentPage - 2 })}
+                className="px-3 py-2"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              
+              {/* React-Paginate */}
+              {React.createElement(ReactPaginate as any, {
+                pageCount: totalPages,
+                pageRangeDisplayed: 5,
+                marginPagesDisplayed: 2,
+                onPageChange: handlePageChange,
+                forcePage: currentPage - 1, // React-Paginateは0ベースなので-1
+                previousLabel: null, // カスタムボタンを使用するため無効化
+                nextLabel: null, // カスタムボタンを使用するため無効化
+                breakLabel: "...",
+                containerClassName: "flex items-center space-x-1",
+                pageLinkClassName: "px-3 py-2 text-sm border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-md transition-colors duration-200",
+                activeLinkClassName: "!bg-primary !text-primary-foreground !border-primary",
+                breakLinkClassName: "px-3 py-2 text-sm text-gray-500",
+                disabledClassName: "opacity-50 cursor-not-allowed"
+              })}
+              
+              {/* 次のページボタン */}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === totalPages}
+                onClick={() => currentPage < totalPages && handlePageChange({ selected: currentPage })}
+                className="px-3 py-2"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
 
         {/* マニュアル詳細表示ダイアログ */}
         <Dialog open={!!selectedManual} onOpenChange={() => setSelectedManual(null)}>
           <DialogContent 
-            className="max-w-4xl max-h-[80vh] overflow-y-auto"
+            className="max-w-5xl max-h-[90vh] p-0 flex flex-col"
             aria-describedby={selectedManual ? `manual-description-${selectedManual.id}` : undefined}
           >
-            <DialogHeader>
-              <DialogTitle>{selectedManual?.title}</DialogTitle>
-            </DialogHeader>
             {selectedManual && (
-              <div 
-                id={`manual-description-${selectedManual.id}`}
-                className="mb-4"
-              >
-                <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                  <span className="flex items-center">
-                    <Users className="h-4 w-4 inline mr-1" />
-                    {getDepartmentLabel(selectedManual.department)}
-                  </span>
-                  <span className="flex items-center">
-                    <Tags className="h-4 w-4 inline mr-1" />
-                    {getCategoryLabel(selectedManual.category)}
-                  </span>
-                  {selectedManual.author && (
-                    <span>作成者: {selectedManual.author.name}</span>
-                  )}
-                  <span>
-                    ステータス: {selectedManual.status === 'published' ? '公開中' : '下書き'}
-                  </span>
+              <>
+                {/* ヘッダー部分 */}
+                <div className="bg-muted/30 p-6 border-b flex-shrink-0">
+                  <DialogHeader className="space-y-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <DialogTitle 
+                          className="text-3xl font-bold text-foreground leading-tight"
+                        >
+                          {selectedManual.title}
+                        </DialogTitle>
+                        <Badge 
+                          variant={getStatusBadgeVariant(selectedManual.status)}
+                          className="text-xs font-medium px-3 py-1 flex-shrink-0"
+                        >
+                          {selectedManual.status === 'published' ? '公開中' : '下書き'}
+                        </Badge>
+                      </div>
+                      {selectedManual.can_edit && (
+                        <div className="flex items-center space-x-2 mr-12">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(`/manual/edit/${selectedManual.id}`)}
+                            className="flex items-center gap-2"
+                          >
+                            <Edit className="h-4 w-4" />
+                            編集
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setManualToDelete(selectedManual);
+                              setIsDeleteDialogOpen(true);
+                            }}
+                            className="flex items-center gap-2 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            削除
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* メタ情報トグルボタン（モバイルのみ表示） */}
+                    <div className="md:hidden mt-4">
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-between p-2 h-auto"
+                        onClick={() => setIsMetaVisible(!isMetaVisible)}
+                      >
+                        <span className="text-sm text-muted-foreground">詳細情報</span>
+                        {isMetaVisible ? (
+                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
+
+                    {/* メタ情報グリッド */}
+                    <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 transition-all duration-300 overflow-hidden ${
+                      isMetaVisible ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0 md:max-h-96 md:opacity-100'
+                    }`}>
+                      <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
+                        <div className="bg-primary/5 p-2 rounded-full">
+                          <Users className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground font-medium">部門</div>
+                          <div className="text-sm font-semibold text-foreground">
+                            {getDepartmentLabel(selectedManual.department)}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
+                        <div className="bg-secondary/60 p-2 rounded-full">
+                          <Tags className="h-4 w-4 text-secondary-foreground" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground font-medium">カテゴリー</div>
+                          <div className="text-sm font-semibold text-foreground">
+                            {getCategoryLabel(selectedManual.category)}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {selectedManual.author && (
+                        <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
+                          <div className="bg-accent/60 p-2 rounded-full">
+                            <FileText className="h-4 w-4 text-accent-foreground" />
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground font-medium">作成者</div>
+                            <div className="text-sm font-semibold text-foreground">
+                              {selectedManual.author.name}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* タグ表示 */}
+                    {selectedManual.tags && (
+                      <div className="flex flex-wrap gap-2 mt-4">
+                        {selectedManual.tags.split(',').map((tag, index) => (
+                          <Badge 
+                            key={index} 
+                            variant="outline" 
+                            className="bg-background/80 text-foreground border"
+                          >
+                            {tag.trim()}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </DialogHeader>
                 </div>
-                {selectedManual.tags && (
-                  <div className="mt-2">
-                    {selectedManual.tags.split(',').map((tag, index) => (
-                      <Badge key={index} variant="outline" className="mr-1">
-                        {tag.trim()}
-                      </Badge>
-                    ))}
+
+                {/* コンテンツ部分 */}
+                <div 
+                  id={`manual-description-${selectedManual.id}`}
+                  className="flex-1 overflow-y-auto p-6 bg-background min-h-0"
+                >
+                  <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground [&_h1]:text-[1.75rem] [&_h2]:text-2xl [&_h3]:text-xl [&_h4]:text-base [&_p]:my-0.5 [&_h1]:mb-1 [&_h2]:mb-1 [&_h2]:mt-0.5 [&_h3]:mb-0.5 [&_h4]:mb-0.5 [&_h5]:mb-0.5 [&_h6]:mb-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_blockquote]:my-1 [&_h1]:border-b [&_h1]:border-gray-300 [&_h1]:pb-1">
+                    {selectedManual.content ? (
+                      <div 
+                        dangerouslySetInnerHTML={{ 
+                          __html: renderMarkdown(selectedManual.content) 
+                        }}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="text-center">
+                          <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                          <p className="text-muted-foreground italic">
+                            内容がありません
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              </>
             )}
-            <div className="mt-4">
-              <div className="prose max-w-none prose-lg">
-                {selectedManual?.content ? (
-                  <div 
-                    dangerouslySetInnerHTML={{ 
-                      __html: renderMarkdown(selectedManual.content) 
-                    }}
-                  />
-                ) : (
-                  <div className="text-muted-foreground italic">
-                    内容がありません
-                  </div>
-                )}
-              </div>
-            </div>
           </DialogContent>
         </Dialog>
 

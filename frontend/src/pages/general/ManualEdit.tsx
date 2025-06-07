@@ -60,20 +60,7 @@ const ManualEditView: React.FC = () => {
       setError(null);
       
       const response = await manualService.getManual(manualId);
-      
-      if (!response) {
-        throw new Error('APIからレスポンスが返されませんでした');
-      }
-      
-      if (!response.success) {
-        throw new Error(response.message || 'マニュアルの取得に失敗しました');
-      }
-      
-      if (!response.data) {
-        throw new Error('マニュアルデータが見つかりません');
-      }
-      
-      const manual = response.data;
+      const manual = response.data!;
       
       const newFormData = {
         title: manual.title || '',
@@ -268,7 +255,7 @@ const ManualEditView: React.FC = () => {
                       <div className="border rounded-md p-4 min-h-[400px] bg-white">
                         {formData.content ? (
                           <div 
-                            className="prose max-w-none prose-sm"
+                            className="prose max-w-none prose-sm [&_h1]:text-[1.75rem] [&_h2]:text-2xl [&_h3]:text-xl [&_h4]:text-base [&_p]:my-0.5 [&_h1]:mb-1 [&_h2]:mb-1 [&_h2]:mt-0.5 [&_h3]:mb-0.5 [&_h4]:mb-0.5 [&_h5]:mb-0.5 [&_h6]:mb-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_blockquote]:my-1 [&_h1]:border-b [&_h1]:border-gray-300 [&_h1]:pb-1"
                             dangerouslySetInnerHTML={{ 
                               __html: renderMarkdown(formData.content) 
                             }}
