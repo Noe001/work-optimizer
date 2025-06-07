@@ -46,6 +46,12 @@ class ApplicationController < ActionController::API
 
   # リクエストからJWTトークンを取得し、ユーザーを認証する
   def authenticate_user
+    # 開発環境での安全な認証バイパス（環境変数による制御）
+    if Rails.env.development? && ENV['DEVELOPMENT_AUTH_BYPASS'] == 'true'
+      @current_user = get_development_user
+      return @current_user.present?
+    end
+
     # まずセッションから認証を試みる
     if current_user_from_session
       @current_user = current_user_from_session
@@ -143,6 +149,19 @@ class ApplicationController < ActionController::API
   end
 
   private
+
+  # 開発環境用のユーザー取得（安全な実装）
+  def get_development_user
+    # 環境変数で指定されたユーザーIDを使用（フォールバックあり）
+    user_id = ENV['DEVELOPMENT_USER_ID']
+    
+    if user_id.present?
+      User.find_by(id: user_id)
+    else
+      # フォールバック：最初のユーザーを使用
+      User.first
+    end
+  end
 
   # ヘッダーからトークンを抽出
   def extract_token_from_header

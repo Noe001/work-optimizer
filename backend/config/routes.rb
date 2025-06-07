@@ -32,7 +32,8 @@ Rails.application.routes.draw do
       collection do
         get 'search'
         get 'categories'
-        get 'my'  # 自分のマニュアル一覧
+        get 'stats'   # ダッシュボード用統計情報
+        get 'my'      # 自分のマニュアル一覧
       end
     end
     

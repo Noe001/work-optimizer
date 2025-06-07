@@ -133,7 +133,7 @@ module Api
 
     # 自分のタスク一覧
     def my
-      puts "Getting tasks for user: #{current_user.id} (#{current_user.email})" if Rails.env.development?
+  
       tasks = current_user.tasks
               .includes(:user, :organization, :subtasks)
               .parent_tasks
@@ -144,7 +144,7 @@ module Api
       
       render json: { success: true, data: serialized_tasks }  # TaskSerializerを使用
     rescue => e
-      puts "Error in my tasks: #{e.message}" if Rails.env.development?
+
       render json: { success: false, message: e.message }, status: :internal_server_error
     end
 

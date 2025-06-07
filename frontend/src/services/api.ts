@@ -114,6 +114,7 @@ export const api = {
       
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
+
       ApiErrorHandler.handle(error, `GET ${url}`);
     }
   },

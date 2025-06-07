@@ -3,6 +3,7 @@ import userService from './userService';
 import taskService from './taskService';
 import meetingService from './meetingService';
 import attendanceService from './attendanceService';
+import manualService from './manualService';
 
 export {
   api,
@@ -10,6 +11,7 @@ export {
   taskService,
   meetingService,
   attendanceService,
+  manualService,
 };
 
 export default {
@@ -18,4 +20,5 @@ export default {
   task: taskService,
   meeting: meetingService,
   attendance: attendanceService,
+  manual: manualService,
 }; 

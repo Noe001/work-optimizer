@@ -15,8 +15,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon } from "@radix-ui/react-icons";
 import { format, parseISO } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Edit, Eye } from "lucide-react";
 import { taskService } from "@/services";
 import { useToast } from "@/hooks";
+import { renderMarkdown } from '@/utils/markdown';
 
 // APIステータスとUIステータスのマッピング
 const statusToApiMapping: Record<string, string> = {
@@ -385,9 +388,9 @@ const CreateTaskView: React.FC = () => {
         </div>
         
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* メインコンテンツ */}
-            <div className="md:col-span-2 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* タスク情報 */}
+            <div>
               <Card>
                 <CardHeader>
                   <CardTitle>タスク情報</CardTitle>
@@ -405,14 +408,50 @@ const CreateTaskView: React.FC = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="description">説明</Label>
-                    <Textarea 
-                      id="description" 
-                      value={formData.description}
-                      onChange={(e) => setFormData({...formData, description: e.target.value})}
-                      placeholder="タスクの詳細を入力"
-                      rows={5}
-                    />
+                    <Label htmlFor="description">説明（Markdown対応）</Label>
+                    <Tabs defaultValue="edit" className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="edit" className="flex items-center gap-2">
+                          <Edit className="h-4 w-4" />
+                          編集
+                        </TabsTrigger>
+                        <TabsTrigger value="preview" className="flex items-center gap-2">
+                          <Eye className="h-4 w-4" />
+                          プレビュー
+                        </TabsTrigger>
+                      </TabsList>
+                      
+                      <TabsContent value="edit" className="mt-4">
+                        <Textarea 
+                          id="description" 
+                          value={formData.description}
+                          onChange={(e) => setFormData({...formData, description: e.target.value})}
+                          placeholder="タスクの詳細をMarkdown形式で入力してください&#10;&#10;例:&#10;## 作業手順&#10;1. 資料の確認&#10;2. データの収集&#10;3. 分析と報告&#10;&#10;**注意点**&#10;- 期限を守る&#10;- 品質を重視する"
+                          rows={10}
+                          className="font-mono"
+                        />
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          MarkdownでHTMLを記述できます。見出し、リスト、強調などがサポートされています。
+                        </div>
+                      </TabsContent>
+                      
+                      <TabsContent value="preview" className="mt-4">
+                        <div className="border rounded-md p-4 min-h-[240px] bg-white">
+                          {formData.description ? (
+                            <div 
+                              className="prose max-w-none prose-sm [&_h1]:text-[1.75rem] [&_h2]:text-2xl [&_h3]:text-xl [&_h4]:text-base [&_p]:my-0.5 [&_h1]:mb-1 [&_h2]:mb-1 [&_h2]:mt-0.5 [&_h3]:mb-0.5 [&_h4]:mb-0.5 [&_h5]:mb-0.5 [&_h6]:mb-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_blockquote]:my-1 [&_h1]:border-b [&_h1]:border-gray-300 [&_h1]:pb-1"
+                              dangerouslySetInnerHTML={{ 
+                                __html: renderMarkdown(formData.description) 
+                              }}
+                            />
+                          ) : (
+                            <div className="text-muted-foreground italic">
+                              説明を入力するとここにプレビューが表示されます
+                            </div>
+                          )}
+                        </div>
+                      </TabsContent>
+                    </Tabs>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -454,7 +493,10 @@ const CreateTaskView: React.FC = () => {
                   </div>
                 </CardContent>
               </Card>
-              
+            </div>
+            
+            {/* 詳細設定とボタン */}
+            <div className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle>詳細設定</CardTitle>
@@ -542,6 +584,7 @@ const CreateTaskView: React.FC = () => {
                               type="button"
                               onClick={() => removeTag(tag)}
                               className="ml-1 p-1 rounded-full hover:bg-gray-200"
+                              title={`${tag}タグを削除`}
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -591,6 +634,7 @@ const CreateTaskView: React.FC = () => {
                               type="button"
                               onClick={() => isEditMode ? markSubtaskForRemoval(subtask.id) : removeSubtask(subtask.id)}
                               className="text-gray-500 hover:text-gray-700"
+                              title="サブタスクを削除"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -601,15 +645,10 @@ const CreateTaskView: React.FC = () => {
                   </div>
                 </CardContent>
               </Card>
-            </div>
-            
-            {/* サイドバー */}
-            <div className="space-y-6">
+              
+              {/* ボタンエリア */}
               <Card>
-                <CardHeader>
-                  <CardTitle>アクション</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 pt-6">
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? (
                       <>
