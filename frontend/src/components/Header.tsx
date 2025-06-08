@@ -115,8 +115,8 @@ const Header: React.FC = () => {
         
         <div className="flex items-center gap-2 font-semibold">
           <Link to="/" className="flex items-center gap-2">
-            <img src="/images/w-o_logo.png" alt="logo" className="h-7 w-7" />
-            <span className="hidden md:inline">WorkOptimizer</span>
+            <img src="/images/actify_logo.png" alt="logo" className="h-7 w-7" />
+            <span className="hidden md:inline">Actify</span>
           </Link>
         </div>
         
@@ -185,7 +185,7 @@ const Header: React.FC = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center bg-red-500 text-white text-xs rounded-full">
+                <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center bg-teal-primary text-white text-xs rounded-full">
                   3
                 </span>
               </Button>

@@ -408,7 +408,7 @@ const SignupView: React.FC = () => {
 
             <div className="text-center text-sm text-gray-600">
               すでにアカウントをお持ちの方は
-              <a href="/login" className="text-blue-600 hover:underline ml-1">
+              <a href="/login" className="text-teal-primary hover:underline ml-1">
                 ログイン
               </a>
             </div>

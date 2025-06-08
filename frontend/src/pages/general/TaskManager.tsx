@@ -64,17 +64,17 @@ const priorityMapping: Record<string, "低" | "中" | "高" | "緊急"> = {
 };
 
 const priorityColors = {
-  "低": "bg-blue-100 text-blue-700",
-  "中": "bg-yellow-100 text-yellow-700",
-  "高": "bg-orange-100 text-orange-700",
+  "低": "bg-teal-100 text-teal-700",
+  "中": "bg-teal-200 text-teal-800",
+  "高": "bg-teal-300 text-teal-900",
   "緊急": "bg-red-100 text-red-700"
 };
 
 const statusColors = {
-  "未着手": "bg-slate-100 text-slate-800",
-  "進行中": "bg-sky-100 text-sky-800",
-  "レビュー中": "bg-purple-100 text-purple-800",
-  "完了": "bg-emerald-100 text-emerald-800"
+  "未着手": "bg-support-lightGray text-support-textGray",
+  "進行中": "bg-teal-100 text-teal-primary",
+  "レビュー中": "bg-teal-200 text-teal-dark",
+  "完了": "bg-teal-light/20 text-teal-deep"
 };
 
 const TaskManagerView: React.FC = () => {
@@ -886,7 +886,7 @@ const TaskManagerView: React.FC = () => {
     },
     {
       label: "優先度:高",
-      icon: <Badge className="bg-orange-100 text-orange-700 mr-2">高</Badge>,
+                  icon: <Badge className="bg-teal-300 text-teal-900 mr-2">高</Badge>,
       action: () => {
         setFilterPriority("高");
         setQuickFilterOpen(false);
@@ -1526,8 +1526,8 @@ const TaskManagerView: React.FC = () => {
                       {tasks.find((t) => t.id === selectedTaskId)?.subtasks && 
                        tasks.find((t) => t.id === selectedTaskId)!.subtasks.length > 0 && (
                         <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
-                          <div className="bg-blue-100 p-2 rounded-full">
-                            <FileText className="h-4 w-4 text-blue-600" />
+                                  <div className="bg-teal-100 p-2 rounded-full">
+          <FileText className="h-4 w-4 text-teal-primary" />
                           </div>
                           <div>
                             <div className="text-xs text-muted-foreground font-medium">進捗</div>

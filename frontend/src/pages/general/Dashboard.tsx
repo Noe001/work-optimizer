@@ -196,23 +196,23 @@ const DashboardTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* ようこそメッセージ */}
-      <div className="bg-gradient-to-r from-gray-200 to-cyan-500/30 rounded-lg p-6 shadow-lg">
-        <h2 className="text-2xl font-bold mb-2">{greeting}、{userName}さん</h2>
+      <div className="bg-gradient-to-r from-teal-50 to-teal-primary/20 rounded-lg p-6 shadow-lg border border-teal-primary/10">
+        <h2 className="text-2xl font-bold mb-2 text-support-darkerText">{greeting}、{userName}さん</h2>
         <p className="opacity-90">{motivationalMessage} 今週のタスク完了率は{taskCompletionRate}%です。</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="secondary" className="bg-white/20 hover:bg-white/30" asChild>
+          <Button variant="secondary" className="bg-white/20 hover:bg-white/30 text-gray-800 shadow-sm hover:shadow-md transition-shadow" asChild>
             <Link to="/tasks">
               <FileText className="h-4 w-4 mr-2" />
               タスク
             </Link>
           </Button>
-          <Button variant="secondary" className="bg-white/20 hover:bg-white/30" asChild>
+          <Button variant="secondary" className="bg-white/20 hover:bg-white/30 text-gray-800 shadow-sm hover:shadow-md transition-shadow" asChild>
             <Link to="/attendance">
               <Calendar className="h-4 w-4 mr-2" />
               勤怠管理
             </Link>
           </Button>
-          <Button variant="secondary" className="bg-white/20 hover:bg-white/30" asChild>
+          <Button variant="secondary" className="bg-white/20 hover:bg-white/30 text-gray-800 shadow-sm hover:shadow-md transition-shadow" asChild>
             <Link to="/team_chat">
               <MessageSquare className="h-4 w-4 mr-2" />
               メッセージ
@@ -429,9 +429,9 @@ const DashboardTab: React.FC = () => {
                     <circle
                       className={
                         attendanceApi.data.status === 'good' 
-                          ? "text-green-500" 
+                          ? "text-teal-primary" 
                           : attendanceApi.data.status === 'warning' 
-                            ? "text-amber-500" 
+                            ? "text-teal-secondary" 
                             : "text-red-500"
                       }
                       strokeWidth="8"
@@ -448,9 +448,9 @@ const DashboardTab: React.FC = () => {
                   <div className="absolute flex flex-col items-center justify-center">
                     <span className={`text-xl font-bold ${
                       attendanceApi.data.status === 'good' 
-                        ? "text-green-500" 
+                        ? "text-teal-primary" 
                         : attendanceApi.data.status === 'warning' 
-                          ? "text-amber-500" 
+                          ? "text-teal-secondary" 
                           : "text-red-500"
                     }`}>
                       {attendanceApi.data.score || 0}
@@ -460,9 +460,9 @@ const DashboardTab: React.FC = () => {
                 <Badge 
                   className={
                     attendanceApi.data.status === 'good' 
-                      ? "bg-green-100 text-green-800" 
+                      ? "bg-teal-100 text-teal-800" 
                       : attendanceApi.data.status === 'warning' 
-                        ? "bg-amber-100 text-amber-800" 
+                        ? "bg-teal-200 text-teal-700" 
                         : "bg-red-100 text-red-800"
                   }
                 >
@@ -1098,7 +1098,7 @@ const ManualsTab: React.FC = () => {
                 <div className="text-sm text-muted-foreground">総マニュアル数</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-green-600">{stats.published}</div>
+                <div className="text-3xl font-bold text-teal-primary">{stats.published}</div>
                 <div className="text-sm text-muted-foreground">公開中</div>
               </div>
               <div className="text-center">
@@ -1106,7 +1106,7 @@ const ManualsTab: React.FC = () => {
                 <div className="text-sm text-muted-foreground">下書き</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600">{stats.myManuals}</div>
+                <div className="text-3xl font-bold text-teal-secondary">{stats.myManuals}</div>
                 <div className="text-sm text-muted-foreground">自分のマニュアル</div>
               </div>
             </div>

@@ -882,12 +882,12 @@ const Profile: React.FC = () => {
                 />
                 {isUploading && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                    <Loader2 className="h-6 w-6 animate-spin text-teal-primary" />
                   </div>
                 )}
                 {isDragOver && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-20 rounded-full">
-                    <span className="text-blue-600 text-xs font-medium">ドロップ</span>
+                                <div className="absolute inset-0 flex items-center justify-center bg-teal-primary bg-opacity-20 rounded-full">
+                <span className="text-teal-primary text-xs font-medium">ドロップ</span>
                   </div>
                 )}
                 <input
@@ -897,6 +897,7 @@ const Profile: React.FC = () => {
                   accept="image/*"
                   onChange={handleFileChange}
                   disabled={isUploading || isUpdating}
+                  aria-label="プロフィール画像をアップロード"
                 />
                 <Button
                   variant="ghost"

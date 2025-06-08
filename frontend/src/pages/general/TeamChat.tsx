@@ -199,12 +199,12 @@ const TeamChatView: React.FC = () => {
                         <span
                           className={`absolute -bottom-0.5 -right-0.5 block rounded-full h-2.5 w-2.5 ${
                             dm.status === "online"
-                              ? "bg-green-500"
+                              ? "bg-teal-primary"
                               : dm.status === "busy"
                               ? "bg-red-500"
                               : dm.status === "away"
-                              ? "bg-yellow-500"
-                              : "bg-gray-500"
+                              ? "bg-teal-secondary"
+                              : "bg-support-textGray"
                           }`}
                         />
                       </div>

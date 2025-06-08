@@ -459,7 +459,7 @@ VITE_ASSETS_BASE_URL=https://cdn.example.com
 #### 環境別設定例
 ```typescript
 // 本番環境
-VITE_ASSETS_BASE_URL=https://cdn.workoptimizer.com
+VITE_ASSETS_BASE_URL=https://cdn.Actify.com
 VITE_DEFAULT_AVATAR_PATH=/avatars/default.png
 
 // 開発環境
