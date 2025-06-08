@@ -8,28 +8,29 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import {
   FilePlus,
   BookOpen,
   Search,
   BarChart3,
   Calendar,
-  FileText,
   Timer,
-  Book,
   Users,
   Edit,
   Trash2,
-  Filter,
   Tag,
-  Clock,
   Heart,
-  CheckSquare,
   MessageSquare,
+  FileText,
+  CheckSquare,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  Loader2,
 } from "lucide-react"
 import Header from "@/components/Header"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -41,6 +42,15 @@ import type { Meeting as ApiMeeting, Attendance } from '@/types/api'
 import { ApiError, LoadingIndicator } from '@/components/ui'
 import { getTaskProgress } from '@/services/taskService'
 import { useAuth } from '@/contexts/AuthContext'
+import { manualService } from '@/services'
+import type { Manual } from '@/types/api'
+import { getMarkdownPreview, renderMarkdown } from '@/utils/markdown'
+import { toast } from "sonner"
+import { 
+  getDepartmentLabel, 
+  getCategoryLabel,
+  getStatusBadgeVariant 
+} from '@/constants/manual'
 
 // Meeting型定義
 interface LocalMeeting {
@@ -503,8 +513,8 @@ const DashboardTab: React.FC = () => {
               {[
                 { icon: FileText, label: "マニュアル作成", path: "/manual" },
                 { icon: Timer, label: "会議作成", path: "/meeting" },
-                { icon: Book, label: "ナレッジ作成", path: "/knowledge_base" },
-                { icon: Users, label: "チャット", path: "/team_chat" },
+                { icon: BookOpen, label: "ナレッジ作成", path: "/knowledge_base" },
+                { icon: MessageSquare, label: "チャット", path: "/team_chat" },
                 { icon: CheckSquare, label: "タスク管理", path: "/tasks" },
                 { icon: Heart, label: "勤怠管理", path: "/attendance" },
               ].map(({ icon: Icon, label, path }, index) => (
@@ -525,179 +535,596 @@ const DashboardTab: React.FC = () => {
 
 // ManualsTab Component
 const ManualsTab: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedTemplate, setSelectedTemplate] = useState<ManualTemplate | null>(null)
-  const [sortOrder, setSortOrder] = useState<string>("title")
-  const [selectedTag, setSelectedTag] = useState<string>("")
-
-  const manualTemplates: ManualTemplate[] = [
-    {
-      id: 1,
-      title: "新入社員オリエンテーション",
-      description: "新しい社員向けの基本的な業務ガイドライン",
-      sections: ["会社概要", "組織構造", "基本的な業務プロセス", "行動規範", "福利厚生"],
-      createdAt: "2023-05-10",
-      tags: ["新入社員", "オリエンテーション", "入門"],
-    },
-    {
-      id: 2,
-      title: "営業活動マニュアル",
-      description: "営業チーム向けの標準的な営業プロセス",
-      sections: ["見込み客リサーチ", "初回アプローチ", "提案資料作成", "価格交渉", "クロージング"],
-      createdAt: "2023-06-15",
-      tags: ["営業", "プロセス", "顧客"],
-    },
-    {
-      id: 3,
-      title: "クレーム対応マニュアル",
-      description: "顧客からのクレーム対応の標準手順",
-      sections: ["初期対応", "事実確認", "謝罪と解決策提示", "フォローアップ", "再発防止策"],
-      createdAt: "2023-07-20",
-      tags: ["サポート", "顧客対応", "手順", "トラブルシューティング"],
-    },
-  ]
-
-  // ダミーデータからユニークなタグのリストを生成
-  const manualTags = Array.from(new Set(manualTemplates.flatMap(manual => manual.tags)));
-
-  const sortedManuals = [...manualTemplates].filter(
-    (template) =>
-      (selectedTag ? template.tags.includes(selectedTag) : true) &&
-      (template.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      template.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      template.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
-  ).sort((a, b) => {
-    switch (sortOrder) {
-      case "title":
-        return a.title.localeCompare(b.title);
-      case "titleDesc":
-        return b.title.localeCompare(a.title);
-      case "createdAt":
-        return a.createdAt.localeCompare(b.createdAt);
-      case "createdAtDesc":
-        return b.createdAt.localeCompare(a.createdAt);
-      default:
-        return 0;
-    }
+  const navigate = useNavigate();
+  const [recentManuals, setRecentManuals] = useState<Manual[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState({
+    total: 0,
+    published: 0,
+    drafts: 0,
+    myManuals: 0
   });
+  const [selectedManual, setSelectedManual] = useState<Manual | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [manualToDelete, setManualToDelete] = useState<Manual | null>(null);
+  const [isMetaVisible, setIsMetaVisible] = useState(true);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Manual[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+
+  // マニュアル統計とダッシュボード情報を取得
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const loadDashboardData = async () => {
+    setLoading(true);
+    try {
+      // 最近のマニュアルと統計情報を並列取得
+      const [manualsResponse, statsResponse] = await Promise.all([
+        manualService.getManuals({ page: 1, per_page: 5 }),
+        manualService.getStats()
+      ]);
+      
+      // 最近のマニュアルを設定
+      if (manualsResponse.success && manualsResponse.data) {
+        setRecentManuals(manualsResponse.data.data);
+      }
+        
+      // 統計情報を設定
+      if (statsResponse.success && statsResponse.data) {
+          setStats({
+          total: statsResponse.data.total,
+          published: statsResponse.data.published,
+          drafts: statsResponse.data.drafts,
+          myManuals: statsResponse.data.my_manuals
+          });
+      }
+    } catch (error: any) {
+      console.error('ダッシュボードデータの取得に失敗:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // マニュアル削除
+  const handleDelete = async (manual: Manual) => {
+    try {
+      await manualService.deleteManual(manual.id);
+      toast.success('マニュアルを削除しました');
+      setIsDeleteDialogOpen(false);
+      setSelectedManual(null); // 詳細ポップアップも閉じる
+      loadDashboardData();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  // マニュアル検索
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    try {
+      // サーバーサイドの検索APIを使用（全マニュアルを対象とした検索）
+      const response = await manualService.searchManuals({
+        query: searchQuery.trim(),
+        status: 'published', // 公開済みマニュアルのみ検索
+        page: 1,
+        per_page: 20, // 検索結果は多めに表示
+        order_by: 'updated_at',
+        order: 'desc'
+      });
+      
+      if (response.success && response.data) {
+        setSearchResults(response.data.data || []);
+      } else {
+        setSearchResults([]);
+        if (!response.success && response.message) {
+          toast.error(response.message);
+        }
+      }
+    } catch (error: any) {
+      toast.error('検索に失敗しました');
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+  
+  // 検索クエリ変更時の処理（デバウンス付き）
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    const timer = setTimeout(() => {
+      handleSearch();
+    }, 300); // 300ms のデバウンス
+    
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>業務マニュアル</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="マニュアルを検索..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <Filter className="h-4 w-4" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-60">
-                <div className="space-y-2">
-                  <Label>ソート</Label>
-                  <Select defaultValue="title" value={sortOrder} onValueChange={setSortOrder}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="ソート順" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="title">タイトル (昇順)</SelectItem>
-                      <SelectItem value="titleDesc">タイトル (降順)</SelectItem>
-                      <SelectItem value="createdAt">作成日 (昇順)</SelectItem>
-                      <SelectItem value="createdAtDesc">作成日 (降順)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </PopoverContent>
-            </Popover>
-            <Button asChild>
+        <CardTitle className="flex justify-between items-center">
+          <span>業務マニュアル</span>
+          <div className="flex space-x-2">
+            <Button variant="outline" asChild>
               <Link to="/manual">
+                <BookOpen className="mr-2 h-4 w-4" />
+                すべて表示
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link to="/manual/create">
                 <FilePlus className="mr-2 h-4 w-4" />
                 新規作成
               </Link>
             </Button>
           </div>
-
-          <div className="flex space-x-2 overflow-x-auto">
-            {manualTags.map((tag) => (
-              <Button
-                key={tag}
-                variant={selectedTag === tag ? "default" : "outline"}
-                onClick={() => setSelectedTag(tag)}
-              >
-                {tag}
-              </Button>
-            ))}
-            <Button variant={selectedTag === "" ? "default" : "outline"} onClick={() => setSelectedTag("")}>
-              すべて
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {sortedManuals.map((template) => (
-              <Card key={template.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle className="flex justify-between items-center">
-                    <span>{template.title}</span>
-                    <div className="flex space-x-2">
-                      <Button variant="ghost" size="icon">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{template.description}</p>
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {template.tags.map((tag, index) => (
-                      <span key={index} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <Dialog open={!!selectedTemplate} onOpenChange={() => setSelectedTemplate(null)}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{selectedTemplate?.title}</DialogTitle>
-                <DialogDescription>マニュアルテンプレートの詳細情報を表示します</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">{selectedTemplate?.description}</p>
-                <div className="space-y-2">
-                  <h3 className="font-medium text-muted-foreground">マニュアル構成</h3>
-                  {selectedTemplate?.sections.map((section, index) => (
-                    <div key={index} className="flex items-center rounded-md bg-muted p-2 text-sm">
-                      <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
-                      {section}
-                    </div>
-                  ))}
-                </div>
-                <Button className="w-full">マニュアル作成</Button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card 
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => navigate('/manual?status=all')}
+            >
+              <div className="text-center">
+                <div className="text-2xl font-bold text-black">{stats.total}</div>
+                <div className="text-sm text-muted-foreground">総マニュアル数</div>
               </div>
-            </DialogContent>
-          </Dialog>
+            </Card>
+            <Card 
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => navigate('/manual?status=published')}
+            >
+              <div className="text-center">
+                <div className="text-2xl font-bold text-black">{stats.published}</div>
+                <div className="text-sm text-muted-foreground">公開中</div>
+              </div>
+            </Card>
+            <Card 
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => navigate('/manual?status=draft')}
+            >
+              <div className="text-center">
+                <div className="text-2xl font-bold text-black">{stats.drafts}</div>
+                <div className="text-sm text-muted-foreground">下書き</div>
+              </div>
+            </Card>
+            <Card 
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => navigate('/manual?status=my')}
+            >
+              <div className="text-center">
+                <div className="text-2xl font-bold text-black">{stats.myManuals}</div>
+                <div className="text-sm text-muted-foreground">自分のマニュアル</div>
+              </div>
+            </Card>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold mb-4">最近のマニュアル</h3>
+            {loading ? (
+              <div className="text-center py-8">読み込み中...</div>
+            ) : recentManuals.length === 0 ? (
+              <div className="text-center py-8">
+                <BookOpen className="h-12 w-12 mx-auto mb-4 text-black" />
+                <p className="text-muted-foreground mb-4">まだマニュアルがありません</p>
+                <Button asChild>
+                  <Link to="/manual/create">
+                    <FilePlus className="mr-2 h-4 w-4" />
+                    最初のマニュアルを作成
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentManuals.slice(0, 5).map((manual) => (
+                  <Card key={manual.id} className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => {
+                    setSelectedManual(manual);
+                    setIsMetaVisible(true);
+                  }}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <h4 className="font-medium">{manual.title}</h4>
+                          <Badge variant={getStatusBadgeVariant(manual.status)}>
+                            {manual.status === 'published' ? '公開中' : '下書き'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                          <span className="flex items-center">
+                            <Users className="h-4 w-4 mr-1" />
+                            {getDepartmentLabel(manual.department)}
+                          </span>
+                          <span className="flex items-center">
+                            <Tag className="h-4 w-4 mr-1" />
+                            {getCategoryLabel(manual.category)}
+                          </span>
+                          {manual.author && (
+                            <span>作成者: {manual.author.name}</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                          {getMarkdownPreview(manual.content || '', 100)}
+                        </p>
+                      </div>
+
+                    </div>
+                  </Card>
+                ))}
+                
+                {/* すべて表示リンク */}
+                <div className="text-center pt-4">
+                  <Button variant="outline" asChild>
+                    <Link to="/manual">
+                      すべてのマニュアルを表示
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold mb-4">アクション</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 hover:shadow-md transition-shadow cursor-pointer border rounded-lg">
+                <Link to="/manual/create" className="block">
+                  <div className="text-center">
+                    <FilePlus className="h-8 w-8 mx-auto mb-2 text-primary" />
+                    <div className="font-medium">新規作成</div>
+                    <div className="text-sm text-muted-foreground">新しいマニュアルを作成</div>
+                  </div>
+                </Link>
+              </div>
+              <div 
+                className="p-4 hover:shadow-md transition-shadow cursor-pointer border rounded-lg"
+                onClick={() => setIsSearchModalOpen(true)}
+              >
+                  <div className="text-center">
+                  <Search className="h-8 w-8 mx-auto mb-2 text-primary" />
+                  <div className="font-medium">クイック検索</div>
+                  <div className="text-sm text-muted-foreground">マニュアルを素早く検索</div>
+                  </div>
+              </div>
+              <div 
+                className="p-4 hover:shadow-md transition-shadow cursor-pointer border rounded-lg"
+                onClick={() => setIsStatsModalOpen(true)}
+              >
+                  <div className="text-center">
+                  <BarChart3 className="h-8 w-8 mx-auto mb-2 text-primary" />
+                  <div className="font-medium">詳細統計</div>
+                  <div className="text-sm text-muted-foreground">詳細な統計情報</div>
+                  </div>
+              </div>
+            </div>
+          </div>
         </div>
       </CardContent>
+
+      {/* マニュアル詳細表示ダイアログ */}
+      <Dialog open={!!selectedManual} onOpenChange={() => setSelectedManual(null)}>
+        <DialogContent 
+          className="max-w-5xl max-h-[90vh] p-0 flex flex-col"
+          aria-describedby={selectedManual ? `manual-description-${selectedManual.id}` : undefined}
+        >
+          {selectedManual && (
+            <>
+              {/* ヘッダー部分 */}
+                              <div className="bg-muted/30 p-6 border-b flex-shrink-0">
+                  <DialogHeader className="space-y-4">
+                    <div className="flex items-baseline gap-3">
+                      <DialogTitle 
+                        className="text-3xl font-bold text-foreground leading-tight"
+                      >
+                        {selectedManual.title}
+                      </DialogTitle>
+                      {selectedManual.created_at && (
+                        <span className="text-sm text-muted-foreground">
+                          {new Date(selectedManual.created_at).toLocaleDateString('ja-JP')}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <DialogDescription className="sr-only">
+                      {selectedManual.title}のマニュアル詳細を表示しています。
+                    </DialogDescription>
+                  
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <Badge 
+                        variant={getStatusBadgeVariant(selectedManual.status)}
+                        className="text-xs font-medium px-3 py-1 flex-shrink-0"
+                      >
+                        {selectedManual.status === 'published' ? '公開中' : '下書き'}
+                      </Badge>
+                    </div>
+                    {selectedManual.can_edit && (
+                      <div className="flex items-center space-x-2 mr-12">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate(`/manual/edit/${selectedManual.id}`)}
+                          className="flex items-center gap-2"
+                        >
+                          <Edit className="h-4 w-4" />
+                          編集
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setManualToDelete(selectedManual);
+                            setIsDeleteDialogOpen(true);
+                          }}
+                          className="flex items-center gap-2 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          削除
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* メタ情報トグルボタン（モバイルのみ表示） */}
+                  <div className="md:hidden mt-4">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-between p-2 h-auto"
+                      onClick={() => setIsMetaVisible(!isMetaVisible)}
+                    >
+                      <span className="text-sm text-muted-foreground">詳細情報</span>
+                      {isMetaVisible ? (
+                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* メタ情報グリッド */}
+                  <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 transition-all duration-300 overflow-hidden ${
+                    isMetaVisible ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0 md:max-h-96 md:opacity-100'
+                  }`}>
+                    <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
+                      <div className="bg-primary/5 p-2 rounded-full">
+                        <Users className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground font-medium">部門</div>
+                        <div className="text-sm font-semibold text-foreground">
+                          {getDepartmentLabel(selectedManual.department)}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
+                      <div className="bg-secondary/60 p-2 rounded-full">
+                        <Tag className="h-4 w-4 text-secondary-foreground" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground font-medium">カテゴリー</div>
+                        <div className="text-sm font-semibold text-foreground">
+                          {getCategoryLabel(selectedManual.category)}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {selectedManual.author && (
+                      <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
+                        <div className="bg-accent/60 p-2 rounded-full">
+                          <FileText className="h-4 w-4 text-accent-foreground" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground font-medium">作成者</div>
+                          <div className="text-sm font-semibold text-foreground">
+                            {selectedManual.author.name}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* タグ表示 */}
+                  {selectedManual.tags && (
+                    <div className="flex flex-wrap gap-2 mt-4">
+                      {selectedManual.tags.split(',').map((tag, index) => (
+                        <Badge 
+                          key={index} 
+                          variant="outline" 
+                          className="bg-background/80 text-foreground border"
+                        >
+                          {tag.trim()}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </DialogHeader>
+              </div>
+
+              {/* コンテンツ部分 */}
+              <div 
+                id={`manual-description-${selectedManual.id}`}
+                className="flex-1 overflow-y-auto p-6 bg-background min-h-0"
+              >
+                                  <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground [&_h1]:text-[1.75rem] [&_h2]:text-2xl [&_h3]:text-xl [&_h4]:text-base [&_p]:my-0.5 [&_h1]:mb-1 [&_h2]:mb-1 [&_h2]:mt-0.5 [&_h3]:mb-0.5 [&_h4]:mb-0.5 [&_h5]:mb-0.5 [&_h6]:mb-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_blockquote]:my-1 [&_h1]:border-b [&_h1]:border-gray-300 [&_h1]:pb-1">
+                  {selectedManual.content ? (
+                    <div 
+                      dangerouslySetInnerHTML={{ 
+                        __html: renderMarkdown(selectedManual.content) 
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="text-center">
+                        <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                        <p className="text-muted-foreground italic">
+                          内容がありません
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 削除確認ダイアログ */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent aria-describedby="delete-dialog-description">
+          <DialogHeader>
+            <DialogTitle>マニュアルの削除</DialogTitle>
+            <DialogDescription id="delete-dialog-description">
+              「{manualToDelete?.title}」を削除しますか？この操作は取り消せません。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              キャンセル
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => manualToDelete && handleDelete(manualToDelete)}
+            >
+              削除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* クイック検索モーダル */}
+      <Dialog open={isSearchModalOpen} onOpenChange={setIsSearchModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>マニュアル検索</DialogTitle>
+            <DialogDescription>
+              全マニュアルを対象にタイトルや内容から検索できます
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex space-x-2">
+              <Input
+                placeholder="検索キーワードを入力..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              />
+              <Button onClick={handleSearch} disabled={isSearching}>
+                {isSearching ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4 mr-2" />
+                )}
+                検索
+              </Button>
+            </div>
+            <div className="max-h-80 overflow-y-auto space-y-2">
+              {isSearching ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                  <span className="text-muted-foreground">検索中...</span>
+                </div>
+              ) : searchResults.length > 0 ? (
+                <>
+                  <div className="text-sm text-muted-foreground px-1 mb-2">
+                    {searchResults.length}件のマニュアルが見つかりました
+                  </div>
+                  {searchResults.map((manual) => (
+                    <Card key={manual.id} className="p-3 cursor-pointer hover:shadow-md" onClick={() => {
+                      setSelectedManual(manual);
+                      setIsSearchModalOpen(false);
+                      setIsMetaVisible(true);
+                    }}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium truncate">{manual.title}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {getDepartmentLabel(manual.department)} - {getCategoryLabel(manual.category)}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            作成者: {manual.author?.name || '不明'} · {new Date(manual.created_at).toLocaleDateString('ja-JP')}
+                          </p>
+                        </div>
+                        <Badge variant={getStatusBadgeVariant(manual.status)}>
+                          {manual.status === 'published' ? '公開中' : '下書き'}
+                        </Badge>
+                      </div>
+                    </Card>
+                  ))}
+                </>
+              ) : searchQuery ? (
+                <p className="text-center text-muted-foreground py-4">
+                  「{searchQuery}」に一致するマニュアルが見つかりません
+                </p>
+              ) : (
+                <p className="text-center text-muted-foreground py-4">
+                  検索キーワードを入力してください
+                </p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 詳細統計モーダル */}
+      <Dialog open={isStatsModalOpen} onOpenChange={setIsStatsModalOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>マニュアル詳細統計</DialogTitle>
+            <DialogDescription>
+              マニュアルの詳細な統計情報
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-primary">{stats.total}</div>
+                <div className="text-sm text-muted-foreground">総マニュアル数</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-green-600">{stats.published}</div>
+                <div className="text-sm text-muted-foreground">公開中</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-amber-600">{stats.drafts}</div>
+                <div className="text-sm text-muted-foreground">下書き</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-blue-600">{stats.myManuals}</div>
+                <div className="text-sm text-muted-foreground">自分のマニュアル</div>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <h4 className="font-medium">公開率</h4>
+              <Progress 
+                value={stats.total > 0 ? (stats.published / stats.total) * 100 : 0} 
+                className="h-3"
+              />
+              <p className="text-sm text-muted-foreground">
+                {stats.total > 0 ? Math.round((stats.published / stats.total) * 100) : 0}% のマニュアルが公開されています
+              </p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+
     </Card>
   )
 }
@@ -1063,7 +1490,7 @@ const MeetingsTab: React.FC = () => {
             <Button
               onClick={() => {
                 // Here you would typically save the meeting minutes
-                console.log("Meeting minutes:", meetingMinutes)
+        
                 onClose()
               }}
             >
@@ -1107,7 +1534,7 @@ const MeetingsTab: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-2">
-                  <Clock className="h-4 w-4" />
+                  <Calendar className="h-4 w-4" />
                   <span>{new Date(meeting.scheduledTime).toLocaleString()}</span>
                 </div>
                 <div className="flex items-center space-x-2 text-sm text-muted-foreground">

@@ -126,7 +126,7 @@ const CreateMeeting: React.FC = () => {
   };
 
   const handleSchedule = () => {
-    console.log('Scheduling meeting:', formData);
+
   };
 
   return (

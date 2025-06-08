@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { 
   AUTH_ERROR_CODES, 
   LOGIN_ERROR_CODES, 
@@ -72,12 +73,30 @@ export const ERROR_ACTIONS: Record<ApiErrorCode, UserAction> = {
 
 /**
  * APIエラーをユーザーフレンドリーなメッセージに変換
+ * 任意のエラー形式に対応（既存の型安全性を維持しつつ、柔軟性を向上）
  */
-export function getErrorMessage(error: ApiError): string {
-  if (error.code && isValidErrorCode(error.code)) {
+export function getErrorMessage(error: any): string {
+  // 既存のApiError形式の処理（型安全性を維持）
+  if (error?.code && isValidErrorCode(error.code)) {
     return ERROR_MESSAGES[error.code as ApiErrorCode];
   }
-  return error.message || 'エラーが発生しました。';
+  
+  // Axiosエラーレスポンスの処理
+  if (error?.response?.data?.message) {
+    return error.response.data.message;
+  }
+  
+  // 直接的なメッセージの処理
+  if (error?.message) {
+    return error.message;
+  }
+  
+  // 既存のApiError形式
+  if (typeof error === 'object' && error.message) {
+    return error.message;
+  }
+  
+  return 'エラーが発生しました。';
 }
 
 /**
@@ -312,4 +331,90 @@ export function createUnifiedError(error: any): {
     fieldErrors,
     generalErrors
   };
+}
+
+export interface ApiError {
+  success: false;
+  message: string;
+  code?: string;
+  errors?: string[];
+  timestamp?: string;
+}
+
+export interface ApiErrorResponse {
+  response?: {
+    data?: ApiError;
+    status?: number;
+  };
+  message?: string;
+}
+
+export class ErrorHandler {
+  /**
+   * 統合エラーハンドリング
+   * 既存の関数と統合し、重複を排除
+   */
+  static handle(error: any, context?: string): void {
+    console.error(`=== エラー発生 ${context ? `(${context})` : ''} ===`);
+    console.error('エラーオブジェクト:', error);
+    
+    // 統一されたgetErrorMessage関数を使用
+    const message = getErrorMessage(error);
+      
+      // 詳細エラーがある場合は追加表示
+    if (error?.response?.data?.errors && error.response.data.errors.length > 0) {
+      console.error('詳細エラー:', error.response.data.errors);
+    }
+    
+    if (error?.response?.data?.code) {
+      console.error('APIエラーコード:', error.response.data.code);
+    }
+    
+    if (error?.response?.status) {
+      console.error('HTTPステータス:', error.response.status);
+    }
+    
+    toast.error(message);
+  }
+
+  static handleValidation(errors: string[]): void {
+    const message = formatValidationErrors(errors);
+    toast.error(message);
+  }
+
+  static handleNetwork(): void {
+    toast.error('ネットワークエラーが発生しました。接続を確認してください。');
+  }
+
+  static handleUnauthorized(): void {
+    toast.error('認証が必要です。ログインしてください。');
+  }
+
+  static handleForbidden(): void {
+    toast.error('この操作を実行する権限がありません。');
+  }
+
+  static handleNotFound(resource?: string): void {
+    const message = resource ? `${resource}が見つかりません` : 'リソースが見つかりません';
+    toast.error(message);
+  }
+
+  static handleServerError(): void {
+    toast.error('サーバーエラーが発生しました。しばらく時間をおいて再試行してください。');
+  }
+
+  /**
+   * @deprecated getErrorMessage関数を直接使用してください
+   */
+  static getErrorMessage(error: any): string {
+    return getErrorMessage(error);
+  }
+
+  static isNetworkError(error: any): boolean {
+    return !error?.response && error?.message?.includes('Network Error');
+  }
+
+  static getStatusCode(error: any): number | null {
+    return error?.response?.status || null;
+  }
 } 

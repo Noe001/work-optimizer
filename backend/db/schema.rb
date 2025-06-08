@@ -66,10 +66,21 @@ ActiveRecord::Schema[7.2].define(version: 2025_05_28_053438) do
   end
 
   create_table "manuals", id: :string, charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
-    t.string "title"
+    t.string "title", null: false
     t.text "content"
+    t.string "user_id", null: false
+    t.string "department", null: false
+    t.string "category", null: false
+    t.string "access_level", default: "all", null: false
+    t.string "edit_permission", default: "author", null: false
+    t.string "status", default: "draft", null: false
+    t.text "tags"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["category"], name: "index_manuals_on_category"
+    t.index ["department"], name: "index_manuals_on_department"
+    t.index ["status"], name: "index_manuals_on_status"
+    t.index ["user_id"], name: "index_manuals_on_user_id"
   end
 
   create_table "meeting_participants", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
@@ -143,13 +154,20 @@ ActiveRecord::Schema[7.2].define(version: 2025_05_28_053438) do
     t.string "department"
     t.string "position"
     t.text "bio"
+    t.boolean "department_admin", default: false, null: false
+    t.boolean "system_admin", default: false, null: false
+    t.boolean "organization_admin", default: false, null: false
+    t.index ["department_admin"], name: "index_users_on_department_admin"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["organization_admin"], name: "index_users_on_organization_admin"
+    t.index ["system_admin"], name: "index_users_on_system_admin"
   end
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "attendances", "users"
   add_foreign_key "leave_requests", "users"
+  add_foreign_key "manuals", "users"
   add_foreign_key "organization_memberships", "organizations"
   add_foreign_key "organization_memberships", "users"
 end

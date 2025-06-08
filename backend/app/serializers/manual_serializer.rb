@@ -1,29 +1,38 @@
-class ManualSerializer
-  include JSONAPI::Serializer
+class ManualSerializer < ActiveModel::Serializer
+  attributes :id, :title, :content, :department, :category, :access_level, :edit_permission, :status, :created_at, :updated_at, :tags, :author, :can_edit
   
-  attributes :title, :content, :department, :category, :access_level, :edit_permission, :status, :created_at, :updated_at
-  
-  attribute :author do |manual|
-    {
-      id: manual.user.id,
-      name: manual.user.name
-    }
+  def author
+    if object.user.present?
+      {
+        id: object.user.id,
+        name: object.user.name
+      }
+    else
+      {
+        id: nil,
+        name: '不明なユーザー'
+      }
+    end
   end
   
-  attribute :can_edit do |manual, params|
-    current_user = params[:current_user]
+  def can_edit
+    current_user = instance_options[:current_user]
     return false unless current_user
     
-    case manual.edit_permission
-    when 'author'
-      manual.user_id == current_user.id
-    when 'department'
-      manual.department == current_user.department && current_user.department_admin?
-    when 'specific'
-      # 特定のユーザーに編集権限がある場合の処理
-      # この実装はプロジェクトの要件に応じて拡張する必要があります
-      manual.user_id == current_user.id
-    else
+    begin
+      if object.edit_author?
+        object.user_id == current_user.id
+      elsif object.edit_department?
+        object.department == current_user.department && current_user.department_admin?
+      elsif object.edit_specific?
+        # 特定のユーザーに編集権限がある場合の処理
+        # この実装はプロジェクトの要件に応じて拡張する必要があります
+        object.user_id == current_user.id
+      else
+        false
+      end
+    rescue => e
+      Rails.logger.error "can_edit calculation error: #{e.class} - #{e.message}"
       false
     end
   end

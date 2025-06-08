@@ -127,7 +127,7 @@ const TeamChatView: React.FC = () => {
     
     // ここでメッセージ送信のAPIを呼び出す想定
     // 実際の実装ではバックエンドAPIとの連携が必要
-    console.log("メッセージを送信:", message);
+
     
     // メッセージを送信後、入力フィールドをクリア
     setMessage("");
