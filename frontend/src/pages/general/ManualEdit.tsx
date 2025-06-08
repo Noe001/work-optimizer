@@ -120,12 +120,19 @@ const ManualEditView: React.FC = () => {
     }
 
     try {
+      // API呼び出し
       const dataToSave = { ...formData, status };
+      const response = await manualService.updateManual(id, dataToSave);
       
-      await manualService.updateManual(id, dataToSave);
-      toast.success(status === 'draft' ? '下書きを保存しました' : 'マニュアルを更新しました');
-      navigate('/manual');
+      if (response.success) {
+        toast.success(status === 'draft' ? '下書きを保存しました' : 'マニュアルを更新しました');
+        navigate('/manual');
+      } else {
+        // APIからのエラーメッセージを表示
+        toast.error(response.message || 'マニュアルの更新に失敗しました');
+      }
     } catch (error: any) {
+      // ネットワークエラーなど、API呼び出し自体が失敗した場合
       toast.error(error.message || 'マニュアルの保存に失敗しました');
     }
   };

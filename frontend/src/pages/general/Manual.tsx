@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, BookOpen, FileText, Users, Tags, Plus, Search, Filter, Edit, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, BookOpen, FileText, Users, Tags, Plus, Search, Filter, Edit, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import ReactPaginate from 'react-paginate';
 import Header from '@/components/Header';
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,16 @@ import {
   getStatusBadgeVariant 
 } from '@/constants/manual';
 
+// 並び替えオプション
+const SORT_OPTIONS = [
+  { value: 'updated_at_desc', label: '更新日時（新しい順）' },
+  { value: 'updated_at_asc', label: '更新日時（古い順）' },
+  { value: 'created_at_desc', label: '作成日時（新しい順）' },
+  { value: 'created_at_asc', label: '作成日時（古い順）' },
+  { value: 'title_asc', label: 'タイトル（昇順）' },
+  { value: 'title_desc', label: 'タイトル（降順）' },
+];
+
 const ManualView: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -55,10 +65,13 @@ const ManualView: React.FC = () => {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedFilter, setSelectedFilter] = useState('all');
+  const [selectedSort, setSelectedSort] = useState('updated_at_desc');
   const [selectedManual, setSelectedManual] = useState<Manual | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [manualToDelete, setManualToDelete] = useState<Manual | null>(null);
   const [isMetaVisible, setIsMetaVisible] = useState(true);
+  
+
 
   // 初期化時にURLパラメータからフィルター条件を読み取る
   useEffect(() => {
@@ -79,11 +92,13 @@ const ManualView: React.FC = () => {
     loadManuals({ page: 1 });
   }, [searchParams]);
 
-  // フィルター変更時の処理
+  // フィルター・並び替え変更時の処理（検索クエリは手動実行のため除外）
   useEffect(() => {
     setCurrentPage(1);
     loadManuals({ page: 1 });
-  }, [selectedFilter, selectedDepartment, selectedCategory]);
+  }, [selectedFilter, selectedDepartment, selectedCategory, selectedSort]);
+
+
 
   // ページ変更ハンドラー（React-Paginate用）
   const handlePageChange = (selectedItem: { selected: number }) => {
@@ -94,16 +109,19 @@ const ManualView: React.FC = () => {
       setCurrentPage(newPage);
       
       // 現在のフィルター条件を含めてリクエスト
+      const sortParams = parseSortOption(selectedSort);
       const params: ManualListParams = {
         page: newPage,
         per_page: 10,
         query: searchQuery || undefined,
         department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
         category: selectedCategory !== 'all' ? selectedCategory : undefined,
+        order_by: sortParams.order_by,
+        order: sortParams.order,
       };
       
-      // ステータスフィルターがある場合は追加
-      if (selectedFilter === 'published' || selectedFilter === 'draft') {
+      // ステータスフィルターがある場合は追加（'my'フィルターは除く）
+      if (selectedFilter !== 'all' && selectedFilter !== 'my') {
         params.status = selectedFilter;
       }
       
@@ -118,12 +136,15 @@ const ManualView: React.FC = () => {
     try {
       // ページネーションパラメータを確実に設定
       const pageToLoad = params?.page ?? currentPage;
+      const sortParams = parseSortOption(selectedSort);
       const loadParams: ManualListParams = {
         page: pageToLoad,
         per_page: 10, // 1ページあたり10件に制限
         query: searchQuery || undefined,
         department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
         category: selectedCategory !== 'all' ? selectedCategory : undefined,
+        order_by: sortParams.order_by,
+        order: sortParams.order,
         ...params, // 追加パラメータで上書き可能
       };
 
@@ -132,27 +153,30 @@ const ManualView: React.FC = () => {
       let response;
       
       if (selectedFilter === 'my') {
-        // 自分のマニュアルを取得
-        response = await manualService.getMyManuals(loadParams);
+        // 自分のマニュアルを取得（statusパラメータを除外）
+        const myManualsParams = { ...loadParams };
+        delete myManualsParams.status; // 自分のマニュアル取得時はステータスフィルターを除外
+        response = await manualService.getMyManuals(myManualsParams);
       } else {
-        // ステータスフィルターをloadParamsに追加（バックエンドで処理）
-        if (selectedFilter === 'published' || selectedFilter === 'draft') {
+        // 全マニュアルを取得（ステータスフィルターはバックエンドで処理される）
+        if (selectedFilter !== 'all') {
           loadParams.status = selectedFilter;
         }
-        
-        // 全マニュアルを取得
         response = await manualService.getManuals(loadParams);
       }
 
       // 統一されたレスポンス形式を処理
       if (response.success && response.data) {
-        setManuals(response.data.data);
-        setTotalPages(response.data.meta.total_pages);
-        setTotalCount(response.data.meta.total_count);
+        setManuals(response.data.data || []);
+        setTotalPages(response.data.meta?.total_pages || 1);
+        setTotalCount(response.data.meta?.total_count || 0);
       } else {
         setManuals([]);
         setTotalPages(1);
         setTotalCount(0);
+        if (!response.success && response.message) {
+          toast.error(response.message);
+        }
       }
     } catch (error: any) {
       toast.error(error.message);
@@ -177,7 +201,23 @@ const ManualView: React.FC = () => {
   // 検索実行
   const handleSearch = () => {
     setCurrentPage(1);
-    loadManuals({ page: 1 });
+    const sortParams = parseSortOption(selectedSort);
+    const params: ManualListParams = {
+      page: 1,
+      per_page: 10,
+      query: searchQuery || undefined,
+      department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
+      category: selectedCategory !== 'all' ? selectedCategory : undefined,
+      order_by: sortParams.order_by,
+      order: sortParams.order,
+    };
+    
+    // ステータスフィルターがある場合は追加
+    if (selectedFilter !== 'all') {
+      params.status = selectedFilter;
+    }
+    
+    loadManuals(params);
   };
 
   // フィルターリセット
@@ -186,8 +226,44 @@ const ManualView: React.FC = () => {
     setSelectedDepartment('all');
     setSelectedCategory('all');
     setSelectedFilter('all');
+    setSelectedSort('updated_at_desc');
     setCurrentPage(1);
-    loadManuals({ page: 1, per_page: 10 });
+    
+    // リセット後のパラメータで再検索
+    const resetParams: ManualListParams = {
+      page: 1,
+      per_page: 10,
+      order_by: 'updated_at',
+      order: 'desc',
+    };
+    
+    loadManuals(resetParams);
+  };
+
+  // 検索入力の処理
+  const handleSearchInputChange = (value: string) => {
+    setSearchQuery(value);
+  };
+
+  // 並び替えパラメータの解析
+  const parseSortOption = (sortValue: string): { order_by: string; order: 'asc' | 'desc' } => {
+    const [column, direction] = sortValue.split('_').pop() || 'desc';
+    const isDesc = sortValue.endsWith('_desc');
+    const isAsc = sortValue.endsWith('_asc');
+    
+    let actualColumn: string;
+    if (sortValue.startsWith('title_')) {
+      actualColumn = 'title';
+    } else if (sortValue.startsWith('created_at_')) {
+      actualColumn = 'created_at';  
+    } else {
+      actualColumn = 'updated_at'; // デフォルト
+    }
+    
+    return {
+      order_by: actualColumn,
+      order: isAsc ? 'asc' : 'desc'
+    };
   };
 
   // ラベル変換関数
@@ -228,18 +304,7 @@ const ManualView: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div>
-                <Label htmlFor="search">キーワード検索</Label>
-                <Input
-                  id="search"
-                  placeholder="タイトルで検索..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                />
-              </div>
-              
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
               <div>
                 <Label>表示条件</Label>
                 <Select value={selectedFilter} onValueChange={setSelectedFilter}>
@@ -289,15 +354,39 @@ const ManualView: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div>
+                <Label htmlFor="search">キーワード検索</Label>
+                <Input
+                  id="search"
+                  placeholder="タイトルで検索..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearchInputChange(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                />
+              </div>
               
               <div className="flex items-end space-x-2">
                 <Button onClick={handleSearch} className="flex-1">
                   <Search className="h-4 w-4 mr-2" />
                   検索
                 </Button>
-                <Button variant="outline" onClick={handleResetFilters}>
-                  <Filter className="h-4 w-4" />
-                </Button>
+              </div>
+
+              <div>
+                <Label>並び替え</Label>
+                <Select value={selectedSort} onValueChange={setSelectedSort}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="並び替えを選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SORT_OPTIONS.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardContent>
@@ -311,7 +400,17 @@ const ManualView: React.FC = () => {
             <Card>
               <CardContent className="text-center py-8">
                 <BookOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground mb-4">マニュアルが見つかりませんでした</p>
+                <p className="text-muted-foreground mb-4">
+                  {searchQuery || selectedDepartment !== 'all' || selectedCategory !== 'all' || selectedFilter !== 'all'
+                    ? '検索条件に一致するマニュアルが見つかりませんでした'
+                    : 'マニュアルが見つかりませんでした'
+                  }
+                </p>
+                {(searchQuery || selectedDepartment !== 'all' || selectedCategory !== 'all') && (
+                  <Button variant="outline" onClick={handleResetFilters} className="mr-2">
+                    フィルターをリセット
+                  </Button>
+                )}
                 {selectedFilter === 'my' && (
                   <Button onClick={() => navigate('/manual/create')}>
                     <Plus className="h-4 w-4 mr-2" />
@@ -439,22 +538,31 @@ const ManualView: React.FC = () => {
 
         {/* マニュアル詳細表示ダイアログ */}
         <Dialog open={!!selectedManual} onOpenChange={() => setSelectedManual(null)}>
-          <DialogContent 
-            className="max-w-5xl max-h-[90vh] p-0 flex flex-col"
-            aria-describedby={selectedManual ? `manual-description-${selectedManual.id}` : undefined}
-          >
+          <DialogContent className="max-w-5xl max-h-[90vh] p-0 flex flex-col">
             {selectedManual && (
               <>
                 {/* ヘッダー部分 */}
                 <div className="bg-muted/30 p-6 border-b flex-shrink-0">
                   <DialogHeader className="space-y-4">
+                    <div className="flex items-baseline gap-3">
+                      <DialogTitle 
+                        className="text-3xl font-bold text-foreground leading-tight"
+                      >
+                        {selectedManual.title}
+                      </DialogTitle>
+                      {selectedManual.created_at && (
+                        <span className="text-sm text-muted-foreground">
+                          {new Date(selectedManual.created_at).toLocaleDateString('ja-JP')}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <DialogDescription className="sr-only">
+                      {selectedManual.title}のマニュアル詳細を表示しています。
+                    </DialogDescription>
+                    
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <DialogTitle 
-                          className="text-3xl font-bold text-foreground leading-tight"
-                        >
-                          {selectedManual.title}
-                        </DialogTitle>
                         <Badge 
                           variant={getStatusBadgeVariant(selectedManual.status)}
                           className="text-xs font-medium px-3 py-1 flex-shrink-0"
@@ -462,31 +570,29 @@ const ManualView: React.FC = () => {
                           {selectedManual.status === 'published' ? '公開中' : '下書き'}
                         </Badge>
                       </div>
-                      {selectedManual.can_edit && (
-                        <div className="flex items-center space-x-2 mr-12">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => navigate(`/manual/edit/${selectedManual.id}`)}
-                            className="flex items-center gap-2"
-                          >
-                            <Edit className="h-4 w-4" />
-                            編集
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setManualToDelete(selectedManual);
-                              setIsDeleteDialogOpen(true);
-                            }}
-                            className="flex items-center gap-2 text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            削除
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex items-center space-x-2 mr-12">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate(`/manual/edit/${selectedManual.id}`)}
+                          className="flex items-center gap-2"
+                        >
+                          <Edit className="h-4 w-4" />
+                          編集
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setManualToDelete(selectedManual);
+                            setIsDeleteDialogOpen(true);
+                          }}
+                          className="flex items-center gap-2 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          削除
+                        </Button>
+                      </div>
                     </div>
                     
                     {/* メタ情報トグルボタン（モバイルのみ表示） */}
@@ -546,6 +652,20 @@ const ManualView: React.FC = () => {
                           </div>
                         </div>
                       )}
+                      
+                      {selectedManual.created_at && (
+                        <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
+                          <div className="bg-green-100 p-2 rounded-full">
+                            <CalendarDays className="h-4 w-4 text-green-600" />
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground font-medium">作成日</div>
+                            <div className="text-sm font-semibold text-foreground">
+                              {new Date(selectedManual.created_at).toLocaleDateString('ja-JP')}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* タグ表示 */}
@@ -566,10 +686,7 @@ const ManualView: React.FC = () => {
                 </div>
 
                 {/* コンテンツ部分 */}
-                <div 
-                  id={`manual-description-${selectedManual.id}`}
-                  className="flex-1 overflow-y-auto p-6 bg-background min-h-0"
-                >
+                <div className="flex-1 overflow-y-auto p-6 bg-background min-h-0">
                   <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground [&_h1]:text-[1.75rem] [&_h2]:text-2xl [&_h3]:text-xl [&_h4]:text-base [&_p]:my-0.5 [&_h1]:mb-1 [&_h2]:mb-1 [&_h2]:mt-0.5 [&_h3]:mb-0.5 [&_h4]:mb-0.5 [&_h5]:mb-0.5 [&_h6]:mb-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_blockquote]:my-1 [&_h1]:border-b [&_h1]:border-gray-300 [&_h1]:pb-1">
                     {selectedManual.content ? (
                       <div 

@@ -94,6 +94,9 @@ const TaskManagerView: React.FC = () => {
   // 削除確認用の状態を追加
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<UITask | null>(null);
+  
+  // タスク詳細ダイアログのメタ情報表示制御
+  const [isTaskMetaVisible, setIsTaskMetaVisible] = useState(false);
 
   // 拡張フィルター機能
   const [filterTags, setFilterTags] = useState<string[]>([]);
@@ -268,15 +271,13 @@ const TaskManagerView: React.FC = () => {
     
     // getTaskで取得したタスクデータにサブタスクが含まれていることを期待する
     if (apiTask.subtasks && Array.isArray(apiTask.subtasks)) {
-      console.log('サブタスクデータ:', apiTask.subtasks);
+      
       subtasks = apiTask.subtasks.map(subtask => ({
         id: subtask.id || Math.random().toString(36).substring(2, 10), // IDがない場合はランダムなIDを生成
         title: subtask.title,
         completed: subtask.status === 'completed' || (subtask as any).completed === true
       }));
-    } else {
-      console.log('サブタスクデータがありません', apiTask);
-    }
+          }
     
     // 日付フォーマット
     const dueDate = apiTask.due_date;
@@ -355,6 +356,7 @@ const TaskManagerView: React.FC = () => {
   const closeTaskDetails = () => {
     setIsTaskDialogOpen(false);
     setSelectedTaskId(null);
+    setIsTaskMetaVisible(false); // メタ情報表示状態をリセット
   };
 
   // 削除処理関数を TaskManagerView に移動
@@ -1404,20 +1406,29 @@ const TaskManagerView: React.FC = () => {
 
         {/* タスク詳細ダイアログ */}
         <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
-          <DialogContent 
-            className="max-w-5xl max-h-[90vh] p-0 flex flex-col"
-            aria-describedby={selectedTaskId ? `task-description-${selectedTaskId}` : undefined}
-          >
+          <DialogContent className="max-w-5xl max-h-[90vh] p-0 flex flex-col">
             {selectedTaskId && tasks.find((t) => t.id === selectedTaskId) && (
               <>
                 {/* ヘッダー部分 */}
                 <div className="bg-muted/30 p-6 border-b flex-shrink-0">
                   <DialogHeader className="space-y-4">
+                    <div className="flex items-baseline gap-3">
+                      <DialogTitle className="text-3xl font-bold text-foreground leading-tight">
+                        {tasks.find((t) => t.id === selectedTaskId)?.title || 'タスク詳細'}
+                      </DialogTitle>
+                      {tasks.find((t) => t.id === selectedTaskId)?.createdAt && (
+                        <span className="text-sm text-muted-foreground">
+                          {new Date(tasks.find((t) => t.id === selectedTaskId)!.createdAt).toLocaleDateString('ja-JP')}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <DialogDescription className="sr-only">
+                      {tasks.find((t) => t.id === selectedTaskId)?.title || 'タスク'}の詳細を表示しています。
+                    </DialogDescription>
+                    
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <DialogTitle className="text-3xl font-bold text-foreground leading-tight">
-                          {tasks.find((t) => t.id === selectedTaskId)?.title || 'タスク詳細'}
-                        </DialogTitle>
                         <Badge 
                           className={`${statusColors[tasks.find((t) => t.id === selectedTaskId)?.status || "未着手"]} text-xs font-medium px-3 py-1 flex-shrink-0`}
                         >
@@ -1454,9 +1465,27 @@ const TaskManagerView: React.FC = () => {
                         </Button>
                       </div>
                     </div>
+                    
+                    {/* メタ情報トグルボタン（モバイルのみ表示） */}
+                    <div className="md:hidden mt-4">
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-between p-2 h-auto"
+                        onClick={() => setIsTaskMetaVisible(!isTaskMetaVisible)}
+                      >
+                        <span className="text-sm text-muted-foreground">詳細情報</span>
+                        {isTaskMetaVisible ? (
+                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
 
                     {/* メタ情報グリッド */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 transition-all duration-300 overflow-hidden ${
+                      isTaskMetaVisible ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0 md:max-h-96 md:opacity-100'
+                    }`}>
                       <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
                         <div className="bg-primary/5 p-2 rounded-full">
                           <User className="h-4 w-4 text-primary" />
@@ -1492,6 +1521,28 @@ const TaskManagerView: React.FC = () => {
                           </div>
                         </div>
                       </div>
+                      
+                      {/* プログレス情報（サブタスクがある場合のみ表示） */}
+                      {tasks.find((t) => t.id === selectedTaskId)?.subtasks && 
+                       tasks.find((t) => t.id === selectedTaskId)!.subtasks.length > 0 && (
+                        <div className="flex items-center space-x-2 bg-card/60 rounded-lg p-3 border">
+                          <div className="bg-blue-100 p-2 rounded-full">
+                            <FileText className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground font-medium">進捗</div>
+                            <div className="text-sm font-semibold text-foreground">
+                              {(() => {
+                                const currentTask = tasks.find((t) => t.id === selectedTaskId);
+                                if (currentTask) {
+                                  return `${calculateTaskProgress(currentTask)}% 完了`;
+                                }
+                                return "0% 完了";
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* タグ表示 */}
@@ -1512,10 +1563,7 @@ const TaskManagerView: React.FC = () => {
                 </div>
 
                 {/* コンテンツ部分 */}
-                <div 
-                  id={`task-description-${selectedTaskId}`}
-                  className="flex-1 overflow-y-auto p-6 bg-background min-h-0"
-                >
+                <div className="flex-1 overflow-y-auto p-6 bg-background min-h-0">
                   <TaskDetails 
                     task={tasks.find((t) => t.id === selectedTaskId)!} 
                     onClose={closeTaskDetails}

@@ -138,7 +138,7 @@ const CreateTaskView: React.FC = () => {
         
         if (response.success && response.data) {
           const task = response.data;
-          console.log("取得したタスク:", task);
+    
           
           // タグデータの処理
           let tags: string[] = [];
@@ -162,7 +162,7 @@ const CreateTaskView: React.FC = () => {
             }
           }
           
-          console.log("処理後のタグ:", tags);
+    
           
           // APIデータからフォームデータへの変換
           setFormData({
@@ -319,7 +319,7 @@ const CreateTaskView: React.FC = () => {
     const taskDataPayload = payload.task;
 
     // デバッグログ
-    console.log("送信ペイロード (TaskData):", JSON.stringify(taskDataPayload, null, 2));
+    
 
     setLoading(true);
     setError(null);
@@ -422,10 +422,10 @@ const CreateTaskView: React.FC = () => {
                       </TabsList>
                       
                       <TabsContent value="edit" className="mt-4">
-                        <Textarea 
-                          id="description" 
-                          value={formData.description}
-                          onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    <Textarea 
+                      id="description" 
+                      value={formData.description}
+                      onChange={(e) => setFormData({...formData, description: e.target.value})}
                           placeholder="タスクの詳細をMarkdown形式で入力してください&#10;&#10;例:&#10;## 作業手順&#10;1. 資料の確認&#10;2. データの収集&#10;3. 分析と報告&#10;&#10;**注意点**&#10;- 期限を守る&#10;- 品質を重視する"
                           rows={10}
                           className="font-mono"
@@ -443,7 +443,7 @@ const CreateTaskView: React.FC = () => {
                               dangerouslySetInnerHTML={{ 
                                 __html: renderMarkdown(formData.description) 
                               }}
-                            />
+                    />
                           ) : (
                             <div className="text-muted-foreground italic">
                               説明を入力するとここにプレビューが表示されます
@@ -494,7 +494,7 @@ const CreateTaskView: React.FC = () => {
                 </CardContent>
               </Card>
             </div>
-            
+              
             {/* 詳細設定とボタン */}
             <div className="space-y-6">
               <Card>
@@ -645,7 +645,7 @@ const CreateTaskView: React.FC = () => {
                   </div>
                 </CardContent>
               </Card>
-              
+            
               {/* ボタンエリア */}
               <Card>
                 <CardContent className="space-y-4 pt-6">

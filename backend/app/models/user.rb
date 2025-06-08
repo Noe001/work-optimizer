@@ -122,11 +122,21 @@ class User < ApplicationRecord
   end
 
   # 部門管理者かどうかを判定
+  # NOTE: 実際のロジックは組織の要件に応じて調整してください。
   def department_admin?
-    # roleが'admin'または'manager'の場合、部門管理者とする
-    # 実際のロジックは組織の要件に応じて調整
     role.in?(['admin', 'manager']) || position&.downcase&.include?('manager')
   end
+
+  # TODO: 将来的な権限管理システムの改善案
+  # 1. 専用のPermissionテーブルを作成
+  # 2. CanCanCan/Punditなどの認可ライブラリの導入
+  # 3. 部門管理者フラグ(department_admin)カラムの追加
+  # 4. Role-Based Access Control (RBAC)の実装
+  #
+  # 改善例:
+  # def department_admin?
+  #   department_admin || has_role?(:department_manager, department)
+  # end
 
   private
 

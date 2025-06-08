@@ -10,6 +10,8 @@ export interface ManualListParams {
   category?: string;
   query?: string;
   status?: string;
+  order_by?: string;
+  order?: 'asc' | 'desc';
 }
 
 // マニュアル詳細検索のパラメータ
@@ -89,19 +91,13 @@ class ManualService {
   // 自分が作成したマニュアル一覧
   async getMyManuals(params?: { page?: number; per_page?: number; status?: string }): Promise<ApiResponse<PaginatedResponse<Manual>>> {
     try {
-
-      const response = await api.get('/api/manuals/my', params);
-      
-      // バックエンドは {data: [...], meta: {...}} 形式で返すため、標準形式に変換
-      // （getManuals と同様に manuals_collection_response を使用）
-      const responseData = response.data as any;
-      return {
-        success: true,
-        data: responseData
-      } as ApiResponse<PaginatedResponse<Manual>>;
+      const response = await api.get<PaginatedResponse<Manual>>('/api/manuals/my', params);
+      // api.get() は既に ApiResponse<T> 形式を返す
+      return response;
     } catch (error: any) {
-      const message = getErrorMessage(error) || '自分のマニュアル取得に失敗しました';
-      throw new Error(message);
+      // 統一されたエラーハンドリングを使用
+      // ApiErrorHandler.handle は api.get() 内で自動的に呼び出される
+      throw error;
     }
   }
 
@@ -109,28 +105,18 @@ class ManualService {
   async getManual(id: string): Promise<ApiResponse<Manual>> {
     try {
       if (!id) {
+        // IDがない場合はAPI呼び出し前にエラーをスロー
         throw new Error('マニュアルIDが指定されていません');
       }
       
-      const response = await api.get(`/api/manuals/${id}`);
+      const response = await api.get<Manual>(`/api/manuals/${id}`);
       
-      if (!response) {
-        throw new Error('APIからレスポンスが返されませんでした');
-      }
-      
-      if (!response.success) {
-        throw new Error(response.message || 'マニュアルの取得に失敗しました');
-      }
-      
-      if (!response.data) {
-        throw new Error('マニュアルデータが見つかりません');
-      }
-      
-      // api.get() は既に ApiResponse<Manual> 形式を返すので、型キャストして返す
-      return response as ApiResponse<Manual>;
+      // api.get() が成功した場合のみここに到達し、ApiResponse<Manual> 形式で返される
+      return response;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'マニュアル詳細の取得に失敗しました';
-      throw new Error(errorMessage);
+      // api.get() または上記の throw new Error で発生したエラーを捕捉
+      // 統一されたエラーハンドリングを使用
+      throw error; // エラーを再スローして呼び出し元に伝える
     }
   }
 

@@ -104,7 +104,6 @@ const taskService = {
       
       // キャッシュが有効で、強制再取得でない場合はキャッシュから返す
       if (!forceRefresh && cachedTask && (now - cachedTask.timestamp) < CACHE_TTL) {
-        console.log('Using cached task data for:', id);
         return {
           success: true,
           data: cachedTask.data,
@@ -119,10 +118,8 @@ const taskService = {
         
         // レスポンス構造に応じてデータを取得
       if (response.data.data) {
-          console.log('Response has nested data structure');
           taskData = response.data.data as Task;
       } else {
-          console.log('Response has flat data structure');
           taskData = response.data as Task;
       }
       
@@ -173,7 +170,6 @@ const taskService = {
   async createTask(taskData: TaskData): Promise<ApiResponse<Task>> {
     try {
       // サブタスク関連の処理を削除
-      console.log('送信するタスクデータ (作成):', taskData);
       const response = await api.post('/api/tasks', { task: taskData });
       
       if (response.success && response.data) {
@@ -205,7 +201,6 @@ const taskService = {
   async updateTask(id: string, taskData: TaskData): Promise<ApiResponse<Task>> {
     try {
       // サブタスク関連の処理を削除
-      console.log('送信するタスクデータ (更新):', taskData);
       const response = await api.patch(`/api/tasks/${id}`, { task: taskData });
       
       if (response.success && response.data) {

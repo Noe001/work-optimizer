@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ManualFormData } from '@/services/manualService';
+import { ManualFormData, manualService } from '@/services/manualService';
 import { DEPARTMENTS, CATEGORIES, ACCESS_LEVELS, EDIT_PERMISSIONS } from '@/constants/manual';
 import { renderMarkdown } from '@/utils/markdown';
 
@@ -52,8 +52,6 @@ const ManualCreateView: React.FC = () => {
 
   // マニュアル保存
   const handleSave = async (status: 'draft' | 'published') => {
-
-
     if (!formData.title.trim()) {
       toast.error('タイトルを入力してください');
       return;
@@ -69,10 +67,20 @@ const ManualCreateView: React.FC = () => {
       return;
     }
 
-    try {      
-      toast.success(status === 'draft' ? '下書きを保存しました' : 'マニュアルを作成しました');
-      navigate('/manual');
+    try {
+      // API呼び出し
+      const dataToSave = { ...formData, status };
+      const response = await manualService.createManual(dataToSave);
+      
+      if (response.success) {
+        toast.success(status === 'draft' ? '下書きを保存しました' : 'マニュアルを作成しました');
+        navigate('/manual');
+      } else {
+        // APIからのエラーメッセージを表示
+        toast.error(response.message || 'マニュアルの作成に失敗しました');
+      }
     } catch (error: any) {
+      // ネットワークエラーなど、API呼び出し自体が失敗した場合
       toast.error(error.message || 'マニュアルの作成に失敗しました');
     }
   };

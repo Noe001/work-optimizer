@@ -570,15 +570,15 @@ const ManualsTab: React.FC = () => {
       if (manualsResponse.success && manualsResponse.data) {
         setRecentManuals(manualsResponse.data.data);
       }
-      
+        
       // 統計情報を設定
       if (statsResponse.success && statsResponse.data) {
-        setStats({
+          setStats({
           total: statsResponse.data.total,
           published: statsResponse.data.published,
           drafts: statsResponse.data.drafts,
           myManuals: statsResponse.data.my_manuals
-        });
+          });
       }
     } catch (error: any) {
       console.error('ダッシュボードデータの取得に失敗:', error);
@@ -767,21 +767,21 @@ const ManualsTab: React.FC = () => {
                 className="p-4 hover:shadow-md transition-shadow cursor-pointer border rounded-lg"
                 onClick={() => setIsSearchModalOpen(true)}
               >
-                <div className="text-center">
+                  <div className="text-center">
                   <Search className="h-8 w-8 mx-auto mb-2 text-primary" />
                   <div className="font-medium">クイック検索</div>
                   <div className="text-sm text-muted-foreground">マニュアルを素早く検索</div>
-                </div>
+                  </div>
               </div>
               <div 
                 className="p-4 hover:shadow-md transition-shadow cursor-pointer border rounded-lg"
                 onClick={() => setIsStatsModalOpen(true)}
               >
-                <div className="text-center">
+                  <div className="text-center">
                   <BarChart3 className="h-8 w-8 mx-auto mb-2 text-primary" />
                   <div className="font-medium">詳細統計</div>
                   <div className="text-sm text-muted-foreground">詳細な統計情報</div>
-                </div>
+                  </div>
               </div>
             </div>
           </div>
@@ -797,15 +797,27 @@ const ManualsTab: React.FC = () => {
           {selectedManual && (
             <>
               {/* ヘッダー部分 */}
-              <div className="bg-muted/30 p-6 border-b flex-shrink-0">
-                <DialogHeader className="space-y-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
+                              <div className="bg-muted/30 p-6 border-b flex-shrink-0">
+                  <DialogHeader className="space-y-4">
+                    <div className="flex items-baseline gap-3">
                       <DialogTitle 
                         className="text-3xl font-bold text-foreground leading-tight"
                       >
                         {selectedManual.title}
                       </DialogTitle>
+                      {selectedManual.created_at && (
+                        <span className="text-sm text-muted-foreground">
+                          {new Date(selectedManual.created_at).toLocaleDateString('ja-JP')}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <DialogDescription className="sr-only">
+                      {selectedManual.title}のマニュアル詳細を表示しています。
+                    </DialogDescription>
+                  
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
                       <Badge 
                         variant={getStatusBadgeVariant(selectedManual.status)}
                         className="text-xs font-medium px-3 py-1 flex-shrink-0"
@@ -1433,7 +1445,7 @@ const MeetingsTab: React.FC = () => {
             <Button
               onClick={() => {
                 // Here you would typically save the meeting minutes
-                console.log("Meeting minutes:", meetingMinutes)
+        
                 onClose()
               }}
             >

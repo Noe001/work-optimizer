@@ -144,7 +144,7 @@ export const api = {
     try {
       // FormDataの場合は_methodパラメータを追加してPOSTメソッドで送信
       if (data instanceof FormData) {
-        console.log('FormDataを検出したため、POSTリクエストとして送信します', { url });
+
         data.append('_method', 'PUT');
         try {
           const response = await apiClient.post<T>(url, data, {

@@ -30,7 +30,7 @@ module Api
       # 検索クエリでフィルター（SQLインジェクション対策）
       if params[:query].present?
         sanitized_query = ActiveRecord::Base.sanitize_sql_like(params[:query])
-        @manuals = @manuals.where('title ILIKE ? OR content ILIKE ?', "%#{sanitized_query}%", "%#{sanitized_query}%")
+        @manuals = @manuals.where('LOWER(title) LIKE LOWER(?) OR LOWER(content) LIKE LOWER(?)', "%#{sanitized_query}%", "%#{sanitized_query}%")
       end
       
       # ソート順（デフォルトは更新日時の降順）
@@ -62,13 +62,13 @@ module Api
       # タイトルでフィルター（SQLインジェクション対策）
       if params[:title].present?
         sanitized_title = ActiveRecord::Base.sanitize_sql_like(params[:title])
-        @manuals = @manuals.where('title ILIKE ?', "%#{sanitized_title}%")
+        @manuals = @manuals.where('LOWER(title) LIKE LOWER(?)', "%#{sanitized_title}%")
       end
       
       # 内容でフィルター（SQLインジェクション対策）
       if params[:content].present?
         sanitized_content = ActiveRecord::Base.sanitize_sql_like(params[:content])
-        @manuals = @manuals.where('content ILIKE ?', "%#{sanitized_content}%")
+        @manuals = @manuals.where('LOWER(content) LIKE LOWER(?)', "%#{sanitized_content}%")
       end
       
       # 作成者でフィルター
@@ -224,19 +224,34 @@ module Api
       render json: response_body, status: status
     end
 
+    # マニュアルコレクションのシリアライズ（共通メソッド）
+    def serialize_manual_collection(paginated)
+      begin
+        # ActiveModel::Serializer::CollectionSerializer を使用（Railsの慣習に従う）
+        ActiveModel::Serializer::CollectionSerializer.new(
+          paginated, 
+          serializer: ManualSerializer
+        ).as_json(current_user: current_user)
+      rescue => e
+        # CollectionSerializerで問題が発生した場合は手動シリアライズにフォールバック
+        Rails.logger.warn "CollectionSerializer failed, falling back to manual serialization: #{e.message}"
+        paginated.map do |manual|
+          ManualSerializer.new(manual, current_user: current_user).as_json
+        end
+      end
+    end
+
     # マニュアル一覧用レスポンス生成ヘルパー
     def manuals_collection_response(manuals, paginated, message: nil)
-      # 手動でシリアライズ（ActiveModel::Serializer::CollectionSerializerの問題を回避）
-      serialized_data = paginated.map do |manual|
-        ManualSerializer.new(manual, current_user: current_user).as_json
-      end
+      # シリアライズは共通メソッドを使用
+      serialized_data = serialize_manual_collection(paginated)
       
       response_body = {
         success: true,
         data: {
           data: serialized_data,
           meta: {
-            total_count: manuals.count,
+            total_count: paginated.total_count, # Kaminariのtotal_countを使用（パフォーマンス向上）
             total_pages: paginated.total_pages,
             current_page: paginated.current_page
           }
@@ -249,17 +264,15 @@ module Api
 
     # 検索結果用レスポンス生成ヘルパー（フィルターとソート情報を含む）
     def search_response(manuals, paginated, order_column, order_direction)
-      # 手動でシリアライズ（manuals_collection_responseと同様）
-      serialized_data = paginated.map do |manual|
-        ManualSerializer.new(manual, current_user: current_user).as_json
-      end
+      # シリアライズは共通メソッドを使用
+      serialized_data = serialize_manual_collection(paginated)
       
       render json: {
         success: true,
         data: {
           data: serialized_data,
           meta: {
-            total_count: manuals.count,
+            total_count: paginated.total_count, # Kaminariのtotal_countを使用（パフォーマンス向上）
             total_pages: paginated.total_pages,
             current_page: paginated.current_page,
             filters: {

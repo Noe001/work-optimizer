@@ -60,7 +60,7 @@ const KnowledgeCreationPage = () => {
       createdAt: new Date().toISOString()
     }
     
-    console.log("新規ナレッジ:", newKnowledge)
+    
     // 実際にはここでAPIを呼び出しデータを保存する
     
     // フォームをリセット
