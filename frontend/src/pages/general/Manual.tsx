@@ -504,21 +504,21 @@ const ManualView: React.FC = () => {
               </Button>
               
               {/* React-Paginate */}
-              {React.createElement(ReactPaginate as any, {
-                pageCount: totalPages,
-                pageRangeDisplayed: 5,
-                marginPagesDisplayed: 2,
-                onPageChange: handlePageChange,
-                forcePage: currentPage - 1, // React-Paginateは0ベースなので-1
-                previousLabel: null, // カスタムボタンを使用するため無効化
-                nextLabel: null, // カスタムボタンを使用するため無効化
-                breakLabel: "...",
-                containerClassName: "flex items-center space-x-1",
-                pageLinkClassName: "px-3 py-2 text-sm border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-md transition-colors duration-200",
-                activeLinkClassName: "!bg-primary !text-primary-foreground !border-primary",
-                breakLinkClassName: "px-3 py-2 text-sm text-gray-500",
-                disabledClassName: "opacity-50 cursor-not-allowed"
-              })}
+              <ReactPaginate
+                pageCount={totalPages}
+                pageRangeDisplayed={5}
+                marginPagesDisplayed={2}
+                onPageChange={handlePageChange}
+                forcePage={currentPage - 1} // React-Paginateは0ベースなので-1
+                previousLabel={null} // カスタムボタンを使用するため無効化
+                nextLabel={null} // カスタムボタンを使用するため無効化
+                breakLabel="..."
+                containerClassName="flex items-center space-x-1"
+                pageLinkClassName="px-3 py-2 text-sm border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-md transition-colors duration-200"
+                activeLinkClassName="!bg-primary !text-primary-foreground !border-primary"
+                breakLinkClassName="px-3 py-2 text-sm text-gray-500"
+                disabledClassName="opacity-50 cursor-not-allowed"
+              />
               
               {/* 次のページボタン */}
               <Button

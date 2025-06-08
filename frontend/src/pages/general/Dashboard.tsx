@@ -27,6 +27,7 @@ import {
   ChevronDown,
   ChevronUp,
   Filter,
+  Loader2,
 } from "lucide-react"
 import Header from "@/components/Header"
 import { Link, useNavigate } from "react-router-dom"
@@ -550,6 +551,7 @@ const ManualsTab: React.FC = () => {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Manual[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
   // マニュアル統計とダッシュボード情報を取得
@@ -602,26 +604,52 @@ const ManualsTab: React.FC = () => {
 
   // マニュアル検索
   const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
     
+    setIsSearching(true);
     try {
-      const response = await manualService.getManuals({
+      // サーバーサイドの検索APIを使用（全マニュアルを対象とした検索）
+      const response = await manualService.searchManuals({
+        query: searchQuery.trim(),
+        status: 'published', // 公開済みマニュアルのみ検索
         page: 1,
-        per_page: 10
+        per_page: 20, // 検索結果は多めに表示
+        order_by: 'updated_at',
+        order: 'desc'
       });
       
       if (response.success && response.data) {
-        // クライアント側でフィルタリング
-        const filtered = response.data.data.filter(manual =>
-          manual.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (manual.content && manual.content.toLowerCase().includes(searchQuery.toLowerCase()))
-        );
-        setSearchResults(filtered);
+        setSearchResults(response.data.data || []);
+      } else {
+        setSearchResults([]);
+        if (!response.success && response.message) {
+          toast.error(response.message);
+        }
       }
     } catch (error: any) {
       toast.error('検索に失敗しました');
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
     }
   };
+  
+  // 検索クエリ変更時の処理（デバウンス付き）
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    const timer = setTimeout(() => {
+      handleSearch();
+    }, 300); // 300ms のデバウンス
+    
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
 
 
@@ -986,7 +1014,7 @@ const ManualsTab: React.FC = () => {
           <DialogHeader>
             <DialogTitle>マニュアル検索</DialogTitle>
             <DialogDescription>
-              タイトルや内容からマニュアルを検索できます
+              全マニュアルを対象にタイトルや内容から検索できます
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -997,32 +1025,49 @@ const ManualsTab: React.FC = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
               />
-              <Button onClick={handleSearch}>
-                <Search className="h-4 w-4 mr-2" />
+              <Button onClick={handleSearch} disabled={isSearching}>
+                {isSearching ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4 mr-2" />
+                )}
                 検索
               </Button>
             </div>
             <div className="max-h-80 overflow-y-auto space-y-2">
-              {searchResults.length > 0 ? (
-                searchResults.map((manual) => (
-                  <Card key={manual.id} className="p-3 cursor-pointer hover:shadow-md" onClick={() => {
-                    setSelectedManual(manual);
-                    setIsSearchModalOpen(false);
-                    setIsMetaVisible(true);
-                  }}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium">{manual.title}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {getDepartmentLabel(manual.department)} - {getCategoryLabel(manual.category)}
-                        </p>
+              {isSearching ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                  <span className="text-muted-foreground">検索中...</span>
+                </div>
+              ) : searchResults.length > 0 ? (
+                <>
+                  <div className="text-sm text-muted-foreground px-1 mb-2">
+                    {searchResults.length}件のマニュアルが見つかりました
+                  </div>
+                  {searchResults.map((manual) => (
+                    <Card key={manual.id} className="p-3 cursor-pointer hover:shadow-md" onClick={() => {
+                      setSelectedManual(manual);
+                      setIsSearchModalOpen(false);
+                      setIsMetaVisible(true);
+                    }}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium truncate">{manual.title}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {getDepartmentLabel(manual.department)} - {getCategoryLabel(manual.category)}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            作成者: {manual.author?.name || '不明'} · {new Date(manual.created_at).toLocaleDateString('ja-JP')}
+                          </p>
+                        </div>
+                        <Badge variant={getStatusBadgeVariant(manual.status)}>
+                          {manual.status === 'published' ? '公開中' : '下書き'}
+                        </Badge>
                       </div>
-                      <Badge variant={getStatusBadgeVariant(manual.status)}>
-                        {manual.status === 'published' ? '公開中' : '下書き'}
-                      </Badge>
-                    </div>
-                  </Card>
-                ))
+                    </Card>
+                  ))}
+                </>
               ) : searchQuery ? (
                 <p className="text-center text-muted-foreground py-4">
                   「{searchQuery}」に一致するマニュアルが見つかりません

@@ -85,6 +85,7 @@ export interface PaginationMeta {
   total_pages: number;
   total_count: number;
   per_page: number;
+  last_page: number; // react-paginateとの互換性のために追加
 }
 
 // ページネーション付きレスポンス型
