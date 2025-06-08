@@ -121,10 +121,60 @@ class User < ApplicationRecord
     ).sum(:overtime_hours) || 0
   end
 
+  # 権限管理メソッド群
+  
+  # システム管理者かどうかを判定
+  def system_admin?
+    system_admin || role == 'admin'
+  end
+  
+  # 組織管理者かどうかを判定  
+  def organization_admin?
+    organization_admin || system_admin?
+  end
+  
   # 部門管理者かどうかを判定
-  # NOTE: 実際のロジックは組織の要件に応じて調整してください。
+  # 新しい権限フラグを優先し、フォールバックとしてレガシー実装を保持
   def department_admin?
-    role.in?(['admin', 'manager']) || position&.downcase&.include?('manager')
+    # 1. 新しい権限フラグをチェック（最優先）
+    return true if department_admin
+    
+    # 2. システム管理者は全権限を持つ
+    return true if system_admin?
+    
+    # 3. 明示的なロールチェック
+    return true if role.in?(['admin', 'department_manager', 'department_admin'])
+    
+    # 4. レガシー実装（段階的廃止予定）
+    # DEPRECATION WARNING: この部分は将来的に削除されます
+    Rails.logger.warn "[DEPRECATION] position-based admin detection used for user #{id}. Please update to use department_admin flag."
+    
+    return false unless position.present?
+    
+    # 厳格な役職名チェック（ホワイトリスト方式）
+    admin_positions = [
+      '部長', '課長', '室長', '所長', 'マネージャー', 'manager',
+      'department manager', 'section manager', 'division manager'
+    ]
+    
+    normalized_position = position.strip.downcase
+    admin_positions.any? { |admin_pos| normalized_position == admin_pos.downcase }
+  end
+  
+  # 特定のリソースに対する権限チェック（将来のRBACに向けた準備）
+  def can_manage?(resource_type, scope = :own)
+    case scope
+    when :system
+      system_admin?
+    when :organization  
+      organization_admin?
+    when :department
+      department_admin? || organization_admin?
+    when :own
+      true # 基本的に自分のリソースは管理可能
+    else
+      false
+    end
   end
 
   # TODO: 将来的な権限管理システムの改善案

@@ -22,9 +22,27 @@ module Api
         @manuals = @manuals.where(category: params[:category])
       end
       
-      # ステータスでフィルター（バックエンドで処理）
-      if params[:status].present? && params[:status] != 'all'
-        @manuals = @manuals.where(status: params[:status])
+      # ステータスでフィルター（セキュアなデフォルト）
+      if params[:status].present?
+        case params[:status]
+        when 'all'
+          # 'all' の場合は権限に応じてフィルター（公開済み + 自分の下書き）
+          @manuals = @manuals.where(
+            "(status = 'published') OR (status = 'draft' AND user_id = ?)", 
+            current_user.id
+          )
+        when 'published'
+          @manuals = @manuals.where(status: 'published')
+        when 'draft'
+          # 下書きは自分のもののみ
+          @manuals = @manuals.where(status: 'draft', user_id: current_user.id)
+        else
+          # 無効なステータス値の場合はデフォルトにフォールバック
+          @manuals = @manuals.where(status: 'published')
+        end
+      else
+        # デフォルトは公開済みのみ（セキュリティ重視）
+        @manuals = @manuals.where(status: 'published')
       end
       
       # 検索クエリでフィルター（SQLインジェクション対策）
@@ -33,8 +51,19 @@ module Api
         @manuals = @manuals.where('LOWER(title) LIKE LOWER(?) OR LOWER(content) LIKE LOWER(?)', "%#{sanitized_query}%", "%#{sanitized_query}%")
       end
       
-      # ソート順（デフォルトは更新日時の降順）
-      @manuals = @manuals.order(updated_at: :desc)
+      # ソート順
+      order_column = params[:order_by] || 'updated_at'
+      order_direction = params[:order] || 'desc'
+      
+      # 有効なソートカラムかチェック
+      valid_sort_columns = %w[title created_at updated_at]
+      order_column = 'updated_at' unless valid_sort_columns.include?(order_column)
+      
+      # 有効なソート方向かチェック
+      valid_directions = %w[asc desc]
+      order_direction = 'desc' unless valid_directions.include?(order_direction)
+      
+      @manuals = @manuals.order("#{order_column} #{order_direction}")
       
       # ページネーション
       page_size = [params[:per_page]&.to_i || 10, 100].min # 最大100件まで
@@ -59,13 +88,22 @@ module Api
         @manuals = @manuals.where(category: params[:category])
       end
       
-      # タイトルでフィルター（SQLインジェクション対策）
+      # 検索クエリでフィルター（タイトルと内容を両方検索）
+      if params[:query].present?
+        sanitized_query = ActiveRecord::Base.sanitize_sql_like(params[:query])
+        @manuals = @manuals.where(
+          'LOWER(title) LIKE LOWER(?) OR LOWER(content) LIKE LOWER(?)', 
+          "%#{sanitized_query}%", "%#{sanitized_query}%"
+        )
+      end
+      
+      # タイトルでフィルター（個別指定時）
       if params[:title].present?
         sanitized_title = ActiveRecord::Base.sanitize_sql_like(params[:title])
         @manuals = @manuals.where('LOWER(title) LIKE LOWER(?)', "%#{sanitized_title}%")
       end
       
-      # 内容でフィルター（SQLインジェクション対策）
+      # 内容でフィルター（個別指定時）
       if params[:content].present?
         sanitized_content = ActiveRecord::Base.sanitize_sql_like(params[:content])
         @manuals = @manuals.where('LOWER(content) LIKE LOWER(?)', "%#{sanitized_content}%")
@@ -92,6 +130,29 @@ module Api
       
       if params[:updated_before].present?
         @manuals = @manuals.where('updated_at <= ?', params[:updated_before])
+      end
+      
+      # ステータスでフィルター（セキュアなデフォルト）
+      if params[:status].present?
+        case params[:status]
+        when 'all'
+          # 'all' の場合は権限に応じてフィルター（公開済み + 自分の下書き）
+          @manuals = @manuals.where(
+            "(status = 'published') OR (status = 'draft' AND user_id = ?)", 
+            current_user.id
+          )
+        when 'published'
+          @manuals = @manuals.where(status: 'published')
+        when 'draft'
+          # 下書きは自分のもののみ
+          @manuals = @manuals.where(status: 'draft', user_id: current_user.id)
+        else
+          # 無効なステータス値の場合はデフォルトにフォールバック
+          @manuals = @manuals.where(status: 'published')
+        end
+      else
+        # デフォルトは公開済みのみ（セキュリティ重視）
+        @manuals = @manuals.where(status: 'published')
       end
       
       # ソート順

@@ -18,7 +18,7 @@ export const CATEGORIES: ManualCategoryOption[] = [
 export const ACCESS_LEVELS: ManualAccessLevelOption[] = [
   { value: 'all', label: '全社員' },
   { value: 'department', label: '部門内' },
-  { value: 'specific', label: '指定メンバーのみ' },
+  { value: 'specific', label: '指定メンバーのみ ⚠️ 仮実装' },
 ];
 
 // 編集権限選択肢

@@ -154,7 +154,13 @@ ActiveRecord::Schema[7.2].define(version: 2025_05_28_053438) do
     t.string "department"
     t.string "position"
     t.text "bio"
+    t.boolean "department_admin", default: false, null: false
+    t.boolean "system_admin", default: false, null: false
+    t.boolean "organization_admin", default: false, null: false
+    t.index ["department_admin"], name: "index_users_on_department_admin"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["organization_admin"], name: "index_users_on_organization_admin"
+    t.index ["system_admin"], name: "index_users_on_system_admin"
   end
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"

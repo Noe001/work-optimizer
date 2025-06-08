@@ -114,8 +114,8 @@ export const api = {
       
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
-
-      ApiErrorHandler.handle(error, `GET ${url}`);
+      // エラーを処理し、構造化されたエラーレスポンスを返すかエラーを再スロー
+      return ApiErrorHandler.handleAndReturn<T>(error, `GET ${url}`);
     }
   },
 
@@ -130,7 +130,7 @@ export const api = {
       const response = await apiClient.post<T>(url, data, config);
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
-      ApiErrorHandler.handle(error, `POST ${url}`);
+      return ApiErrorHandler.handleAndReturn<T>(error, `POST ${url}`);
     }
   },
 
@@ -161,7 +161,7 @@ export const api = {
       const response = await apiClient.put<T>(url, data, config);
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
-      ApiErrorHandler.handle(error, `PUT ${url}`);
+      return ApiErrorHandler.handleAndReturn<T>(error, `PUT ${url}`);
     }
   },
 
@@ -175,7 +175,7 @@ export const api = {
       const response = await apiClient.delete<T>(url, config);
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
-      ApiErrorHandler.handle(error, `DELETE ${url}`);
+      return ApiErrorHandler.handleAndReturn<T>(error, `DELETE ${url}`);
     }
   },
 
@@ -194,7 +194,7 @@ export const api = {
       const response = await apiClient.patch<T>(url, data, { ...config, headers });
       return axiosToApiResponse<T>(response);
     } catch (error: any) {
-      ApiErrorHandler.handle(error, `PATCH ${url}`);
+      return ApiErrorHandler.handleAndReturn<T>(error, `PATCH ${url}`);
     }
   },
 };
@@ -225,6 +225,37 @@ class ApiErrorHandler {
     };
     
     throw apiError;
+  }
+
+  /**
+   * エラーを処理して構造化されたエラーレスポンスを返す
+   * undefinedを返すことを防ぎ、ランタイムエラーを回避する
+   */
+  static handleAndReturn<T>(error: AxiosError, context: string): ApiResponse<T> {
+    const errorMessage = this.extractErrorMessage(error);
+    const errorCode = error.response?.status;
+    
+    // ログ出力
+    if (import.meta.env.DEV) {
+      console.error(`[${context}] API Error:`, {
+        message: errorMessage,
+        status: errorCode,
+        url: error.config?.url,
+        data: error.response?.data
+      });
+    }
+    
+    // ユーザーフレンドリーなエラーメッセージ
+    const userMessage = this.getUserFriendlyMessage(errorCode, errorMessage);
+    
+    // 構造化されたエラーレスポンスを返す
+    return {
+      success: false,
+      message: userMessage,
+      data: undefined as T,
+      code: (error.response?.data as any)?.code || 'API_ERROR',
+      errors: (error.response?.data as any)?.errors || []
+    };
   }
   
   private static extractErrorMessage(error: AxiosError): string {

@@ -48,6 +48,8 @@ class Manual < ApplicationRecord
   scope :published, -> { where(manuals: { status: 'published' }) }
   
   # 特定のユーザーがアクセスできるマニュアルを取得するスコープ
+  # TODO: access_level = 'specific' の実装は仮実装です
+  # 将来的にmanual_accessesテーブルを使用した詳細な権限管理に移行予定
   scope :accessible_by, ->(user) {
     if user.nil?
       none
@@ -58,10 +60,19 @@ class Manual < ApplicationRecord
         'published',  # 公開済みマニュアルの場合
         'all',  # 全社員アクセス可能
         'department', user.department.to_s,  # 同じ部門
-        'specific', user.id  # 特定ユーザー指定
+        'specific', user.id  # 仮実装：作成者のみアクセス可能（本来は指定ユーザー）
       )
     end
   }
+  
+  # アクセスレベルの警告メッセージ（開発環境用）
+  def access_level_warning?
+    access_specific? && Rails.env.development?
+  end
+
+  def access_level_warning_message
+    "⚠️ 注意: 'specific'アクセスレベルは現在仮実装のため、作成者のみアクセス可能です。将来的にmanual_accessesテーブルを使用した指定メンバー機能を実装予定です。"
+  end
 
   private
 
