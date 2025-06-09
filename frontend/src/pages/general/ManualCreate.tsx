@@ -88,7 +88,7 @@ const ManualCreateView: React.FC = () => {
   return (
     <>
       <Header />
-      <div className="p-6 bg-background min-h-screen bg-gray-50">
+      <div className="p-6 bg-background min-h-screen">
         {/* Header */}
         <div className="mb-6">
           <Button 
@@ -157,7 +157,7 @@ const ManualCreateView: React.FC = () => {
                     </TabsContent>
                     
                     <TabsContent value="preview" className="mt-4">
-                      <div className="border rounded-md p-4 min-h-[400px] bg-white">
+                      <div className="border rounded-md p-4 min-h-[400px] bg-background">
                         {formData.content ? (
                           <div 
                             className="prose max-w-none prose-sm [&_h1]:text-[1.75rem] [&_h2]:text-2xl [&_h3]:text-xl [&_h4]:text-base [&_p]:my-0.5 [&_h1]:mb-1 [&_h2]:mb-1 [&_h2]:mt-0.5 [&_h3]:mb-0.5 [&_h4]:mb-0.5 [&_h5]:mb-0.5 [&_h6]:mb-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_blockquote]:my-1 [&_h1]:border-b [&_h1]:border-gray-300 [&_h1]:pb-1"

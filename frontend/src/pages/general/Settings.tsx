@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import { useTheme } from '@/contexts/ThemeContext'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,10 +26,12 @@ import {
 import Header from "@/components/Header"
 
 const SettingsView: React.FC = () => {
+  const { theme, toggleTheme } = useTheme();
+
   return (
     <>
       <Header />
-      <div className="min-h-screen flex flex-col bg-gray-50">
+      <div className="min-h-screen flex flex-col bg-background">
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* プロフィール設定 */}
@@ -154,7 +157,10 @@ const SettingsView: React.FC = () => {
                       ダークテーマを使用する
                     </p>
                   </div>
-                  <Switch />
+                  <Switch 
+                    checked={theme === 'dark'}
+                    onCheckedChange={toggleTheme}
+                  />
                 </div>
               </CardContent>
             </Card>

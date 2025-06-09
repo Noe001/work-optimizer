@@ -3,6 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 // 認証コンテキスト
 import { AuthProvider } from './contexts/AuthContext';
 
+// テーマコンテキスト
+import { ThemeProvider } from './contexts/ThemeContext';
+
 // 認証が必要なルートのプロテクター
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -25,8 +28,9 @@ import CreateTaskView from './pages/general/CreateTask';
 import AttendanceView from './pages/general/Attendance';
 
 const App = () => (
-  <AuthProvider>
-    <Router>
+  <ThemeProvider>
+    <AuthProvider>
+      <Router>
       <Routes>
         {/* 認証不要のルート */}
         <Route path="/login" element={<LoginView />} />
@@ -142,8 +146,9 @@ const App = () => (
           </ProtectedRoute>
         } />
       </Routes>
-    </Router>
-  </AuthProvider>
+      </Router>
+    </AuthProvider>
+  </ThemeProvider>
 );
 
 export default App;

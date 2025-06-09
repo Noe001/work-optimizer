@@ -561,7 +561,7 @@ const AttendanceView: React.FC = () => {
       case 'sick':
         return <Badge className="bg-teal-light text-teal-deep">病気休暇</Badge>;
       case 'other':
-        return <Badge className="bg-gray-500">その他</Badge>;
+        return <Badge className="bg-muted">その他</Badge>;
       default:
         return <Badge>不明</Badge>;
     }
@@ -841,37 +841,37 @@ const AttendanceView: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-4">
-              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
+              <div className="flex flex-col items-center justify-center p-4 bg-muted rounded-lg">
                 <span className="text-sm text-muted-foreground">出勤日数</span>
                 <span className="text-2xl font-semibold mt-1">
                   {attendanceSummary ? attendanceSummary.present_days : "-"}/{attendanceSummary ? attendanceSummary.total_days : "-"}
                 </span>
               </div>
-              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
+              <div className="flex flex-col items-center justify-center p-4 bg-muted rounded-lg">
                 <span className="text-sm text-muted-foreground">遅刻日数</span>
                 <span className="text-2xl font-semibold mt-1">
                   {attendanceSummary ? attendanceSummary.late_days : "-"}
                 </span>
               </div>
-              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
+              <div className="flex flex-col items-center justify-center p-4 bg-muted rounded-lg">
                 <span className="text-sm text-muted-foreground">総労働時間</span>
                 <span className="text-2xl font-semibold mt-1">
                   {attendanceSummary ? attendanceSummary.total_hours : "-"}
                 </span>
               </div>
-              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
+              <div className="flex flex-col items-center justify-center p-4 bg-muted rounded-lg">
                 <span className="text-sm text-muted-foreground">残業時間</span>
                 <span className="text-2xl font-semibold mt-1">
                   {attendanceSummary ? attendanceSummary.total_overtime : "-"}
                 </span>
               </div>
-              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
+              <div className="flex flex-col items-center justify-center p-4 bg-muted rounded-lg">
                 <span className="text-sm text-muted-foreground">有給休暇残</span>
                 <span className="text-2xl font-semibold mt-1">
                   {attendanceSummary ? attendanceSummary.leave_balance?.paid : "-"}
                 </span>
               </div>
-              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg">
+              <div className="flex flex-col items-center justify-center p-4 bg-muted rounded-lg">
                 <span className="text-sm text-muted-foreground">病休残</span>
                 <span className="text-2xl font-semibold mt-1">
                   {attendanceSummary ? attendanceSummary.leave_balance?.sick : "-"}

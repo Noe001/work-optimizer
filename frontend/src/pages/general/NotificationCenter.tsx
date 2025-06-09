@@ -36,7 +36,7 @@ const NotificationCenter: React.FC = () => {
   return (
     <>
       <Header />
-      <div className="p-6 bg-background min-h-screen bg-gray-50">
+      <div className="p-6 bg-background min-h-screen">
         <div className="mb-6">
           <Button 
             variant="ghost" 

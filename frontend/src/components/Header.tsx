@@ -26,8 +26,11 @@ import {
   Plus,
   Building2,
   Clock,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
 import { createAvatarProps } from "@/utils/avatarUtils";
 
 // ナビゲーションリンクの定義
@@ -50,6 +53,7 @@ const Header: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   
   // ログアウト処理
   const handleLogout = async () => {
@@ -76,7 +80,7 @@ const Header: React.FC = () => {
   );
   
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-white shadow-md">
+    <header className="sticky top-0 z-50 w-full border-b bg-background shadow-md">
       <div className="container mx-auto flex h-14 items-center px-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -181,11 +185,21 @@ const Header: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-2">
+          {/* テーマ切り替えボタン */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え'}
+          >
+            {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </Button>
+          
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center bg-teal-primary text-white text-xs rounded-full">
+                <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center bg-red-500 text-white text-xs rounded-full">
                   3
                 </span>
               </Button>

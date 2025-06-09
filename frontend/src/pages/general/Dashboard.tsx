@@ -200,19 +200,19 @@ const DashboardTab: React.FC = () => {
         <h2 className="text-2xl font-bold mb-2 text-support-darkerText">{greeting}、{userName}さん</h2>
         <p className="opacity-90">{motivationalMessage} 今週のタスク完了率は{taskCompletionRate}%です。</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="secondary" className="bg-white/20 hover:bg-white/30 text-gray-800 shadow-sm hover:shadow-md transition-shadow" asChild>
+          <Button variant="secondary" className="bg-background/20 hover:bg-background/30 text-foreground shadow-sm hover:shadow-md transition-shadow" asChild>
             <Link to="/tasks">
               <FileText className="h-4 w-4 mr-2" />
               タスク
             </Link>
           </Button>
-          <Button variant="secondary" className="bg-white/20 hover:bg-white/30 text-gray-800 shadow-sm hover:shadow-md transition-shadow" asChild>
+          <Button variant="secondary" className="bg-background/20 hover:bg-background/30 text-foreground shadow-sm hover:shadow-md transition-shadow" asChild>
             <Link to="/attendance">
               <Calendar className="h-4 w-4 mr-2" />
               勤怠管理
             </Link>
           </Button>
-          <Button variant="secondary" className="bg-white/20 hover:bg-white/30 text-gray-800 shadow-sm hover:shadow-md transition-shadow" asChild>
+          <Button variant="secondary" className="bg-background/20 hover:bg-background/30 text-foreground shadow-sm hover:shadow-md transition-shadow" asChild>
             <Link to="/team_chat">
               <MessageSquare className="h-4 w-4 mr-2" />
               メッセージ
@@ -1439,7 +1439,7 @@ const MeetingsTab: React.FC = () => {
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <label htmlFor="participants" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="participants" className="block text-sm font-medium text-foreground">
               参加者
             </label>
             <Input
@@ -1450,7 +1450,7 @@ const MeetingsTab: React.FC = () => {
             />
           </div>
           <div>
-            <label htmlFor="discussion" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="discussion" className="block text-sm font-medium text-foreground">
               議論内容
             </label>
             <Textarea
@@ -1462,7 +1462,7 @@ const MeetingsTab: React.FC = () => {
             />
           </div>
           <div>
-            <label htmlFor="decisions" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="decisions" className="block text-sm font-medium text-foreground">
               決定事項
             </label>
             <Textarea
@@ -1474,7 +1474,7 @@ const MeetingsTab: React.FC = () => {
             />
           </div>
           <div>
-            <label htmlFor="nextActions" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="nextActions" className="block text-sm font-medium text-foreground">
               次のアクション
             </label>
             <Textarea
@@ -1567,7 +1567,7 @@ const DashboardView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>("dashboard")
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+            <div className="min-h-screen flex flex-col bg-background">
       <Header />
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

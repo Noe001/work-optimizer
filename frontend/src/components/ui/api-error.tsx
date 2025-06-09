@@ -23,7 +23,7 @@ export function ApiError({ error, onRetry, className = '' }: ApiErrorProps) {
           {onRetry && (
             <Button 
               variant="outline" 
-              className="mt-2 bg-white" 
+              className="mt-2 bg-background" 
               onClick={onRetry}
               size="sm"
             >
