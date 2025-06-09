@@ -886,8 +886,8 @@ const Profile: React.FC = () => {
                   </div>
                 )}
                 {isDragOver && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-teal-primary bg-opacity-20 rounded-full">
-                <span className="text-teal-primary text-xs font-medium">ドロップ</span>
+                  <div className="absolute inset-0 flex items-center justify-center bg-teal-primary bg-opacity-20 rounded-full">
+                    <span className="text-teal-primary text-xs font-medium">ドロップ</span>
                   </div>
                 )}
                 <input
