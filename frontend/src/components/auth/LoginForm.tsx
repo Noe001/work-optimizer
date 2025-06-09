@@ -97,17 +97,17 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onSwitchToSignu
 
           {/* メールアドレス */}
           <div className="space-y-2">
-            <Label htmlFor="email">メールアドレス</Label>
+            <Label htmlFor="email" className="text-foreground">メールアドレス</Label>
             <Input
               id="email"
               type="email"
               placeholder="example@company.com"
               {...register('email')}
-              className={errors.email ? 'border-red-500' : ''}
+              className={`${errors.email ? 'border-red-500' : ''} bg-background text-foreground placeholder:text-muted-foreground`}
               autoComplete="email"
             />
             {errors.email && (
-              <p className="text-sm text-red-500">{errors.email.message}</p>
+              <p className="text-sm text-red-500 dark:text-red-400">{errors.email.message}</p>
             )}
           </div>
 

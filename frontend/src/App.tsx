@@ -29,8 +29,8 @@ import AttendanceView from './pages/general/Attendance';
 
 const App = () => (
   <ThemeProvider>
-    <AuthProvider>
-      <Router>
+  <AuthProvider>
+    <Router>
       <Routes>
         {/* 認証不要のルート */}
         <Route path="/login" element={<LoginView />} />
@@ -146,8 +146,8 @@ const App = () => (
           </ProtectedRoute>
         } />
       </Routes>
-      </Router>
-    </AuthProvider>
+    </Router>
+  </AuthProvider>
   </ThemeProvider>
 );
 

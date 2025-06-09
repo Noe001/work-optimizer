@@ -196,9 +196,9 @@ const DashboardTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* ようこそメッセージ */}
-      <div className="bg-gradient-to-r from-teal-50 to-teal-primary/20 rounded-lg p-6 shadow-lg border border-teal-primary/10">
-        <h2 className="text-2xl font-bold mb-2 text-support-darkerText">{greeting}、{userName}さん</h2>
-        <p className="opacity-90">{motivationalMessage} 今週のタスク完了率は{taskCompletionRate}%です。</p>
+      <div className="bg-gradient-to-r from-teal-50 to-teal-primary/20 dark:from-teal-950/30 dark:to-teal-900/20 rounded-lg p-6 shadow-lg border border-teal-primary/10 dark:border-teal-primary/20">
+        <h2 className="text-2xl font-bold mb-2 text-foreground">{greeting}、{userName}さん</h2>
+        <p className="text-muted-foreground">{motivationalMessage} 今週のタスク完了率は{taskCompletionRate}%です。</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button variant="secondary" className="bg-background/20 hover:bg-background/30 text-foreground shadow-sm hover:shadow-md transition-shadow" asChild>
             <Link to="/tasks">
@@ -682,7 +682,7 @@ const ManualsTab: React.FC = () => {
               onClick={() => navigate('/manual?status=all')}
             >
               <div className="text-center">
-                <div className="text-2xl font-bold text-black">{stats.total}</div>
+                <div className="text-2xl font-bold text-foreground">{stats.total}</div>
                 <div className="text-sm text-muted-foreground">総マニュアル数</div>
               </div>
             </Card>
@@ -691,7 +691,7 @@ const ManualsTab: React.FC = () => {
               onClick={() => navigate('/manual?status=published')}
             >
               <div className="text-center">
-                <div className="text-2xl font-bold text-black">{stats.published}</div>
+                <div className="text-2xl font-bold text-foreground">{stats.published}</div>
                 <div className="text-sm text-muted-foreground">公開中</div>
               </div>
             </Card>
@@ -700,7 +700,7 @@ const ManualsTab: React.FC = () => {
               onClick={() => navigate('/manual?status=draft')}
             >
               <div className="text-center">
-                <div className="text-2xl font-bold text-black">{stats.drafts}</div>
+                <div className="text-2xl font-bold text-foreground">{stats.drafts}</div>
                 <div className="text-sm text-muted-foreground">下書き</div>
               </div>
             </Card>
@@ -709,7 +709,7 @@ const ManualsTab: React.FC = () => {
               onClick={() => navigate('/manual?status=my')}
             >
               <div className="text-center">
-                <div className="text-2xl font-bold text-black">{stats.myManuals}</div>
+                <div className="text-2xl font-bold text-foreground">{stats.myManuals}</div>
                 <div className="text-sm text-muted-foreground">自分のマニュアル</div>
               </div>
             </Card>
@@ -721,7 +721,7 @@ const ManualsTab: React.FC = () => {
               <div className="text-center py-8">読み込み中...</div>
             ) : recentManuals.length === 0 ? (
               <div className="text-center py-8">
-                <BookOpen className="h-12 w-12 mx-auto mb-4 text-black" />
+                <BookOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground mb-4">まだマニュアルがありません</p>
                 <Button asChild>
                   <Link to="/manual/create">
