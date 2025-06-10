@@ -118,9 +118,19 @@ const Header: React.FC = () => {
         </DropdownMenu>
         
         <div className="flex items-center gap-2 font-semibold">
-          <Link to="/" className="flex items-center gap-2">
-            <img src="/images/actify_logo.png" alt="logo" className="h-7 w-7" />
-            <span className="hidden md:inline">Actify</span>
+          <Link to="/" className="flex items-center">
+            {/* 狭い画面では通常のロゴ */}
+            <img 
+              src="/images/actify_logo.png" 
+              alt="Actify" 
+              className="h-7 w-7 md:hidden" 
+            />
+            {/* 広い画面ではフルロゴ */}
+            <img 
+              src="/images/actify_logo_full.png" 
+              alt="Actify" 
+              className="h-7 hidden md:block" 
+            />
           </Link>
         </div>
         

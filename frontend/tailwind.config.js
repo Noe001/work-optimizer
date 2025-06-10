@@ -76,6 +76,17 @@ module.exports = {
 				textGray: '#64748b',
 				darkText: '#1e293b',
 				darkerText: '#0f172a'
+			},
+			// ダークモード専用カラー
+			dark: {
+				// 背景色
+				mainBg: '#36393F',     // チャット/メイン背景
+				sidebarBg: '#2F3136',  // サイドバー
+				frameBg: '#202225',    // 外枠/最暗部
+				// テキスト & UI要素
+				primaryText: '#FFFFFF',   // プライマリテキスト
+				secondaryText: '#B9BBBE', // セカンダリテキスト
+				uiHover: '#40444B',      // UI要素/ホバー
 			}
   		}
   	}

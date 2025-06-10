@@ -196,30 +196,32 @@ const DashboardTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* ようこそメッセージ */}
-      <div className="bg-gradient-to-r from-teal-50 to-teal-primary/20 dark:from-teal-950/30 dark:to-teal-900/20 rounded-lg p-6 shadow-lg border border-teal-primary/10 dark:border-teal-primary/20">
-        <h2 className="text-2xl font-bold mb-2 text-foreground">{greeting}、{userName}さん</h2>
-        <p className="text-muted-foreground">{motivationalMessage} 今週のタスク完了率は{taskCompletionRate}%です。</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="secondary" className="bg-background/20 hover:bg-background/30 text-foreground shadow-sm hover:shadow-md transition-shadow" asChild>
-            <Link to="/tasks">
-              <FileText className="h-4 w-4 mr-2" />
-              タスク
-            </Link>
-          </Button>
-          <Button variant="secondary" className="bg-background/20 hover:bg-background/30 text-foreground shadow-sm hover:shadow-md transition-shadow" asChild>
-            <Link to="/attendance">
-              <Calendar className="h-4 w-4 mr-2" />
-              勤怠管理
-            </Link>
-          </Button>
-          <Button variant="secondary" className="bg-background/20 hover:bg-background/30 text-foreground shadow-sm hover:shadow-md transition-shadow" asChild>
-            <Link to="/team_chat">
-              <MessageSquare className="h-4 w-4 mr-2" />
-              メッセージ
-            </Link>
-          </Button>
-        </div>
-      </div>
+      <Card className="bg-gradient-to-r from-card to-muted/50 border-border shadow-lg">
+        <CardContent className="p-6">
+          <h2 className="text-2xl font-bold mb-2 text-foreground">{greeting}、{userName}さん</h2>
+          <p className="text-muted-foreground mb-4">{motivationalMessage} 今週のタスク完了率は{taskCompletionRate}%です。</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" className="shadow-sm hover:shadow-md transition-shadow" asChild>
+              <Link to="/tasks">
+                <FileText className="h-4 w-4 mr-2" />
+                タスク
+              </Link>
+            </Button>
+            <Button variant="secondary" className="shadow-sm hover:shadow-md transition-shadow" asChild>
+              <Link to="/attendance">
+                <Calendar className="h-4 w-4 mr-2" />
+                勤怠管理
+              </Link>
+            </Button>
+            <Button variant="secondary" className="shadow-sm hover:shadow-md transition-shadow" asChild>
+              <Link to="/team_chat">
+                <MessageSquare className="h-4 w-4 mr-2" />
+                メッセージ
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Manuals Section */}
       <div className="space-y-6">
@@ -230,7 +232,7 @@ const DashboardTab: React.FC = () => {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {manualItems.map((manual) => (
-                <Card key={manual.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                <Card key={manual.id} className="cursor-pointer hover:shadow-md transition-shadow bg-muted/40">
                   <CardHeader>
                     <CardTitle className="flex justify-between items-center">
                       <span>{manual.title}</span>
@@ -368,7 +370,7 @@ const DashboardTab: React.FC = () => {
                       : 30; // デフォルト30分
                       
                     return (
-                      <div key={meeting.id} className="flex justify-between items-center p-2 border rounded">
+                      <div key={meeting.id} className="flex justify-between items-center p-2 border rounded bg-muted/40">
                         <div>
                           <div className="font-medium">{meeting.title}</div>
                           <div className="text-sm text-muted-foreground">{timeString}</div>
@@ -678,7 +680,7 @@ const ManualsTab: React.FC = () => {
         <div className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card 
-              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow bg-muted/40"
               onClick={() => navigate('/manual?status=all')}
             >
               <div className="text-center">
@@ -687,7 +689,7 @@ const ManualsTab: React.FC = () => {
               </div>
             </Card>
             <Card 
-              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow bg-muted/40"
               onClick={() => navigate('/manual?status=published')}
             >
               <div className="text-center">
@@ -696,7 +698,7 @@ const ManualsTab: React.FC = () => {
               </div>
             </Card>
             <Card 
-              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow bg-muted/40"
               onClick={() => navigate('/manual?status=draft')}
             >
               <div className="text-center">
@@ -705,7 +707,7 @@ const ManualsTab: React.FC = () => {
               </div>
             </Card>
             <Card 
-              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow bg-muted/40"
               onClick={() => navigate('/manual?status=my')}
             >
               <div className="text-center">
@@ -733,7 +735,7 @@ const ManualsTab: React.FC = () => {
             ) : (
               <div className="space-y-3">
                 {recentManuals.slice(0, 5).map((manual) => (
-                  <Card key={manual.id} className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => {
+                  <Card key={manual.id} className="p-4 hover:shadow-md transition-shadow cursor-pointer bg-muted/40" onClick={() => {
                     setSelectedManual(manual);
                     setIsMetaVisible(true);
                   }}>
@@ -782,7 +784,7 @@ const ManualsTab: React.FC = () => {
           <div>
             <h3 className="text-lg font-semibold mb-4">アクション</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 hover:shadow-md transition-shadow cursor-pointer border rounded-lg">
+              <div className="p-4 hover:shadow-md transition-shadow cursor-pointer border rounded-lg bg-muted/40">
                 <Link to="/manual/create" className="block">
                   <div className="text-center">
                     <FilePlus className="h-8 w-8 mx-auto mb-2 text-primary" />
@@ -792,7 +794,7 @@ const ManualsTab: React.FC = () => {
                 </Link>
               </div>
               <div 
-                className="p-4 hover:shadow-md transition-shadow cursor-pointer border rounded-lg"
+                className="p-4 hover:shadow-md transition-shadow cursor-pointer border rounded-lg bg-muted/40"
                 onClick={() => setIsSearchModalOpen(true)}
               >
                   <div className="text-center">
@@ -802,7 +804,7 @@ const ManualsTab: React.FC = () => {
                   </div>
               </div>
               <div 
-                className="p-4 hover:shadow-md transition-shadow cursor-pointer border rounded-lg"
+                className="p-4 hover:shadow-md transition-shadow cursor-pointer border rounded-lg bg-muted/40"
                 onClick={() => setIsStatsModalOpen(true)}
               >
                   <div className="text-center">
@@ -1046,7 +1048,7 @@ const ManualsTab: React.FC = () => {
                     {searchResults.length}件のマニュアルが見つかりました
                   </div>
                   {searchResults.map((manual) => (
-                    <Card key={manual.id} className="p-3 cursor-pointer hover:shadow-md" onClick={() => {
+                    <Card key={manual.id} className="p-3 cursor-pointer hover:shadow-md bg-muted/40" onClick={() => {
                       setSelectedManual(manual);
                       setIsSearchModalOpen(false);
                       setIsMetaVisible(true);
@@ -1267,7 +1269,7 @@ const KnowledgeTab: React.FC = () => {
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filteredAndSortedKnowledge.map((knowledge) => (
-              <Card key={knowledge.id} className="cursor-pointer hover:shadow-md transition-shadow">
+              <Card key={knowledge.id} className="cursor-pointer hover:shadow-md transition-shadow bg-muted/40">
                 <CardHeader>
                   <CardTitle className="flex justify-between items-center">
                     <span>{knowledge.title}</span>
@@ -1518,7 +1520,7 @@ const MeetingsTab: React.FC = () => {
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {meetingsLocal.map((meeting) => (
-            <Card key={meeting.id} className="hover:shadow-md transition-shadow">
+            <Card key={meeting.id} className="hover:shadow-md transition-shadow bg-muted/40">
               <CardHeader>
                 <CardTitle className="flex justify-between items-center">
                   <span>{meeting.title}</span>
