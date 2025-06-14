@@ -26,12 +26,13 @@ import {
   Plus,
   Building2,
   Clock,
-  Moon,
-  Sun,
-} from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useTheme } from "@/contexts/ThemeContext";
-import { createAvatarProps } from "@/utils/avatarUtils";
+      Moon,
+    Sun,
+    CircleUserRound,
+  } from "lucide-react";
+  import { useAuth } from "@/contexts/AuthContext";
+  import { useTheme } from "@/contexts/ThemeContext";
+  import OrganizationSelector from "./OrganizationSelector";
 
 // ナビゲーションリンクの定義
 const navigationLinks = [
@@ -69,15 +70,8 @@ const Header: React.FC = () => {
     if (user?.name) {
       return user.name;
     }
-    return "ユーザー";
-  };
-
-  // アバター画像のプロップスを取得
-  const avatarProps = createAvatarProps(
-    user?.avatarUrl,
-    getUserDisplayName(),
-    "ユーザーアバター"
-  );
+          return "ユーザー";
+    };
   
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background shadow-md">
@@ -189,10 +183,13 @@ const Header: React.FC = () => {
           </DropdownMenu>
         </nav>
         
-        <div className="flex-1 mx-4 relative hidden sm:block">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-          <Input type="text" placeholder="検索..." className="pl-8" />
-        </div>
+                 <div className="flex-1 mx-4 flex items-center gap-4">
+           <OrganizationSelector />
+           <div className="relative hidden sm:block flex-1">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+            <Input type="text" placeholder="検索..." className="pl-8" />
+           </div>
+          </div>
         
         <div className="flex items-center gap-2">
           {/* テーマ切り替えボタン */}
@@ -241,15 +238,12 @@ const Header: React.FC = () => {
             </DropdownMenuContent>
           </DropdownMenu>
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <img 
-                  {...avatarProps}
-                  className="w-8 h-8 rounded-full"
-                />
-              </Button>
-            </DropdownMenuTrigger>
+                      <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full [&_svg]:size-6">
+                  <CircleUserRound className="h-7 w-7" />
+                </Button>
+              </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>{getUserDisplayName()}</DropdownMenuLabel>
               <DropdownMenuSeparator />
