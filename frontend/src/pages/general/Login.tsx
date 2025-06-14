@@ -182,7 +182,7 @@ const Login: React.FC = () => {
                 onChange={(e) => handleInputChange('email', e.target.value)}
                 required
                 disabled={isSubmitting}
-                className={error && !email ? 'border-red-500' : ''}
+                className={error && !email ? 'border-red-500 dark:border-red-500' : ''}
               />
             </div>
             <div className="space-y-2">
@@ -195,7 +195,7 @@ const Login: React.FC = () => {
                 onChange={(e) => handleInputChange('password', e.target.value)}
                 required
                 disabled={isSubmitting}
-                className={error && !password ? 'border-red-500' : ''}
+                className={error && !password ? 'border-red-500 dark:border-red-500' : ''}
               />
             </div>
 

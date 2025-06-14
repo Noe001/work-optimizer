@@ -264,7 +264,7 @@ const ManualView: React.FC = () => {
   return (
     <>
       <Header />
-      <div className="p-6 bg-background min-h-screen bg-gray-50">
+      <div className="p-6 bg-background min-h-screen">
         {/* Header */}
         <div className="mb-6">
           <Button 
@@ -514,7 +514,7 @@ const ManualView: React.FC = () => {
                 nextLabel={null} // カスタムボタンを使用するため無効化
                 breakLabel="..."
                 containerClassName="flex items-center space-x-1"
-                pageLinkClassName="px-3 py-2 text-sm border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-md transition-colors duration-200"
+                pageLinkClassName="px-3 py-2 text-sm border border-border bg-background hover:bg-muted text-foreground rounded-md transition-colors duration-200"
                 activeLinkClassName="!bg-primary !text-primary-foreground !border-primary"
                 breakLinkClassName="px-3 py-2 text-sm text-gray-500"
                 disabledClassName="opacity-50 cursor-not-allowed"

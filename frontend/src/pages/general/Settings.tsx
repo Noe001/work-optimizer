@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import { useTheme, ThemePreference } from '@/contexts/ThemeContext'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import {
   Bell,
   User,
@@ -25,10 +27,12 @@ import {
 import Header from "@/components/Header"
 
 const SettingsView: React.FC = () => {
+  const { theme, themePreference, setThemePreference } = useTheme();
+
   return (
     <>
       <Header />
-      <div className="min-h-screen flex flex-col bg-gray-50">
+      <div className="min-h-screen flex flex-col bg-background">
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* プロフィール設定 */}
@@ -147,14 +151,42 @@ const SettingsView: React.FC = () => {
                   </Select>
                 </div>
                 <Separator />
-                <div className="flex items-center justify-between">
+                <div className="space-y-3">
                   <div className="space-y-0.5">
-                    <Label>ダークモード</Label>
+                    <Label>テーマ設定</Label>
                     <p className="text-sm text-muted-foreground">
-                      ダークテーマを使用する
+                      アプリケーションのテーマを選択
                     </p>
                   </div>
-                  <Switch />
+                  <RadioGroup 
+                    value={themePreference} 
+                    onValueChange={(value: ThemePreference) => setThemePreference(value)}
+                    className="flex flex-col space-y-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="light" id="light" />
+                      <Label htmlFor="light" className="flex items-center cursor-pointer">
+                        ライトモード
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="dark" id="dark" />
+                      <Label htmlFor="dark" className="flex items-center cursor-pointer">
+                        ダークモード
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="system" id="system" />
+                      <Label htmlFor="system" className="flex items-center cursor-pointer">
+                        システム設定に合わせる
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  {themePreference === 'system' && (
+                    <p className="text-xs text-muted-foreground pl-6">
+                      現在: {theme === 'dark' ? 'ダークモード' : 'ライトモード'}
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>

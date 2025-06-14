@@ -232,13 +232,13 @@ const SignupView: React.FC = () => {
   }> = ({ isValid, message, serverError }) => (
     <div className="flex items-center space-x-2 text-sm">
       {isValid === null ? (
-        <Circle className="h-4 w-4 text-gray-300" />
+        <Circle className="h-4 w-4 text-muted-foreground" />
       ) : isValid ? (
         <CheckCircle2 className="h-4 w-4 text-green-500" />
       ) : (
         <XCircle className="h-4 w-4 text-red-500" />
       )}
-      <span className={isValid === null ? 'text-gray-400' : isValid ? 'text-green-600' : 'text-red-600'}>
+      <span className={isValid === null ? 'text-muted-foreground' : isValid ? 'text-green-600' : 'text-red-600'}>
         {message}
       </span>
       {serverError && (
@@ -256,7 +256,7 @@ const SignupView: React.FC = () => {
   const displayError = error || authError;
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
+    <div className="flex items-center justify-center min-h-screen bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl">アカウント作成</CardTitle>
@@ -273,9 +273,9 @@ const SignupView: React.FC = () => {
                 onChange={handleInputChange}
                 placeholder=""
                 required
-                className={`w-full ${
+                className={
                   formData.name ? (validation.name.isValid ? 'border-green-500' : 'border-red-500') : ''
-                }`}
+                }
                 ref={nameRef}
               />
               <ValidationItem
@@ -295,9 +295,9 @@ const SignupView: React.FC = () => {
                 onChange={handleInputChange}
                 placeholder={`例: user${Date.now().toString().slice(-4)}@example.com`}
                 required
-                className={`w-full ${
+                className={
                   formData.email ? (validation.email.isValid ? 'border-green-500' : 'border-red-500') : ''
-                }`}
+                }
                 ref={emailRef}
               />
               <ValidationItem
@@ -318,7 +318,7 @@ const SignupView: React.FC = () => {
                   onChange={handleInputChange}
                   placeholder=""
                   required
-                  className={`w-full pr-10 ${
+                  className={`pr-10 ${
                     formData.password
                       ? validation.password.hasMinLength && validation.password.hasNumber && validation.password.hasLetter
                         ? 'border-green-500'
@@ -330,7 +330,7 @@ const SignupView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-600"
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground"
                 >
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
@@ -362,7 +362,7 @@ const SignupView: React.FC = () => {
                   onChange={handleInputChange}
                   placeholder=""
                   required
-                  className={`w-full pr-10 ${
+                  className={`pr-10 ${
                     formData.confirmPassword
                       ? validation.confirmPassword.isValid
                         ? 'border-green-500'
@@ -374,7 +374,7 @@ const SignupView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-600"
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground"
                 >
                   {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
@@ -386,14 +386,14 @@ const SignupView: React.FC = () => {
             </div>
 
             {displayError && (
-              <div className="text-sm text-red-600 bg-red-50 p-4 rounded-lg border-l-4 border-red-500 shadow-sm animate-pulse">
+              <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950/20 p-4 rounded-lg border-l-4 border-red-500 shadow-sm animate-pulse">
                 <div className="flex items-start space-x-3">
                   <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
                   <div>
                     <div className="font-medium">エラーが発生しました</div>
                     <div className="mt-1">{displayError}</div>
                     {displayError.includes('メールアドレス') && displayError.includes('登録されています') && (
-                      <div className="mt-2 text-xs text-red-500 bg-red-100 p-2 rounded">
+                                              <div className="mt-2 text-xs text-red-500 bg-red-100 dark:bg-red-900/20 p-2 rounded">
                         💡 <strong>ヒント:</strong> 別のメールアドレスを使用してください。例: user{Date.now().toString().slice(-4)}@example.com
                       </div>
                     )}
@@ -406,9 +406,9 @@ const SignupView: React.FC = () => {
               {isSubmitting ? 'アカウント作成中...' : 'アカウント作成'}
             </Button>
 
-            <div className="text-center text-sm text-gray-600">
+            <div className="text-center text-sm text-muted-foreground">
               すでにアカウントをお持ちの方は
-              <a href="/login" className="text-blue-600 hover:underline ml-1">
+              <a href="/login" className="text-teal-primary hover:underline ml-1">
                 ログイン
               </a>
             </div>

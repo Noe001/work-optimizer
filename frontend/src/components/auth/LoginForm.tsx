@@ -97,17 +97,17 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onSwitchToSignu
 
           {/* メールアドレス */}
           <div className="space-y-2">
-            <Label htmlFor="email">メールアドレス</Label>
+            <Label htmlFor="email" className="text-foreground">メールアドレス</Label>
             <Input
               id="email"
               type="email"
               placeholder="example@company.com"
               {...register('email')}
-              className={errors.email ? 'border-red-500' : ''}
+              className={`${errors.email ? 'border-red-500' : ''} bg-background text-foreground placeholder:text-muted-foreground`}
               autoComplete="email"
             />
             {errors.email && (
-              <p className="text-sm text-red-500">{errors.email.message}</p>
+              <p className="text-sm text-red-500 dark:text-red-400">{errors.email.message}</p>
             )}
           </div>
 
@@ -126,7 +126,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onSwitchToSignu
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
@@ -158,7 +158,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onSwitchToSignu
                 <button
                   type="button"
                   onClick={onSwitchToSignup}
-                  className="text-blue-600 hover:text-blue-800 font-medium"
+                  className="text-teal-primary hover:text-teal-dark font-medium"
                 >
                   新規登録
                 </button>

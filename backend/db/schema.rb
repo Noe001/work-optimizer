@@ -150,13 +150,13 @@ ActiveRecord::Schema[7.2].define(version: 2025_05_28_053438) do
     t.timestamp "last_login_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "department_admin", default: false, null: false
+    t.boolean "system_admin", default: false, null: false
+    t.boolean "organization_admin", default: false, null: false
     t.text "avatarUrl"
     t.string "department"
     t.string "position"
     t.text "bio"
-    t.boolean "department_admin", default: false, null: false
-    t.boolean "system_admin", default: false, null: false
-    t.boolean "organization_admin", default: false, null: false
     t.index ["department_admin"], name: "index_users_on_department_admin"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["organization_admin"], name: "index_users_on_organization_admin"

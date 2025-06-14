@@ -50,7 +50,7 @@ const Skeleton: React.FC<{ className?: string }> = ({ className = "" }) => (
 const ProfileSkeleton: React.FC = () => (
   <>
     <Header />
-    <div className="p-6 bg-background min-h-screen bg-gray-50">
+    <div className="p-6 bg-background min-h-screen">
       <div className="mb-6">
         <Skeleton className="h-6 w-48 mb-4" />
         <Skeleton className="h-8 w-32 mb-2" />
@@ -84,7 +84,7 @@ const ProfileSkeleton: React.FC = () => (
 
 // ローディングオーバーレイコンポーネント
 const LoadingOverlay: React.FC = () => (
-  <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-10">
+  <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
     <div className="flex items-center space-x-2">
       <Loader2 className="h-4 w-4 animate-spin" />
       <span>更新中...</span>
@@ -263,7 +263,7 @@ const PasswordChangeCard: React.FC = () => {
       <CardContent className="p-4 sm:p-6">
         <form onSubmit={handlePasswordSubmit} className="space-y-4 sm:space-y-6">
           <div>
-            <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label htmlFor="currentPassword" className="block text-sm font-medium text-foreground mb-2">
               現在のパスワード <span className="text-red-500" aria-label="必須項目">*</span>
             </label>
             <Input 
@@ -287,7 +287,7 @@ const PasswordChangeCard: React.FC = () => {
             )}
           </div>
           <div>
-            <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label htmlFor="newPassword" className="block text-sm font-medium text-foreground mb-2">
               新しいパスワード <span className="text-red-500" aria-label="必須項目">*</span>
             </label>
             <Input 
@@ -314,7 +314,7 @@ const PasswordChangeCard: React.FC = () => {
             )}
           </div>
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground mb-2">
               新しいパスワードの確認 <span className="text-red-500" aria-label="必須項目">*</span>
             </label>
             <Input 
@@ -847,7 +847,7 @@ const Profile: React.FC = () => {
   return (
     <>
       <Header />
-      <div className="p-4 sm:p-6 bg-background min-h-screen bg-gray-50">
+      <div className="p-4 sm:p-6 bg-background min-h-screen">
         <div className="mb-6">
           <Button 
             variant="ghost" 
@@ -882,12 +882,12 @@ const Profile: React.FC = () => {
                 />
                 {isUploading && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                    <Loader2 className="h-6 w-6 animate-spin text-teal-primary" />
                   </div>
                 )}
                 {isDragOver && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-20 rounded-full">
-                    <span className="text-blue-600 text-xs font-medium">ドロップ</span>
+                                <div className="absolute inset-0 flex items-center justify-center bg-teal-primary bg-opacity-20 rounded-full">
+                <span className="text-teal-primary text-xs font-medium">ドロップ</span>
                   </div>
                 )}
                 <input
@@ -897,11 +897,12 @@ const Profile: React.FC = () => {
                   accept="image/*"
                   onChange={handleFileChange}
                   disabled={isUploading || isUpdating}
+                  aria-label="プロフィール画像をアップロード"
                 />
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="absolute bottom-0 right-0 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow group-hover:scale-110"
+                  className="absolute bottom-0 right-0 bg-background rounded-full shadow-md hover:shadow-lg transition-shadow group-hover:scale-110"
                   onClick={handleAvatarClick}
                   disabled={isUploading || isUpdating}
                   aria-label="プロフィール画像を変更"
@@ -920,7 +921,7 @@ const Profile: React.FC = () => {
           <CardContent className="p-4 sm:p-6">
             <div className="space-y-4 sm:space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">自己紹介</label>
+                <label className="block text-sm font-medium text-foreground mb-2">自己紹介</label>
                 <Textarea
                   name="bio"
                   value={profile.bio || ''}
@@ -939,7 +940,7 @@ const Profile: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="name" className="block text-sm font-medium text-foreground mb-2">
                     名前 <span className="text-red-500" aria-label="必須項目">*</span>
                   </label>
                 <Input
@@ -961,7 +962,7 @@ const Profile: React.FC = () => {
                   )}
               </div>
               <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
                     メールアドレス <span className="text-red-500" aria-label="必須項目">*</span>
                   </label>
                 <Input
@@ -986,7 +987,7 @@ const Profile: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
-                  <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-2">部門</label>
+                  <label htmlFor="department" className="block text-sm font-medium text-foreground mb-2">部門</label>
                 <Input
                     id="department"
                   name="department"
@@ -1005,7 +1006,7 @@ const Profile: React.FC = () => {
                   )}
               </div>
               <div>
-                  <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-2">ポジション</label>
+                  <label htmlFor="position" className="block text-sm font-medium text-foreground mb-2">ポジション</label>
                 <Input
                     id="position"
                   name="position"

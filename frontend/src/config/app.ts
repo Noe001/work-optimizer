@@ -30,7 +30,7 @@ export const ASSETS_CONFIG = {
 
 // アプリケーション設定
 export const APP_CONFIG = {
-  NAME: getEnvVar('VITE_APP_NAME', 'WorkOptimizer'),
+  NAME: getEnvVar('VITE_APP_NAME', 'Actify'),
   VERSION: getEnvVar('VITE_APP_VERSION', '1.0.0'),
   ENVIRONMENT: getEnvVar('VITE_APP_ENV', 'development'),
   

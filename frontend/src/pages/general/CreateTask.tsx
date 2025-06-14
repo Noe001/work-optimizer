@@ -366,7 +366,7 @@ const CreateTaskView: React.FC = () => {
 
   if (initialLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+              <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
           <p className="mt-2 text-sm text-gray-500">タスクデータを読み込み中...</p>
@@ -376,7 +376,7 @@ const CreateTaskView: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+          <div className="min-h-screen bg-background">
       <Header />
       <div className="container mx-auto py-6 px-4">
         <div className="mb-6">
@@ -436,7 +436,7 @@ const CreateTaskView: React.FC = () => {
                       </TabsContent>
                       
                       <TabsContent value="preview" className="mt-4">
-                        <div className="border rounded-md p-4 min-h-[240px] bg-white">
+                        <div className="border rounded-md p-4 min-h-[240px] bg-background">
                           {formData.description ? (
                             <div 
                               className="prose max-w-none prose-sm [&_h1]:text-[1.75rem] [&_h2]:text-2xl [&_h3]:text-xl [&_h4]:text-base [&_p]:my-0.5 [&_h1]:mb-1 [&_h2]:mb-1 [&_h2]:mt-0.5 [&_h3]:mb-0.5 [&_h4]:mb-0.5 [&_h5]:mb-0.5 [&_h6]:mb-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_blockquote]:my-1 [&_h1]:border-b [&_h1]:border-gray-300 [&_h1]:pb-1"
@@ -616,7 +616,7 @@ const CreateTaskView: React.FC = () => {
                     {formData.subtasks.length > 0 && (
                       <div className="space-y-2 mt-2">
                         {formData.subtasks.map((subtask) => (
-                          <div key={subtask.id} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                          <div key={subtask.id} className="flex items-center justify-between bg-muted p-2 rounded">
                             <div className="flex items-center gap-2">
                               <Checkbox
                                 id={`subtask-${subtask.id}`}
@@ -633,7 +633,7 @@ const CreateTaskView: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => isEditMode ? markSubtaskForRemoval(subtask.id) : removeSubtask(subtask.id)}
-                              className="text-gray-500 hover:text-gray-700"
+                              className="text-muted-foreground hover:text-foreground"
                               title="サブタスクを削除"
                             >
                               <X className="h-4 w-4" />
